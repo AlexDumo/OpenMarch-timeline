@@ -69,7 +69,8 @@ function placedLine(id = 1, ids = [1, 2, 3, 4, 5], y = 100): PlacedBox {
     const slots = lineTool.shape.generate(params, ids.length, ctx);
     return readBack({
         id,
-        timelineId: 10,
+        beat: 8,
+        shapeKey: 1,
         kind: "line",
         kindVersion: 2,
         params: { ...params, spots: ids.length },
@@ -89,7 +90,6 @@ function readBack(recipe: PlacedRecipe): PlacedBox {
     const at = new Map(recipe.members.map((m) => [m.marcherId, m]));
     const [placed] = boxesAt({
         recipes: [recipe],
-        moveEndOf: () => 8,
         beat: 8,
         positionOf: (id) => at.get(id),
     });
@@ -179,7 +179,8 @@ describe("the order on a line", () => {
         const slots = boxTool.shape.generate(params, 4, ctx);
         const box = readBack({
             id: 3,
-            timelineId: 10,
+            beat: 8,
+            shapeKey: 1,
             kind: "block",
             kindVersion: 1,
             params: { ...params, spots: 4 },
@@ -289,7 +290,8 @@ describe("the order stored with a placed line", () => {
         return {
             ...placement.recipe,
             id: 2,
-            timelineId: 11,
+            beat: 8,
+            shapeKey: 1,
             members: placement.members,
             params: JSON.parse(JSON.stringify(placement.recipe.params)),
         };
@@ -381,7 +383,8 @@ describe("the order picked on a placed line", () => {
         return {
             ...placement.recipe,
             id: 2,
-            timelineId: 11,
+            beat: 8,
+            shapeKey: 1,
             members: placement.members,
             params: JSON.parse(JSON.stringify(placement.recipe.params)),
         };
@@ -450,7 +453,8 @@ describe("the order picked on a placed line", () => {
         const slots = lineTool.shape.generate(params, 8, ctx);
         return readBack({
             id: 4,
-            timelineId: 10,
+            beat: 8,
+            shapeKey: 1,
             kind: "line",
             kindVersion: 2,
             params: { ...params, spots: 8 },
@@ -518,7 +522,8 @@ describe("the order picked on a placed line", () => {
         const slots = boxTool.shape.generate(params, 4, ctx);
         const box = readBack({
             id: 3,
-            timelineId: 10,
+            beat: 8,
+            shapeKey: 1,
             kind: "block",
             kindVersion: 1,
             params: { ...params, spots: 4 },

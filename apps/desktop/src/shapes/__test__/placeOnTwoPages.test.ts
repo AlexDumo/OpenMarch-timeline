@@ -8,7 +8,6 @@ import {
     useTimelineResolverStore,
 } from "@/timeline/timelineStore";
 import type { CanvasEditPlan } from "@/timeline/timelineCoordinateWrites";
-import { timelinesWithRange } from "@/db-functions/timelines";
 import {
     readAllShapeRecipes,
     type ShapeRecipeMember,
@@ -41,7 +40,7 @@ const plan = (start: number, end: number): CanvasEditPlan => ({
 });
 
 describeDbTests("a box placed on a page and again on the next one", (it) => {
-    it("keeps a recipe in each page's move", async ({
+    it("keeps a recipe at each page's count", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -67,14 +66,12 @@ describeDbTests("a box placed on a page and again on the next one", (it) => {
             ).toBe(true);
             await timelineResolverSettled();
         };
-        const moveOver = async (start: number, end: number) =>
-            (await timelinesWithRange(db, { start, end }))[0]!.id;
-
         await place(1, 9);
         await place(9, 17);
 
-        expect(
-            (await readAllShapeRecipes(db)).map((r) => r.timelineId),
-        ).toEqual([await moveOver(1, 9), await moveOver(9, 17)]);
+        // Each page's shape at that page's count
+        expect((await readAllShapeRecipes(db)).map((r) => r.beat)).toEqual([
+            9, 17,
+        ]);
     });
 });

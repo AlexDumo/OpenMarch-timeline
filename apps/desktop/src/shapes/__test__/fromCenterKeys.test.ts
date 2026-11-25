@@ -179,7 +179,8 @@ function placed(): PlacedBox<BoxParams> {
     return {
         recipe: {
             id: 7,
-            timelineId: 3,
+            beat: 8,
+            shapeKey: 7,
             kind: "block",
             kindVersion: 1,
             params: { ...params, spots: N },

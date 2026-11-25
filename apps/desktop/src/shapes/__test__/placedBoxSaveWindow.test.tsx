@@ -9,6 +9,7 @@ import {
     saveShapeRecipeInTransaction,
     type ShapeRecipeMember,
 } from "@/db-functions/shapeRecipes";
+import { timelinesWithRange } from "@/db-functions/timelines";
 import { moveMarchersInTarget } from "@/db-functions/timelineMoves";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import { NO_KEYS } from "@/input/modifierRoles";
@@ -124,16 +125,16 @@ async function placeBox(db: DbConnection) {
     const members: ShapeRecipeMember[] = boxShape
         .generate(params, 4, shapeContextFor(field()))
         .map((s, slot) => ({ marcherId: ids[slot], slot, x: s.x, y: s.y }));
-    let timelineId: number | null = null;
+    let placedAt: number | null = null;
     await moveMarchersInTarget({
         db,
         target: { kind: "range", ...PAGE2 },
         moves: members.map(({ marcherId, x, y }) => ({ marcherId, x, y })),
-        afterWrite: async (tx, id) => {
-            timelineId = id;
+        afterWrite: async (tx, beat) => {
+            placedAt = beat;
             await saveShapeRecipeInTransaction({
                 tx,
-                timelineId: id,
+                beat,
                 recipe: {
                     kind: boxShape.id,
                     kindVersion: boxShape.version,
@@ -149,7 +150,7 @@ async function placeBox(db: DbConnection) {
     invalidatePlacedBoxes();
     await placedBoxesRead();
     selection.now = ids.map((id) => ({ id }));
-    return { ids, timelineId: timelineId as unknown as number };
+    return { ids, beat: placedAt as unknown as number };
 }
 
 const shownAt = (beat: number) =>
@@ -195,7 +196,7 @@ describeDbTests("a placed shape while its save is under way", (it) => {
         db,
         marchersAndPages: _,
     }) => {
-        const { ids, timelineId } = await placeBox(db);
+        const { ids, beat } = await placeBox(db);
         showBeat(PAGE2);
         const box = shownAt(PAGE2.end);
         const from = spotOf(box, ids[0]);
@@ -206,9 +207,9 @@ describeDbTests("a placed shape while its save is under way", (it) => {
         await settled();
 
         expect(stepsMoved(ids[0], PAGE2.end, from)).toBe(4);
-        expect(
-            (await readAllShapeRecipes(db)).map((r) => r.timelineId),
-        ).toEqual([timelineId]);
+        expect((await readAllShapeRecipes(db)).map((r) => r.beat)).toEqual([
+            beat,
+        ]);
         expect(useTimelineSelectionStore.getState().playheadBeat).toBe(
             PAGE3.end,
         );
@@ -239,16 +240,13 @@ describeDbTests("a placed shape while its save is under way", (it) => {
         /** Another marcher's move over page 3, isolated, with the playhead part way through it */
         async function isolateLaterMove(db: DbConnection) {
             const other = resolver().marcherIds()[4];
-            let timelineId = 0;
             await moveMarchersInTarget({
                 db,
                 target: { kind: "range", ...PAGE3 },
                 moves: [{ marcherId: other, x: 10 * STEP, y: 10 * STEP }],
-                afterWrite: async (_tx, id) => {
-                    timelineId = id!;
-                },
             });
             await settled();
+            const timelineId = (await timelinesWithRange(db, PAGE3))[0]!.id;
             showBeat(PAGE3);
             useIsolationPlanStore.setState({
                 current: { timelineId, plan: resolver(), members: new Set() },
@@ -398,8 +396,8 @@ describeDbTests("the selected shape during a save", (it) => {
 
         act(() => letGo(mode, end));
         // The saving box is this page's copy: the selection doesn't go back to the earlier one
-        expect(selected()!.recipe.timelineId).not.toBe(
-            shownAt(PAGE2.end).recipe.timelineId,
+        expect(selected()!.recipe.beat).not.toBe(
+            shownAt(PAGE2.end).recipe.beat,
         );
         await saveDone();
 

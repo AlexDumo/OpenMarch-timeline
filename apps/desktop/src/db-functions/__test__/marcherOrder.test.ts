@@ -155,10 +155,10 @@ describeDbTests("A line's order set by hand", (it) => {
                 marcherId,
                 ...SPOTS[slot]!,
             })),
-            afterWrite: async (tx, timelineId) => {
+            afterWrite: async (tx, beat) => {
                 await saveShapeRecipeInTransaction({
                     tx,
-                    timelineId,
+                    beat,
                     recipe: {
                         kind: "line",
                         kindVersion: 2,
@@ -177,15 +177,8 @@ describeDbTests("A line's order set by hand", (it) => {
         await timelineResolverSettled();
         const shapesNow = async () => {
             const recipes = await readAllShapeRecipes(db);
-            const ends = await readTimelineEndBeats(
-                db,
-                recipes.flatMap((r) =>
-                    r.timelineId === null ? [] : [r.timelineId],
-                ),
-            );
             return boxesAt({
                 recipes,
-                moveEndOf: (id) => (id === null ? 0 : ends.get(id)),
                 beat: PAGE2.end,
                 positionOf: (id) => {
                     const [x, y] = resolver().positionAt(id, PAGE2.end);
@@ -210,7 +203,7 @@ describeDbTests("A line's order set by hand", (it) => {
         await transactionWithHistory(db, "placeLine", async (tx) => {
             await saveShapeRecipeInTransaction({
                 tx,
-                timelineId: shown[0]!.recipe.timelineId,
+                beat: shown[0]!.recipe.beat,
                 recipe: {
                     kind: "line",
                     kindVersion: 2,
@@ -310,17 +303,17 @@ describeDbTests("A line's order set by hand", (it) => {
         expect(await rememberedOrderAt(db, ids, PAGE2.end)).toEqual(ids);
         expect(await rememberedOrderAt(db, ids, 21)).toEqual(ids);
         expect(await rememberedOrderAt(db, ids, 25)).toBeNull();
-        // Both marks kept, in no move, each at its own beat
+        // Both marks kept, each at its own count, which their params no longer repeat
         expect(
             (await marks()).map((m) => [
                 m.kind,
-                m.timelineId,
-                (m.params as { beat?: number }).beat,
+                m.beat,
+                m.params,
                 m.members.length,
             ]),
         ).toEqual([
-            ["order", null, PAGE2.end, 4],
-            ["orderClear", null, 25, 4],
+            ["order", PAGE2.end, { spots: 4 }, 4],
+            ["orderClear", 25, { spots: 4 }, 4],
         ]);
 
         // An order set on page 3 after: page 2 still keeps its own
@@ -341,7 +334,7 @@ describeDbTests("A line's order set by hand", (it) => {
         ).toEqual([ids, reversed]);
     });
 
-    it("a shape placed again at its move's end leaves an order mark said about a later beat alone", async ({
+    it("a shape placed again at its count leaves an order mark at a later count alone", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -354,7 +347,7 @@ describeDbTests("A line's order set by hand", (it) => {
         await transactionWithHistory(db, "placeBox", async (tx) => {
             await saveShapeRecipeInTransaction({
                 tx,
-                timelineId: pageMove,
+                beat: PAGE2.end,
                 recipe: {
                     kind: "box",
                     kindVersion: 1,
@@ -413,8 +406,7 @@ describeDbTests("A line's order set by hand", (it) => {
         const mark = (await readAllShapeRecipes(db)).find(
             (r) => r.kind === "order",
         )!;
-        expect(mark.timelineId).toBeNull();
-        expect((mark.params as { beat?: number }).beat).toBe(23);
+        expect(mark.beat).toBe(23);
         expect(await rememberedOrderAt(db, [a, b], 23)).toEqual([b, a]);
     });
 
@@ -609,7 +601,7 @@ describeDbTests("A line's order set by hand", (it) => {
             await transactionWithHistory(db, "placeLine", async (tx) => {
                 await saveShapeRecipeInTransaction({
                     tx,
-                    timelineId,
+                    beat,
                     recipe: {
                         kind: "line",
                         kindVersion: 2,
@@ -649,7 +641,7 @@ describeDbTests("A line's order set by hand", (it) => {
         const mark = (await readAllShapeRecipes(db)).find(
             (r) => r.kind === "order",
         )!;
-        expect(mark.timelineId).toBeNull();
+        expect(mark.beat).toBe(25);
 
         // Moved back: page 2's move goes
         await deleteTimeline({ db, timelineId: pageMove });

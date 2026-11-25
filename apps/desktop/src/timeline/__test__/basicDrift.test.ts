@@ -113,19 +113,12 @@ const marksOf = async (db: DbConnection, marcherId: number) =>
         end,
     }));
 
-/** Every placed shape: the count it is placed at (its move's end) and who is in it. */
-const shapes = async (db: DbConnection) => {
-    const ends = new Map(
-        (await db.select().from(schema.timelines).all()).map((t) => [
-            t.id,
-            t.end_beat,
-        ]),
-    );
-    return (await readAllShapeRecipes(db)).map((r) => ({
-        at: r.timelineId === null ? 0 : ends.get(r.timelineId),
+/** Every placed shape: the count it is placed at and who is in it. */
+const shapes = async (db: DbConnection) =>
+    (await readAllShapeRecipes(db)).map((r) => ({
+        at: r.beat,
         members: r.members.map((m) => m.marcherId).sort((x, y) => x - y),
     }));
-};
 
 /** The page boxes after home, in show order. */
 const boxesOf = async (db: DbConnection) =>
@@ -183,10 +176,10 @@ const placeLine = async (
         target,
         keepUnchanged: true,
         moves: members.map(({ marcherId, x, y }) => ({ marcherId, x, y })),
-        afterWrite: async (tx, timelineId) => {
+        afterWrite: async (tx, beat) => {
             await saveShapeRecipeInTransaction({
                 tx,
-                timelineId,
+                beat,
                 recipe,
                 members,
             });
@@ -221,9 +214,9 @@ describeDbTests("Basic and placed shapes (shape recipes, #363)", (it) => {
     };
 
     // BUG 1: Basic's + and Split page re-cut every marcher's move out of the page's move
-    // (`splitMovesAtBeatInTransaction`), the emptied page move is deleted, and its shape recipe
-    // goes with it (`timeline_shape_recipes.timeline_id` cascades). Expert's Split at playhead
-    // keeps the recipe with the half that still arrives (`timelineSplitAtBeat.ts`).
+    // (`splitMovesAtBeatInTransaction`) and the emptied page move is deleted. Its shape recipe
+    // used to go with it; a recipe stands at a count now (ADR 0006 revision of 2026-11-22), and
+    // the new rows still arrive there, so it stays.
     it("+ inside a page keeps the shape placed at the page's flag", async ({
         db,
         marchersAndPages: _,
@@ -263,45 +256,30 @@ describeDbTests("Basic and placed shapes (shape recipes, #363)", (it) => {
         ]);
     });
 
-    // Members given mid-page positions one by one at the same count end up in one move, which the
-    // shape follows with all of them
+    // Members given mid-page positions one by one at the same count keep the whole shape
     it("mid-page positions given one member at a time at one count keep the whole shape", async ({
         db,
         marchersAndPages: _,
     }) => {
         const ids = await lineOnPage2(db);
         const all = [ids.a, ids.b, ids.c];
-        for (const id of all) {
-            const result = await point(db, 13, PAGE2, id, FAR);
-            expect(result.droppedFromShapes).toBeUndefined();
-        }
+        for (const id of all) await point(db, 13, PAGE2, id, FAR);
         expect(await shapes(db)).toEqual([{ at: 17, members: all }]);
     });
 
     // Review finding (2026-11-19): at different counts each member's flag position is in a move of
-    // its own, so the shape can follow only one of them (ADR 0006, rule 1). The others were
-    // dropped silently; the edit now names them (`droppedFromShapes`, a toast)
-    it("mid-page positions at different counts name the members the shape can't keep", async ({
+    // its own. A shape followed only one of them (ADR 0006, rule 1); it stands at the flag's count
+    // now and keeps them all (revision of 2026-11-22)
+    it("mid-page positions at different counts keep every member of the shape", async ({
         db,
         marchersAndPages: _,
     }) => {
         const ids = await lineOnPage2(db);
         const all = [ids.a, ids.b, ids.c];
-        expect(
-            (await point(db, 13, PAGE2, ids.a, FAR)).droppedFromShapes,
-        ).toBeUndefined();
-        expect(
-            (await point(db, 11, PAGE2, ids.b, FAR)).droppedFromShapes,
-        ).toBeUndefined();
-        const last = await point(db, 15, PAGE2, ids.c, FAR);
-        const placed = await shapes(db);
-        expect(placed).toHaveLength(1);
-        expect(placed[0]!.at).toBe(17);
-        const kept = placed[0]!.members;
-        expect(kept).toHaveLength(1);
-        expect(last.droppedFromShapes).toEqual(
-            all.filter((id) => !kept.includes(id)),
-        );
+        await point(db, 13, PAGE2, ids.a, FAR);
+        await point(db, 11, PAGE2, ids.b, FAR);
+        await point(db, 15, PAGE2, ids.c, FAR);
+        expect(await shapes(db)).toEqual([{ at: 17, members: all }]);
         // Everyone still stands on their spot
         expect(all.map((id) => resolver().positionAt(id, 17))).toEqual([
             [100, 50],
@@ -329,7 +307,7 @@ describeDbTests("Basic and placed shapes (shape recipes, #363)", (it) => {
             (await readAllShapeRecipes(db))
                 .filter((r) => r.kind === UNGROUPED_RECIPE_KIND)
                 .map((r) => ({
-                    timelineId: r.timelineId,
+                    beat: r.beat,
                     members: r.members.map((m) => m.marcherId).sort(),
                 }));
         const before = await markOf();
@@ -444,46 +422,41 @@ describeDbTests("Basic and placed shapes (shape recipes, #363)", (it) => {
         ]);
     });
 
-    // BUG 2 (still open, owner decision): a recipe lists only marchers whose rows are in its move
-    // (`saveShapeRecipeInTransaction`; ADR 0006, revision of 2026-10-29, rule 1). Basic's mid-page
-    // positions put each marcher's rows in moves of their own ([13, 17) for a, [9, 17) for the
-    // others), so a shape placed at the flag keeps only the members of one of them. Listing a
-    // here needs that ADR rule changed for the parts of a page. Until then the placement is no
-    // longer silent: everyone is set on their spot and the Shape tool's write names who was left
-    // out (`placeWithMidPagePositionBasic.test.ts`).
-    it.fails(
-        "BUG 2: a shape placed at a page's flag keeps a member that has a mid-page position",
-        async ({ db, marchersAndPages: _ }) => {
-            const ids = await arranged(async () => {
-                const made = await show(db);
-                await point(db, 13, PAGE2, made.a, FAR);
-                expect(await spansOf(db, made.a)).toEqual([
-                    [9, 13],
-                    [13, 17],
-                ]);
-                return made;
-            });
-            if (!ids) return;
-            await placeLine(db, [ids.a, ids.b, ids.c], {
-                kind: "point",
-                beat: PAGE2.end,
-                box: PAGE2,
-            });
-            // All three stand on their spots at the flag
-            expect(
-                [ids.a, ids.b, ids.c].map((id) =>
-                    resolver().positionAt(id, 17),
-                ),
-            ).toEqual([
-                [100, 50],
-                [120, 50],
-                [140, 50],
+    // BUG 2 (fixed by the ADR 0006 revision of 2026-11-22): a recipe listed only marchers whose
+    // rows were in its move (rule 1 of 2026-10-29). Basic's mid-page positions put each marcher's
+    // rows in moves of their own ([13, 17) for a, [9, 17) for the others), so a shape placed at the
+    // flag kept only the members of one of them. A recipe stands at a count now and lists everyone.
+    it("BUG 2: a shape placed at a page's flag keeps a member that has a mid-page position", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const ids = await arranged(async () => {
+            const made = await show(db);
+            await point(db, 13, PAGE2, made.a, FAR);
+            expect(await spansOf(db, made.a)).toEqual([
+                [9, 13],
+                [13, 17],
             ]);
-            expect(await shapes(db)).toEqual([
-                { at: 17, members: [ids.a, ids.b, ids.c] },
-            ]);
-        },
-    );
+            return made;
+        });
+        if (!ids) return;
+        await placeLine(db, [ids.a, ids.b, ids.c], {
+            kind: "point",
+            beat: PAGE2.end,
+            box: PAGE2,
+        });
+        // All three stand on their spots at the flag
+        expect(
+            [ids.a, ids.b, ids.c].map((id) => resolver().positionAt(id, 17)),
+        ).toEqual([
+            [100, 50],
+            [120, 50],
+            [140, 50],
+        ]);
+        expect(await shapes(db)).toEqual([
+            { at: 17, members: [ids.a, ids.b, ids.c] },
+        ]);
+    });
 });
 
 describeDbTests("Basic's locks and Held holds (#472, #474)", (it) => {

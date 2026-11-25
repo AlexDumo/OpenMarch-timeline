@@ -66,19 +66,19 @@ const show = async (db: DbConnection) => {
         x: 100 + 20 * i,
         y: 50,
     }));
-    let saved: { recipeId: number; timelineId: number | null } | undefined;
+    let saved: { recipeId: number; beat: number } | undefined;
     await moveMarchersInTarget({
         db,
         target: { kind: "range", ...PAGE2 },
         moves: members.map(({ marcherId, x, y }) => ({ marcherId, x, y })),
-        afterWrite: async (tx, timelineId) => {
+        afterWrite: async (tx, beat) => {
             const recipeId = await saveShapeRecipeInTransaction({
                 tx,
-                timelineId,
+                beat,
                 recipe: BOX,
                 members,
             });
-            saved = { recipeId, timelineId };
+            saved = { recipeId, beat };
         },
     });
     await timelineResolverSettled();
@@ -94,14 +94,14 @@ const PAGE3_PLAN: CanvasEditPlan = {
 
 /** The pivot change `commitBox` writes on page 3: nobody moves, the earlier page's recipe replaced */
 const changePivot = (
-    { members, recipeId, timelineId }: Awaited<ReturnType<typeof show>>,
+    { members, recipeId, beat }: Awaited<ReturnType<typeof show>>,
     pivot: string,
 ) =>
     writePlacement(
         {
             recipe: { ...BOX, params: { ...BOX.params, pivot } },
             members,
-            replaces: { id: recipeId, timelineId },
+            replaces: { id: recipeId, beat, shapeKey: recipeId },
             setAll: true,
         },
         new QueryClient(),
@@ -135,7 +135,8 @@ const undoSteps = async (db: DbConnection) =>
 const pivots = async (db: DbConnection) =>
     (await readAllShapeRecipes(db)).map((r) => ({
         id: r.id,
-        timelineId: r.timelineId,
+        beat: r.beat,
+        shapeKey: r.shapeKey,
         pivot: (r.params as { pivot: string }).pivot,
     }));
 
@@ -156,12 +157,15 @@ describeDbTests("a pivot change on a page a box is carried onto", (it) => {
         expect(after).toHaveLength(2);
         expect(after.find((r) => r.id === placed.recipeId)).toEqual({
             id: placed.recipeId,
-            timelineId: placed.timelineId,
+            beat: placed.beat,
+            shapeKey: placed.recipeId,
             pivot: "nw",
         });
         const copy = after.find((r) => r.id !== placed.recipeId);
         expect(copy?.pivot).toBe("se");
-        expect(copy?.timelineId).not.toBe(placed.timelineId);
+        // At page 3's count, a mark of the same shape
+        expect(copy?.beat).toBe(PAGE3.end);
+        expect(copy?.shapeKey).toBe(placed.recipeId);
         expect(await undoSteps(db)).toBe(steps + 1);
     });
 
@@ -188,7 +192,8 @@ describeDbTests("a pivot change on a page a box is carried onto", (it) => {
         expect(await pivots(db)).toEqual([
             {
                 id: placed.recipeId,
-                timelineId: placed.timelineId,
+                beat: placed.beat,
+                shapeKey: placed.recipeId,
                 pivot: "se",
             },
         ]);
@@ -198,7 +203,8 @@ describeDbTests("a pivot change on a page a box is carried onto", (it) => {
         expect(await pivots(db)).toEqual([
             {
                 id: placed.recipeId,
-                timelineId: placed.timelineId,
+                beat: placed.beat,
+                shapeKey: placed.recipeId,
                 pivot: "nw",
             },
         ]);

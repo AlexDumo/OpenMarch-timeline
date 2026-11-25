@@ -159,10 +159,10 @@ export async function buildRichShow(db: DbConnection): Promise<void> {
             x: 100 + 20 * i,
             y: 50 + 4 * i * i,
         })),
-        afterWrite: async (tx, timelineId) => {
+        afterWrite: async (tx, beat) => {
             await saveShapeRecipeInTransaction({
                 tx,
-                timelineId,
+                beat,
                 recipe: {
                     kind: "arc",
                     kindVersion: 1,
@@ -314,6 +314,8 @@ export interface ShowState {
     transitions: Row[];
     assignments: Row[];
     held: Row[];
+    /** Shape recipes: they stand at a count, which ripples (ADR 0006 revision of 2026-11-22) */
+    recipes: Row[];
     geometry: Row[];
     /** Tables no count edit should change at all */
     untouched: Record<string, unknown[]>;
@@ -327,7 +329,6 @@ export const UNTOUCHED_TABLES = [
     "marchers",
     "timeline_shapes",
     "timeline_slot_destinations",
-    "timeline_shape_recipes",
     "timeline_shape_recipe_marchers",
     "items",
     "tags",
@@ -378,6 +379,7 @@ export async function readState(db: DbConnection): Promise<ShowState> {
         transitions: await rows(db, "timeline_transitions"),
         assignments: await rows(db, "timeline_assignments"),
         held: await rows(db, "timeline_held_marks"),
+        recipes: (await rows(db, "timeline_shape_recipes")).map(strip),
         geometry: (await rows(db, "item_geometry")).map(strip),
         untouched,
         marcherIds: ((await rows(db, "marchers")) as Row[]).map(

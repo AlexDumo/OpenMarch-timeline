@@ -11,7 +11,6 @@ import type { CanvasEditPlan } from "@/timeline/timelineCoordinateWrites";
 import { readBasicRows } from "@/db-functions/basicRows";
 import { performRedo, performUndo } from "@/db-functions/history";
 import { moveMarchersInTarget } from "@/db-functions/timelineMoves";
-import { timelinesWithRange } from "@/db-functions/timelines";
 import {
     readAllShapeRecipes,
     type ShapeRecipeMember,
@@ -73,34 +72,28 @@ describeDbTests(
                 ).toBe(true);
                 await timelineResolverSettled();
             };
-            const moveOver = async (start: number, end: number) =>
-                (await timelinesWithRange(db, { start, end }))[0]?.id;
             const onPage2 = async () =>
                 (await readBasicRows(db, { marcherIds: ids }))
                     .filter((r) => r.start < 17 && r.end > 9)
                     .map((r) => r.marcherId);
-            const recipeMoves = async () =>
-                (await readAllShapeRecipes(db)).map((r) => r.timelineId);
-            return { ids, members, place, moveOver, onPage2, recipeMoves };
+            const recipeCounts = async () =>
+                (await readAllShapeRecipes(db)).map((r) => r.beat);
+            return { ids, members, place, onPage2, recipeCounts };
         };
 
         // Was BUG 5 of the audit: page 2 got no recipe, and its members lost their rows over
         // page 2, so the page the shape was just placed on was Not defined for them
-        it("keeps a recipe in each page's move, and the members' rows on page 2", async ({
+        it("keeps a recipe at each page's count, and the members' rows on page 2", async ({
             db,
             marchersAndPages: _,
         }) => {
-            const { ids, place, moveOver, onPage2, recipeMoves } =
-                await setup(db);
+            const { ids, place, onPage2, recipeCounts } = await setup(db);
             await place(1, 9);
             expect(await onPage2()).toEqual(ids);
             await place(9, 17);
 
             expect(await onPage2()).toEqual(ids);
-            expect(await recipeMoves()).toEqual([
-                await moveOver(1, 9),
-                await moveOver(9, 17),
-            ]);
+            expect(await recipeCounts()).toEqual([9, 17]);
             // On their spots at page 2's flag, set there by page 2's own move
             const resolver = useTimelineResolverStore.getState().resolver!;
             expect(ids.map((id) => resolver.positionAt(id, 17))).toEqual([
@@ -114,8 +107,7 @@ describeDbTests(
             db,
             marchersAndPages: _,
         }) => {
-            const { ids, place, moveOver, onPage2, recipeMoves } =
-                await setup(db);
+            const { ids, place, onPage2, recipeCounts } = await setup(db);
             const resolver = () =>
                 useTimelineResolverStore.getState().resolver!;
             await place(1, 9);
@@ -124,7 +116,7 @@ describeDbTests(
 
             await performUndo(db);
             await timelineResolverSettled();
-            expect(await recipeMoves()).toEqual([await moveOver(1, 9)]);
+            expect(await recipeCounts()).toEqual([9]);
             expect(await onPage2()).toEqual(ids);
             expect(ids.map((id) => resolver().positionAt(id, 17))).toEqual(
                 before,
@@ -132,10 +124,7 @@ describeDbTests(
 
             await performRedo(db);
             await timelineResolverSettled();
-            expect(await recipeMoves()).toEqual([
-                await moveOver(1, 9),
-                await moveOver(9, 17),
-            ]);
+            expect(await recipeCounts()).toEqual([9, 17]);
             expect(await onPage2()).toEqual(ids);
             expect(resolver().positionAt(ids[0]!, 17)).toEqual([100, 50]);
         });

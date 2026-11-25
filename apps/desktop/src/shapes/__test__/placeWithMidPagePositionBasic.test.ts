@@ -11,7 +11,6 @@ import {
 import type { CanvasEditPlan } from "@/timeline/timelineCoordinateWrites";
 import { readBasicRows } from "@/db-functions/basicRows";
 import { performRedo, performUndo } from "@/db-functions/history";
-import { timelinesWithRange } from "@/db-functions/timelines";
 import { moveMarchersInTarget } from "@/db-functions/timelineMoves";
 import {
     readAllShapeRecipes,
@@ -26,9 +25,9 @@ import { writePlacement } from "../tool/shapePlacement";
  * A shape placed at a page's flag in **Basic** for marchers whose last mid-page position on the
  * page is at different counts (Basic drift audit, 2026-11-18, BUG 2). One marcher has a position
  * at count 13 of page 2 `[9, 17)`, so it arrives at the flag in a move over `[13, 17)` and the
- * others in the page's move. A recipe lists only marchers in its move (ADR 0006, revision of
- * 2026-10-29), so it can't hold all three; Basic shows no moves, so the placement says who was
- * left out, where it used to drop them without a word. Everyone is still set on their spot.
+ * others in the page's move. A recipe listed only marchers in its move (ADR 0006, revision of
+ * 2026-10-29), so it couldn't hold all three, and a toast named who was left out. A recipe stands
+ * at a count now (revision of 2026-11-22): it lists all three, and there is nothing to name.
  *
  * On the `marchersAndPages` show page N's box is `[8N − 7, 8N + 1)`.
  */
@@ -102,7 +101,7 @@ const setup = async (db: DbConnection, { later = false } = {}) => {
     }));
     const place = async (
         plan: CanvasEditPlan,
-        replaces?: { id: number; timelineId: number | null },
+        replaces?: { id: number; beat: number; shapeKey: number },
     ) => {
         expect(
             await writePlacement(
@@ -116,23 +115,21 @@ const setup = async (db: DbConnection, { later = false } = {}) => {
     };
     const shapes = async () =>
         (await readAllShapeRecipes(db)).map((r) => ({
-            move: r.timelineId,
+            at: r.beat,
             members: r.members.map((m) => m.marcherId),
         }));
     const at17 = () => ids.map((id) => resolver().positionAt(id, 17));
-    const pageMove = async () => (await timelinesWithRange(db, PAGE2))[0]!.id;
-    return { a, b, c, place, shapes, spans, at17, pageMove, midPage };
+    return { a, b, c, place, shapes, spans, at17, midPage };
 };
 
 describeDbTests(
     "a shape placed at a page's flag in Basic, one member with a mid-page position",
     (it) => {
-        it("sets everyone on their spot, keeps the members in the page's move, and names the one left out", async ({
+        it("sets everyone on their spot and lists every member at the flag, saying nothing", async ({
             db,
             marchersAndPages: _,
         }) => {
-            const { a, b, c, place, shapes, spans, at17, pageMove } =
-                await setup(db);
+            const { a, b, c, place, shapes, spans, at17 } = await setup(db);
             await place(BASIC);
 
             expect(at17()).toEqual(SPOTS);
@@ -143,10 +140,9 @@ describeDbTests(
             ]);
             expect(resolver().positionAt(a, 13)).toEqual([500, 260]);
             expect(await shapes()).toEqual([
-                { move: await pageMove(), members: [b, c] },
+                { at: PAGE2.end, members: [a, b, c] },
             ]);
-            expect(warning).toHaveBeenCalledTimes(1);
-            expect(warning.mock.calls[0]![0]).toContain(`#${a}`);
+            expect(warning).not.toHaveBeenCalled();
         });
 
         it("says nothing when every member has the same mid-page position", async ({
@@ -170,25 +166,27 @@ describeDbTests(
             expect(warning).not.toHaveBeenCalled();
         });
 
-        it("names a member whose mid-page position came after the shape, when the shape is edited", async ({
+        it("keeps a member whose mid-page position came after the shape, when the shape is edited", async ({
             db,
             marchersAndPages: _,
         }) => {
-            const { a, b, c, place, shapes, pageMove, midPage } = await setup(
-                db,
-                { later: true },
-            );
+            const { a, b, c, place, shapes, midPage } = await setup(db, {
+                later: true,
+            });
             await place(BASIC);
-            const move = await pageMove();
-            expect(await shapes()).toEqual([{ move, members: [a, b, c] }]);
+            const at = PAGE2.end;
+            expect(await shapes()).toEqual([{ at, members: [a, b, c] }]);
             await midPage();
-            expect(warning).not.toHaveBeenCalled();
+            expect(await shapes()).toEqual([{ at, members: [a, b, c] }]);
 
             const [recipe] = await readAllShapeRecipes(db);
-            await place(BASIC, { id: recipe!.id, timelineId: move });
-            expect(await shapes()).toEqual([{ move, members: [b, c] }]);
-            expect(warning).toHaveBeenCalledTimes(1);
-            expect(warning.mock.calls[0]![0]).toContain(`#${a}`);
+            await place(BASIC, {
+                id: recipe!.id,
+                beat: recipe!.beat,
+                shapeKey: recipe!.shapeKey,
+            });
+            expect(await shapes()).toEqual([{ at, members: [a, b, c] }]);
+            expect(warning).not.toHaveBeenCalled();
         });
 
         // Review finding (2026-11-19): a locked marcher isn't moved (V-203) and has the lock toast;
@@ -224,8 +222,7 @@ describeDbTests(
             db,
             marchersAndPages: _,
         }) => {
-            const { a, b, c, place, shapes, spans, at17, pageMove } =
-                await setup(db);
+            const { a, b, c, place, shapes, spans, at17 } = await setup(db);
             const before = at17();
             await place(BASIC);
 
@@ -241,7 +238,7 @@ describeDbTests(
             await performRedo(db);
             await timelineResolverSettled();
             expect(await shapes()).toEqual([
-                { move: await pageMove(), members: [b, c] },
+                { at: PAGE2.end, members: [a, b, c] },
             ]);
             expect(at17()).toEqual(SPOTS);
             expect(resolver().positionAt(a, 13)).toEqual([500, 260]);

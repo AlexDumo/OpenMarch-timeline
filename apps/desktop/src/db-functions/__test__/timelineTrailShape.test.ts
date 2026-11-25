@@ -91,12 +91,9 @@ const resolverOf = async (db: DbConnection) =>
 /** The placed shapes shown at the end flag */
 async function placedAtEnd(db: DbConnection) {
     const r = await resolverOf(db);
-    const timelines = await db.select().from(schema.timelines).all();
     const recipes = (await readAllShapeRecipes(db)) as PlacedRecipe[];
     return boxesAt({
         recipes,
-        moveEndOf: (id) =>
-            id === null ? 0 : timelines.find((t) => t.id === id)?.end_beat,
         beat: WINDOW.end,
         positionOf: (m) => {
             const [x, y] = r.positionAt(m, WINDOW.end);
@@ -278,7 +275,8 @@ describeDbTests("The dragged-out result as a shape (step 4c)", (it) => {
             .from(schema.timeline_transitions)
             .where(eq(schema.timeline_transitions.id, result.transitionId))
             .get())!;
-        expect(recipe.timelineId).toBe(transition.timeline_id);
+        // At the count the trail's move ends at, where the spots are
+        expect(recipe.beat).toBe(transition.end_beat);
         expect((recipe.params as LineParams).points).toHaveLength(2);
         // Each member where it was written, leader first (step 4g: a Line's first slot leads)
         const r = await resolverOf(db);

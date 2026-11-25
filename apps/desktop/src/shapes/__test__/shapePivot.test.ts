@@ -397,7 +397,8 @@ describe("a placed box keeps its pivot", () => {
         const recipe: PlacedRecipe = {
             ...placement.recipe,
             id: 1,
-            timelineId: 10,
+            beat: 8,
+            shapeKey: 1,
             members: placement.members,
             params: JSON.parse(JSON.stringify(placement.recipe.params)),
         };
@@ -406,7 +407,6 @@ describe("a placed box keeps its pivot", () => {
         );
         const [box] = boxesAt({
             recipes: [recipe],
-            moveEndOf: () => 8,
             beat: 8,
             positionOf: (id) => at.get(id),
         });

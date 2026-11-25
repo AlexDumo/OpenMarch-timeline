@@ -190,7 +190,7 @@ const show = async (db: DbConnection) => {
     return { a: a!, b: b!, c: c! };
 };
 
-/** A placed shape's recipe, in the move (timeline) `timelineId`, holding `marcherId` at `xy`. */
+/** A placed shape's recipe at the end of move (timeline) `timelineId`, holding `marcherId` at `xy`. */
 const shapeRecipeIn = (
     db: DbConnection,
     timelineId: number,
@@ -198,10 +198,16 @@ const shapeRecipeIn = (
     xy: XY,
 ) =>
     transactionWithHistory(db, "test", async (tx) => {
+        const move = (await tx
+            .select({ end: schema.timelines.end_beat })
+            .from(schema.timelines)
+            .where(eq(schema.timelines.id, timelineId))
+            .get())!;
         const [recipe] = await tx
             .insert(schema.timeline_shape_recipes)
             .values({
-                timeline_id: timelineId,
+                beat: move.end,
+                shape_key: 0,
                 kind: "line",
                 kind_version: 1,
                 params: "{}",

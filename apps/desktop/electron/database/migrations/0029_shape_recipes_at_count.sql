@@ -14,6 +14,11 @@
 -- - Undo and redo are both cleared in a file whose history names `timeline_shape_recipes`: an old
 --   step would write `timeline_id`. Other files keep their history (as the kept-spots drop did).
 --
+-- Safe to run twice (`addColumnGuard.ts` skips an `ADD COLUMN` the table has): the three
+-- `ADD COLUMN`s give the old table whichever of `timeline_id`, `beat` and `shape_key` it lacks, so
+-- the copy reads them all, and a `beat` or `shape_key` already there is kept. A page-era test file
+-- gets `beat` and `shape_key` that way before it converts (`applyLaterTimelineMigrationsUnrecorded`).
+--
 -- The migration runner turns foreign keys off around each statement, so dropping the old table
 -- deletes no member row (a converting v0.1.7 file runs this inside its transaction, with foreign
 -- keys deferred, on an empty table). The members' history triggers are dropped first so the
@@ -21,6 +26,9 @@
 -- (`createAllUndoTriggers`), the old table's go with it. The app writes file version 19 once this
 -- has run (`markShapeAtCountModel`, `fileVersion.ts`).
 PRAGMA foreign_keys=OFF;--> statement-breakpoint
+ALTER TABLE `timeline_shape_recipes` ADD COLUMN `timeline_id` integer;--> statement-breakpoint
+ALTER TABLE `timeline_shape_recipes` ADD COLUMN `beat` real;--> statement-breakpoint
+ALTER TABLE `timeline_shape_recipes` ADD COLUMN `shape_key` integer;--> statement-breakpoint
 DROP TRIGGER IF EXISTS `timeline_shape_recipe_marchers_it`;--> statement-breakpoint
 DROP TRIGGER IF EXISTS `timeline_shape_recipe_marchers_ut`;--> statement-breakpoint
 DROP TRIGGER IF EXISTS `timeline_shape_recipe_marchers_dt`;--> statement-breakpoint
@@ -42,7 +50,7 @@ CREATE TABLE `__new_timeline_shape_recipes` (
 	CONSTRAINT "timeline_shape_recipes_beat_check" CHECK(typeof(beat) IN ('integer', 'real') AND beat >= 0)
 );
 --> statement-breakpoint
-INSERT INTO `__new_timeline_shape_recipes`("id", "beat", "shape_key", "kind", "kind_version", "params", "order_mode", "reverse", "created_at") SELECT r."id", CASE WHEN r."kind" IN ('order', 'orderClear') AND json_type(r."params", '$.beat') IN ('integer', 'real') THEN max(0.0, json_extract(r."params", '$.beat')) WHEN r."timeline_id" IS NULL THEN 0.0 ELSE CAST(t."end_beat" AS REAL) END, r."id", r."kind", r."kind_version", CASE WHEN r."kind" IN ('order', 'orderClear') AND json_type(r."params", '$.beat') IS NOT NULL THEN json_remove(r."params", '$.beat') ELSE r."params" END, r."order_mode", r."reverse", r."created_at" FROM `timeline_shape_recipes` r LEFT JOIN `timelines` t ON t."id" = r."timeline_id" WHERE r."timeline_id" IS NULL OR t."id" IS NOT NULL;--> statement-breakpoint
+INSERT INTO `__new_timeline_shape_recipes`("id", "beat", "shape_key", "kind", "kind_version", "params", "order_mode", "reverse", "created_at") SELECT r."id", CASE WHEN r."beat" IS NOT NULL THEN max(0.0, r."beat") WHEN r."kind" IN ('order', 'orderClear') AND json_type(r."params", '$.beat') IN ('integer', 'real') THEN max(0.0, json_extract(r."params", '$.beat')) WHEN r."timeline_id" IS NULL THEN 0.0 ELSE CAST(t."end_beat" AS REAL) END, coalesce(r."shape_key", r."id"), r."kind", r."kind_version", CASE WHEN r."kind" IN ('order', 'orderClear') AND json_type(r."params", '$.beat') IS NOT NULL THEN json_remove(r."params", '$.beat') ELSE r."params" END, r."order_mode", r."reverse", r."created_at" FROM `timeline_shape_recipes` r LEFT JOIN `timelines` t ON t."id" = r."timeline_id" WHERE r."timeline_id" IS NULL OR t."id" IS NOT NULL;--> statement-breakpoint
 DROP TABLE `timeline_shape_recipes`;--> statement-breakpoint
 ALTER TABLE `__new_timeline_shape_recipes` RENAME TO `timeline_shape_recipes`;--> statement-breakpoint
 CREATE INDEX `timeline_shape_recipes_beat` ON `timeline_shape_recipes` (`beat`);--> statement-breakpoint

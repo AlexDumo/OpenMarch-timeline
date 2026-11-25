@@ -33,15 +33,14 @@ const env: ToolEnv = {
 };
 const ctx: ShapeContext = { stepPx: STEP, snapPoint: (p) => p };
 const SHOW_END = 32;
-const BOX_MOVE = 10;
-
-/** A box of marchers 1–4 placed in move `BOX_MOVE`, which ends on page 2's flag (beat 8) */
+/** A box of marchers 1–4 placed on page 2's flag (beat 8) */
 function boxRecipe(): PlacedRecipe {
     const params = drawBox({ x: 0, y: 0 }, { x: 40, y: 40 }, 4, env)!;
     const slots = boxShape.generate(params, 4, ctx);
     return {
         id: 1,
-        timelineId: BOX_MOVE,
+        beat: 8,
+        shapeKey: 1,
         kind: "block",
         kindVersion: 1,
         params: { ...params, spots: 4 },
@@ -55,9 +54,6 @@ function boxRecipe(): PlacedRecipe {
         })),
     };
 }
-
-const moveEndOf = (id: number | null) =>
-    id === null ? 0 : id === BOX_MOVE ? 8 : undefined;
 
 const move = (start: number, end: number): CarrySpan => ({
     start,
@@ -126,7 +122,6 @@ function barsAndField(four: "stays" | "off" | "offAndBack", ids: number[]) {
         marcherIds: ids,
         within: ids.flatMap((id) => marcherHolds(spansOf(id), SHOW_END)),
         recipes,
-        moveEndOf,
         spansOf,
         positionAt,
     });
@@ -145,7 +140,6 @@ function barsAndField(four: "stays" | "off" | "offAndBack", ids: number[]) {
             carriedMembers(
                 boxesAt({
                     recipes,
-                    moveEndOf,
                     beat: c,
                     positionOf: (id) => positionAt(id, c),
                 }),

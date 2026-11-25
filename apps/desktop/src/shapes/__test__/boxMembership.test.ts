@@ -71,10 +71,10 @@ const place = async (db: DbConnection, ids: readonly number[]) => {
         db,
         target: PAGE2,
         moves: ids.map((marcherId, i) => ({ marcherId, ...SPOTS[i]! })),
-        afterWrite: async (tx, timelineId) => {
+        afterWrite: async (tx, beat) => {
             await saveShapeRecipeInTransaction({
                 tx,
-                timelineId,
+                beat,
                 recipe: {
                     kind: "block",
                     kindVersion: 1,
@@ -187,25 +187,37 @@ describeDbTests("Placed box membership", (it) => {
         expect(after).toHaveLength(2);
         expect(after.find((r) => r.id === placed!.id)).toEqual(placed);
         const copy = after.find((r) => r.id !== placed!.id)!;
-        expect(copy.timelineId).not.toBe(placed!.timelineId);
+        // At page 3's count, a mark of the same shape
+        expect(copy.beat).toBe(PAGE3.end);
+        expect(copy.shapeKey).toBe(placed!.shapeKey);
         expect(copy.members.map((m) => m.y)).toEqual([60, 60, 80, 80]);
     });
 
-    it("an edit on a later page that takes one member away offers no fill for a copy that kept no one", async ({
+    it("an edit on a later page that takes one member away copies the box there with the others, and offers to fill the hole", async ({
         db,
         marchersAndPages: _,
     }) => {
         const ids = await show(db);
         await place(db, ids);
-        // Only the moved marcher is in page 3's move, so the copy there has none of the others
+        const [placed] = await readAllShapeRecipes(db);
+        // Only the moved marcher has a row on page 3; the others stand still there and are listed
+        // all the same (ADR 0006 revision of 2026-11-22, §1.3)
         const leaves = await edit(db, PAGE3, [
             { marcherId: ids[1]!, x: 300, y: 300 },
         ]);
-        const stored = new Set(
-            (await readAllShapeRecipes(db)).map((r) => r.id),
-        );
-        for (const leave of leaves) expect(stored).toContain(leave.recipeId);
-        expect(leaves).toEqual([]);
+        const stored = await readAllShapeRecipes(db);
+        expect(stored.find((r) => r.id === placed!.id)).toEqual(placed);
+        expect(leaves).toHaveLength(1);
+        const [leave] = leaves;
+        const copy = stored.find((r) => r.id === leave!.recipeId)!;
+        expect(copy.beat).toBe(PAGE3.end);
+        expect(copy.shapeKey).toBe(placed!.shapeKey);
+        expect(leave!.left).toEqual([ids[1]]);
+        expect(copy.members.map((m) => m.marcherId)).toEqual([
+            ids[0],
+            ids[2],
+            ids[3],
+        ]);
     });
 
     it("an edit that touches no box writes nothing of its own", async ({

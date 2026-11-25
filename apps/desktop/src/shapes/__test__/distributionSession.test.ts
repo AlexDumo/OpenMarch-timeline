@@ -72,14 +72,14 @@ function reopened(t: ToolState) {
     const recipe: PlacedRecipe = {
         ...placement.recipe,
         id: 1,
-        timelineId: 10,
+        beat: 8,
+        shapeKey: 1,
         members: placement.members,
         params: JSON.parse(JSON.stringify(placement.recipe.params)),
     };
     const at = new Map(placement.members.map((m) => [m.marcherId, m]));
     const [box] = boxesAt({
         recipes: [recipe],
-        moveEndOf: () => 8,
         beat: 8,
         positionOf: (id) => at.get(id),
     });
@@ -215,7 +215,8 @@ describe("the box's distribution", () => {
         const today = blockKind.generate(old as BlockParams, 10, ctx);
         const recipe: PlacedRecipe = {
             id: 1,
-            timelineId: 10,
+            beat: 8,
+            shapeKey: 1,
             kind: "block",
             kindVersion: 1,
             params: old,
@@ -231,7 +232,6 @@ describe("the box's distribution", () => {
         } as unknown as PlacedRecipe;
         const [box] = boxesAt({
             recipes: [recipe],
-            moveEndOf: () => 8,
             beat: 8,
             positionOf: (id) => today[id - 1],
         });

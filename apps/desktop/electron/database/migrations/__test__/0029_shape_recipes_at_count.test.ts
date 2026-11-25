@@ -275,6 +275,32 @@ describe(`Migration ${AT_COUNT.tag}`, () => {
         });
     });
 
+    it("is safe to run twice: a file that took it under another date keeps every count and key", async () => {
+        await betaFile(file, "other");
+        await migrateFile(file);
+        const after = recipesOf(file);
+        withDb(file, (db) =>
+            db
+                .prepare(
+                    "DELETE FROM __drizzle_migrations WHERE created_at = ?",
+                )
+                .run(AT_COUNT.when),
+        );
+        await migrateFile(file);
+        expect(recipesOf(file)).toEqual(after);
+        withDb(file, (db) =>
+            expect(
+                (
+                    db
+                        .prepare(
+                            "SELECT name FROM pragma_table_info('timeline_shape_recipes')",
+                        )
+                        .all() as { name: string }[]
+                ).map((c) => c.name),
+            ).not.toContain("timeline_id"),
+        );
+    });
+
     it("rolls back and opens again with every recipe at the same count", async () => {
         await betaFile(file, "other");
         await migrateFile(file);

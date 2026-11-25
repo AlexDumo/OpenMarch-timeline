@@ -277,23 +277,13 @@ describe("a group's interval and scaling", () => {
 });
 
 describe("groups read back across pages", () => {
-    // Moves 10, 20 and 30 end at beats 8, 16 and 24
-    const ends = new Map<number | null, number>([
-        [10, 8],
-        [20, 16],
-        [30, 24],
-    ]);
-    const moveEndOf = (id: number | null) => ends.get(id);
-
-    const group = (
-        timelineId: number,
-        id = 1,
-        standing = STANDING,
-    ): PlacedRecipe => {
+    // Placed at counts 8, 16 and 24
+    const group = (beat: number, id = 1, standing = STANDING): PlacedRecipe => {
         const { params: stored, members } = groupRecipe(standing);
         return {
             id,
-            timelineId,
+            beat,
+            shapeKey: id,
             kind: groupShape.id,
             kindVersion: groupShape.version,
             params: stored,
@@ -310,14 +300,13 @@ describe("groups read back across pages", () => {
     ) =>
         boxesAt({
             recipes,
-            moveEndOf,
             beat,
             positionOf: (id) => positions.get(id),
         });
 
     it("reads a group recipe back as a group, through the placed kinds", () => {
         expect(PLACED_KINDS).toContain(groupTool);
-        const [shown] = find([group(10)], 8);
+        const [shown] = find([group(8)], 8);
         expect(shown?.kind).toBe(groupTool);
         expect(shown?.spots).toBe(4);
         close(
@@ -327,7 +316,7 @@ describe("groups read back across pages", () => {
     });
 
     it("shows on later pages while the form is held, and not once a member moves", () => {
-        const r = group(10);
+        const r = group(8);
         expect(find([r], 16)).toHaveLength(1);
         const moved = new Map(standingAt);
         moved.set(4, { x: 170, y: 133 });
@@ -354,7 +343,8 @@ describe("groups read back across pages", () => {
         const spots = boxShape.generate(boxParams, 4, ctx);
         const box: PlacedRecipe = {
             id: 5,
-            timelineId: 10,
+            beat: 8,
+            shapeKey: 5,
             kind: "block",
             kindVersion: 1,
             params: { ...boxParams, spots: 4 },
@@ -369,7 +359,7 @@ describe("groups read back across pages", () => {
         };
         const onBox = new Map(spots.map((s, i) => [i + 1, { x: s.x, y: s.y }]));
         const grouped = group(
-            20,
+            16,
             6,
             spots.map((s, i) => ({ id: i + 1, x: s.x, y: s.y })),
         );
@@ -383,11 +373,12 @@ describe("groups read back across pages", () => {
     });
 
     it("ends where it's ungrouped on a later page", () => {
-        const r = group(10);
+        const r = group(8);
         const ungrouped: PlacedRecipe = {
             ...r,
             id: 9,
-            timelineId: 30,
+            beat: 24,
+            shapeKey: 9,
             kind: UNGROUPED_KIND,
             params: {},
         };

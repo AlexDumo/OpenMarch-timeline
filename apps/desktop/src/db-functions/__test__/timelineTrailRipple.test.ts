@@ -91,10 +91,10 @@ async function setUp(db: DbConnection, { recipe = true } = {}) {
         })),
         ...(recipe
             ? {
-                  afterWrite: async (tx, timelineId) => {
+                  afterWrite: async (tx, beat) => {
                       await saveShapeRecipeInTransaction({
                           tx,
-                          timelineId,
+                          beat,
                           recipe: {
                               kind: "line",
                               kindVersion: 2,
@@ -504,7 +504,8 @@ describeDbTests("Ripple into the next form (AP-T12)", (it) => {
         const mark = (await db
             .insert(R)
             .values({
-                timeline_id: page2.id,
+                beat: page2.end_beat,
+                shape_key: 0,
                 kind: UNGROUPED_RECIPE_KIND,
                 kind_version: 1,
                 params: "{}",
