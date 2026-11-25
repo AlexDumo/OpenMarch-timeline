@@ -684,7 +684,8 @@ split off into another move stay in their shape instead of becoming freeform. De
    other order marks at it. Shapes and marks don't take members from each other, as now. Recipes
    left with no member are deleted. Checked by the write functions; the database has no join
    constraint for it.
-5. **Migration `0029_shape_recipes_at_count`** (the next number after `0028_timeline_route_sources`):
+5. **Migration `0029_shape_recipes_at_count`** (the next free number when step 2 of §7 lands; 0029
+   today, after `0028_timeline_route_sources`):
    - Rebuilds `timeline_shape_recipes` with `beat` in place of `timeline_id` (SQLite can't drop a
      column that has a foreign key). The rebuild runs with foreign keys off, as drizzle's rebuilds
      do, so dropping the old table doesn't cascade into `timeline_shape_recipe_marchers`.
@@ -706,11 +707,12 @@ split off into another move stay in their shape instead of becoming freeform. De
    roll back, 0029) keeps every recipe at the same count. `newFileSchema.test.ts` and `_blank.dots`
    are regenerated. No table is added, so `TABLES_AFTER_0018` in `convertOnOpen.test.ts` is
    unchanged.
-7. **File version.** Builds before 0029 (fork builds and 0.2.0 betas 1 to 6) select
+7. **File version.** Builds before 0029 (fork builds and the 0.2.0 betas so far) select
    `timeline_id` and would fail on every recipe query, not just play or edit one fact wrong. So a
-   file is written as **15** (`SHAPE_AT_COUNT_USER_VERSION`) once 0029 has run on it, new files
-   included, and older builds refuse it with the "made with a newer OpenMarch" message instead of
-   breaking the Shape tool. This is ADR 0017 §9's rule, applied to a fact every file now has.
+   file is written as the next free version (`SHAPE_AT_COUNT_USER_VERSION`) once 0029 has run on
+   it, new files included. That is **18** today: on `pathways/host-10`, 17 is the outline model and
+   15 and 16 are reserved by open pull requests (`electron/database/fileVersion.ts`). Older builds
+   refuse it with the "made with a newer OpenMarch" message instead of breaking the Shape tool. This is ADR 0017 §9's rule, applied to a fact every file now has.
 8. **Which files convert, and how:**
    - **v0.1.7 files** (page era, `user_version` 7) have no recipe tables, and the converter writes
      no recipes (it only reports curved page-era shapes). 0029 runs in the conversion's second
@@ -782,18 +784,18 @@ upkeep, never during undo or redo replay) drops members that no longer stand on 
 their recipe's count and deletes recipes left empty. It replaces the foreign-key cascade from
 moves.
 
-| Edit | What happens to the shape |
-| ---- | ------------------------- |
-| Split marchers into a new move (UI-25) | Nothing. Members stay, whichever move they're in. Rule 3's carry goes. |
-| Split at playhead, Basic mid-page positions, **+** / Split page | Nothing. Positions at the count don't change. Fixes BUG 2. |
-| Merge moves over the same counts | Nothing. |
-| Merge with a refit, clip drag, edge resize, flag drag | If the edit re-times the arrival of **every** member at the count to one new count, the recipe moves there. Otherwise members no longer on their spot at the count leave (holes), and the toast names them. |
-| Delete a move | Members whose arrival went leave; a recipe with nobody left is deleted. Deleting a page's move with all members still deletes the shape, as the cascade did. |
-| Insert or delete counts, tempo edits, page flag edits | The recipe's count ripples as an order mark's does (`orderMarkPlace`): with the page flag it's on, else with its count; a shape inside a deleted page goes. |
-| Member dragged away at the count | Leaves, leaving a hole, with the left-box toast (`leftBoxToast.ts`), as now; found by count instead of move. |
-| A member's earlier keyframe edited | No effect while the member is pinned at the count (§2). A Held member's hold follows its arrival; if that takes it off its spot, it leaves. |
-| Remove keyframe, Clear this page at the count | The member leaves the shape (a hole). See 5.3. |
-| Marcher deleted | Its member rows cascade, as now. |
+| Edit                                                            | What happens to the shape                                                                                                                                                                                   |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Split marchers into a new move (UI-25)                          | Nothing. Members stay, whichever move they're in. Rule 3's carry goes.                                                                                                                                      |
+| Split at playhead, Basic mid-page positions, **+** / Split page | Nothing. Positions at the count don't change. Fixes BUG 2.                                                                                                                                                  |
+| Merge moves over the same counts                                | Nothing.                                                                                                                                                                                                    |
+| Merge with a refit, clip drag, edge resize, flag drag           | If the edit re-times the arrival of **every** member at the count to one new count, the recipe moves there. Otherwise members no longer on their spot at the count leave (holes), and the toast names them. |
+| Delete a move                                                   | Members whose arrival went leave; a recipe with nobody left is deleted. Deleting a page's move with all members still deletes the shape, as the cascade did.                                                |
+| Insert or delete counts, tempo edits, page flag edits           | The recipe's count ripples as an order mark's does (`orderMarkPlace`): with the page flag it's on, else with its count; a shape inside a deleted page goes.                                                 |
+| Member dragged away at the count                                | Leaves, leaving a hole, with the left-box toast (`leftBoxToast.ts`), as now; found by count instead of move.                                                                                                |
+| A member's earlier keyframe edited                              | No effect while the member is pinned at the count (§2). A Held member's hold follows its arrival; if that takes it off its spot, it leaves.                                                                 |
+| Remove keyframe, Clear this page at the count                   | The member leaves the shape (a hole). See 5.3.                                                                                                                                                              |
+| Marcher deleted                                                 | Its member rows cascade, as now.                                                                                                                                                                            |
 
 - **Ungroup marks** (`UNGROUPED_RECIPE_KIND`) are stored at a count, like shapes: on the shape's
   own count the recipe becomes the mark in place; on a later count the mark is saved at that
@@ -849,7 +851,7 @@ names.
 
 1. **Read seam, no behaviour change.** Every reader asks one function for a recipe's count
    (its move's end, a mark's `params.beat` or 0) and for the recipes at a count. Unit tests.
-2. **Migration and writes at a count.** 0029, rollback, file version 15, writers and readers on
+2. **Migration and writes at a count.** 0029, rollback, the file version, writers and readers on
    `beat`, rule 1 and rule 3 removed, upkeep replacing the cascade. Tests: fork, beta and v0.1.7
    conversions, round trip, BUG 2 passing, split and merge keep members. Lab: a Basic mid-page
    position, then a shape at the flag.
@@ -861,6 +863,47 @@ names.
 6. **Holds:** lift the shape-member skips (5.3), amending ADR 0012.
 7. Close fork #504 as replaced, and mark the ownership research's decisions 6, 9 and 10 as
    superseded.
+
+### 8. Shape marks (owner, 2026-11-25)
+
+A recipe at a count is shown as a **shape mark**, in Basic and in Expert. This is how a designer
+sees which counts have a shape of their own and which carry one from before. It is also the rule
+for shapes that change while marchers follow around them (fork #1174, research
+`docs/timeline/research/shape-over-time/`, branch `research/shape-over-time`, fork PR #1247),
+which builds on this revision.
+
+1. **A mark is a recipe at a count.** Nothing else is stored to say whether a later page "follows"
+   an earlier one: it has a mark or it doesn't.
+2. **Between two marks of the same shape, the shape blends; after the last, it holds.** Holding is
+   the carry of the revision of 2026-10-14, unchanged. Blending is new and belongs to the
+   shape-over-time work: a follow move linked to the shape at both counts stores the outline at
+   each end, and the resolver blends them. Without such a move, two marks are two shapes, as now.
+3. **An edit where the shape has a mark changes that mark.** A later count without a mark keeps
+   carrying it, so the edit shows there too.
+4. **An edit where the shape has no mark adds one there.** This is rule 4 of 2026-10-29 (a
+   later-count copy), unchanged. The first such edit shows a toast: "Page 15 now has its own
+   shape. It changes during the move." with Undo and "Match page 14". The second sentence appears
+   only when a follow move links the two counts.
+5. **"Make shape match previous page"** deletes the mark at the playhead's count, in one undo
+   step. The page carries the shape from the mark before it again, and its members go back to
+   the carried spots. Greyed out, with its reason, on a count with no mark of its own.
+6. **Basic puts marks only on pages:** an edit there is always at a page's count. Expert can add a
+   mark at any count, as §3 says.
+7. **Shown:**
+   - **Timeline:** a diamond with the shape's glyph at each mark's count, on the page row in Basic
+     and as in §3 in Expert. One diamond: the shape doesn't change. Two: it changes between them.
+   - **Field:** on a count with a mark, the shape draws solid with its handles. On a count that
+     carries one, it draws dotted and labeled "Same as page 14". Selecting it shows the handles
+     dashed; the first drag adds the mark (4).
+8. **Edge cases:**
+   - Deleting the earlier mark while the later one exists: the later keeps its shape, and a
+     follow move between them unlinks and plays as it did.
+   - Re-timing, splitting and merging: marks move with their counts, as in §4.
+   - Members joining or leaving between two marks: out of scope here, left to the shape-over-time
+     work.
+
+The prototype with marks is `docs/timeline/research/shape-over-time/demo/shape-over-time.html` on
+`research/shape-over-time`.
 
 ### Verification
 
