@@ -3687,7 +3687,7 @@
             "saveNeedsImported": "Pick an imported uniform above to save it as a file.",
             "saveNeedsImport": "Import a uniform first.",
             "missing": "The band's uniform isn't in this show anymore, so the band wears its preset. Import it again to bring it back.",
-            "unreadable": "The band's uniform is in this show, but its file can't be read, so the band wears its preset. If it was made with a newer version of OpenMarch, update OpenMarch to see it. Otherwise pick another uniform, or import one.",
+            "unreadable": "The band's uniform is in this show, but its file can't be read (it may be damaged), so the band wears its preset. Pick another uniform, or import one.",
             "hint": "Paint on the template, hide the template layer, then import a transparent PNG or an SVG. A saved uniform file imports too.",
             "imported": "The band now wears “{name}”.",
             "saveFailed": "Couldn't save the imported uniform",
@@ -3713,7 +3713,8 @@
                 "newer": "That uniform file is from a newer version of OpenMarch. Update OpenMarch to import it.",
                 "damaged": "That uniform file is damaged.",
                 "timedOut": "Importing took too long. Try a smaller file."
-            }
+            },
+            "newer": "The band's uniform was made with a newer version of OpenMarch, so the band wears its preset. Update OpenMarch to see it."
         },
         "uniformItems": {
             "title": "Logos and numbers",
@@ -3837,8 +3838,10 @@
             "badge": "Preview",
             "warning": "Preview: uniform files may change in a later version of OpenMarch, and uniforms you make now may need to be imported again. Keep your original artwork.",
             "dismiss": "Got it",
-            "showUses": "This show uses a preview uniform.",
-            "turnOn": "Turn on custom uniforms"
+            "showUses": "This show's band wears a custom uniform, a preview feature.",
+            "turnOn": "Turn on custom uniforms",
+            "missingOff": "The band's custom uniform isn't in this show anymore, so the band wears its preset. To bring it back, turn on custom uniforms and import it again.",
+            "unreadableOff": "The band's custom uniform is in this show, but its file can't be read, so the band wears its preset. Pick another uniform, or turn on custom uniforms to import one."
         }
     },
     "web": {
@@ -5323,10 +5326,13 @@
             "unused": "{count, plural, one {# asset isn't used} other {# assets aren't used}} anywhere in the show · {size}",
             "missing": "{count, plural, one {# prop names a model this show doesn't have, so it draws as a block.} other {# props name models this show doesn't have, so they draw as blocks.}}",
             "large": "Assets make this show large: {size}. Large shows are slower to open, save and share.",
-            "missingUniform": "The band's uniform isn't in this show anymore, so the band wears its preset. Import it again in the 3D View settings to bring it back.",
-            "unreadableUniform": "The band's uniform is in this show, but its file can't be read (it may be damaged, or from a newer OpenMarch), so the band wears its preset. Pick another uniform in the 3D View settings, or import one.",
+            "missingUniform": "The band's custom uniform isn't in this show anymore, so the band wears its preset. Import it again in the 3D View settings to bring it back.",
+            "unreadableUniform": "The band's custom uniform is in this show, but its file can't be read (it may be damaged), so the band wears its preset. Pick another uniform in the 3D View settings, or import one.",
             "historyFailed": "Couldn't check which uniforms Undo can bring back, so imported uniforms aren't offered for removal.",
-            "unusedVersions": "{count, plural, one {# asset version isn't used} other {# asset versions aren't used}} anywhere in the show · {size}"
+            "unusedVersions": "{count, plural, one {# asset version isn't used} other {# asset versions aren't used}} anywhere in the show · {size}",
+            "missingUniformPreviewOff": "The band's custom uniform isn't in this show anymore, so the band wears its preset. To bring it back, turn on Custom uniforms (preview) in the 3D View settings' Preferences, then import it again.",
+            "unreadableUniformPreviewOff": "The band's custom uniform is in this show, but its file can't be read (it may be damaged), so the band wears its preset. Pick another uniform in the 3D View settings.",
+            "newerUniform": "The band's custom uniform was made with a newer version of OpenMarch, so the band wears its preset. Update OpenMarch to see it."
         },
         "removeUnused": {
             "button": "Remove unused…",

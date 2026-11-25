@@ -45,6 +45,7 @@ import {
     type UniformPackValue,
 } from "@/view3d/core/marchers/uniformArtwork";
 import {
+    uniformPackIsNewer,
     uniformPackQueryOptions,
     uniformEntryOf,
     uniformPacksQueryOptions,
@@ -181,6 +182,9 @@ const FLATS_SAMPLE = "flats:sample" as const;
  * say) keeps wearing it: show data never changes on its own. The picker lists that one uniform,
  * picked, says the show uses a preview uniform and offers to turn the preview on. Picking a
  * preset still works, and nothing is removed from the show.
+ *
+ * When the band's uniform is gone from the show, doesn't read, or was made by a newer OpenMarch,
+ * the band wears its preset and a note here says why, with the setting on or off.
  */
 export function UniformPicker() {
     const { t } = useTranslate();
@@ -199,14 +203,15 @@ export function UniformPicker() {
     // the uniform whose version the band wears (editing items adds versions, fork #1258)
     const wornEntry = namedPack ? uniformEntryOf(packs, namedPack) : undefined;
     // a uniform the show no longer has (an undo after Remove unused…), or one whose file
-    // doesn't read: the band wears its preset, so the preset is the one picked
-    const worn = wornPackProblem(
+    // doesn't read (or was made by a newer OpenMarch): the band wears its preset, so the preset
+    // is the one picked, and a note under the picker says why, with the setting on or off
+    const problem = wornPackProblem(
         namedPack,
         packs ? wornEntry !== undefined : undefined,
         packRead ? pack : undefined,
-    )
-        ? null
-        : named;
+        uniformPackIsNewer(namedPack),
+    );
+    const worn = problem ? null : named;
     type Value = UniformPresetId | typeof FLATS_SAMPLE | UniformPackValue;
     const sampleOption = {
         value: FLATS_SAMPLE as Value,
@@ -265,15 +270,30 @@ export function UniformPicker() {
                 testId="view3d-uniform-picker"
                 className="grid! grid-cols-2 [&>*]:justify-start"
             />
-            {previewWorn && (
+            {problem && (
+                <p
+                    className="text-sub text-yellow"
+                    role="status"
+                    data-testid={`view3d-uniform-${problem}`}
+                >
+                    {problem === "newer"
+                        ? t("view3d.uniformImport.newer")
+                        : flats
+                          ? t(`view3d.uniformImport.${problem}`)
+                          : t(`view3d.uniformPreview.${problem}Off`)}
+                </p>
+            )}
+            {(previewWorn || (!flats && problem && problem !== "newer")) && (
                 <div
                     className="flex flex-wrap items-center gap-6"
                     role="status"
                     data-testid="view3d-uniform-preview-worn"
                 >
-                    <span className="text-sub text-text/60">
-                        {t("view3d.uniformPreview.showUses")}
-                    </span>
+                    {previewWorn && (
+                        <span className="text-sub text-text/60">
+                            {t("view3d.uniformPreview.showUses")}
+                        </span>
+                    )}
                     <Button
                         variant="secondary"
                         size="compact"

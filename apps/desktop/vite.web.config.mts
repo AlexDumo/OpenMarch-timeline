@@ -418,6 +418,11 @@ export default defineConfig(({ mode, command }) => {
             "process.env.PLAYWRIGHT_SESSION": JSON.stringify(""),
             "import.meta.env.VITE_PUBLIC_WEB_BUILD": JSON.stringify("true"),
             "import.meta.env.VITE_PUBLIC_WEB_CHANNEL": JSON.stringify(channel),
+            // "true" only when WEB_CHANNEL was set: a deploy that forgot it reads as "dev", but
+            // previews such as Custom uniforms (preview) stay off there, as in a release
+            "import.meta.env.VITE_PUBLIC_WEB_CHANNEL_NAMED": JSON.stringify(
+                String(process.env.WEB_CHANNEL !== undefined),
+            ),
             "import.meta.env.VITE_PUBLIC_WEB_STORAGE_NAMESPACE":
                 JSON.stringify(storageNamespace),
             "import.meta.env.VITE_PUBLIC_APP_VERSION": JSON.stringify(version),

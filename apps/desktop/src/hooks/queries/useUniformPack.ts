@@ -25,7 +25,10 @@ import {
     type UniformPackManifest,
 } from "@/view3d/core/uniformPack/format";
 import { runUniformPackJob } from "@/view3d/uniformPack/runUniformPackJob";
-import { isPassingPackFailure } from "@/view3d/uniformPack/protocol";
+import {
+    UniformPackJobError,
+    isPassingPackFailure,
+} from "@/view3d/uniformPack/protocol";
 import { conToastError } from "@/utilities/utils";
 import tolgee from "@/global/singletons/Tolgee";
 import { DEFAULT_STALE_TIME } from "./constants";
@@ -185,6 +188,17 @@ export function composeChecksUniformPacks(): void {
     readsDecode = false;
 }
 
+/** The pack values whose last read was refused as made by a newer OpenMarch */
+const newerPacks = new Set<string>();
+
+/**
+ * Whether the pack `value` names was refused as made by a newer OpenMarch, when its
+ * {@link uniformPackQueryOptions} read gave null: the band wears its preset, and updating
+ * OpenMarch draws it (`wornPackProblem`'s "newer").
+ */
+export const uniformPackIsNewer = (value: string | null | undefined): boolean =>
+    !!value && newerPacks.has(value);
+
 /**
  * The pack `value` names, read, or null when it names no uniform asset the show has, or its
  * bytes don't read as a pack, or an image in it doesn't decode (the art couldn't be drawn: see
@@ -223,11 +237,20 @@ export const uniformPackQueryOptions = (value: string | null | undefined) =>
                         "3D View: the show's uniform doesn't read",
                         again,
                     );
+                    if (
+                        again instanceof UniformPackJobError &&
+                        again.code === "newer"
+                    ) {
+                        newerPacks.add(stored.value);
+                        if (value) newerPacks.add(value);
+                    }
                     return null;
                 }
             }
             recheck.delete(stored.value);
             if (value) recheck.delete(value);
+            newerPacks.delete(stored.value);
+            if (value) newerPacks.delete(value);
             if (decode) noteDecoded(stored.value, result.decoded ?? []);
             return {
                 ...stored,

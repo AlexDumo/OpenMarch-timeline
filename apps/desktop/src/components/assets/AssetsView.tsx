@@ -52,7 +52,11 @@ import {
     wornPackProblem,
     type WornPackProblem,
 } from "@/view3d/core/uniformPack/wornPack";
-import { uniformPackQueryOptions } from "@/hooks/queries/useUniformPack";
+import {
+    uniformPackIsNewer,
+    uniformPackQueryOptions,
+} from "@/hooks/queries/useUniformPack";
+import { useCustomUniforms } from "@/view3d/window/uniformArtworkPreview";
 import { parseShowAssetRef, showAssetRefValue } from "@/showAssets/ref";
 
 /**
@@ -127,7 +131,7 @@ function useAssetUse() {
                 item.model?.startsWith("library:") && !known.has(item.model),
         ).length;
         // The band's uniform when the show doesn't have it (an undo after Remove unused…), or
-        // has it but its file doesn't read
+        // has it but its file doesn't read, or was made by a newer OpenMarch
         // any version of it: a version an item edit just replaced still counts (fork #1258)
         const wornId = parseShowAssetRef(worn)?.id;
         const uniformProblem = wornPackProblem(
@@ -139,6 +143,7 @@ function useAssetUse() {
                         row.asset.kind === UNIFORM_ASSET_KIND,
                 ),
             wornPack,
+            uniformPackIsNewer(worn),
         );
         return {
             ...use,
@@ -262,6 +267,7 @@ function AssetNotes({
 }) {
     const tally = removableCount(removableLines(unused, all));
     const sizeText = useSizeText();
+    const customUniforms = useCustomUniforms();
     const notes: React.ReactNode[] = [];
     if (unused.length > 0)
         notes.push(
@@ -302,10 +308,17 @@ function AssetNotes({
                 />
             </li>,
         );
+    // with Custom uniforms (preview) off there's no Import button: the notes say how to get one
     if (uniformProblem === "missing")
         notes.push(
             <li key="missingUniform" data-testid="assets-missing-uniform-note">
-                <T keyName="assets.notes.missingUniform" />
+                <T
+                    keyName={
+                        customUniforms
+                            ? "assets.notes.missingUniform"
+                            : "assets.notes.missingUniformPreviewOff"
+                    }
+                />
             </li>,
         );
     if (uniformProblem === "unreadable")
@@ -314,7 +327,19 @@ function AssetNotes({
                 key="unreadableUniform"
                 data-testid="assets-unreadable-uniform-note"
             >
-                <T keyName="assets.notes.unreadableUniform" />
+                <T
+                    keyName={
+                        customUniforms
+                            ? "assets.notes.unreadableUniform"
+                            : "assets.notes.unreadableUniformPreviewOff"
+                    }
+                />
+            </li>,
+        );
+    if (uniformProblem === "newer")
+        notes.push(
+            <li key="newerUniform" data-testid="assets-newer-uniform-note">
+                <T keyName="assets.notes.newerUniform" />
             </li>,
         );
     if (historyFailed)

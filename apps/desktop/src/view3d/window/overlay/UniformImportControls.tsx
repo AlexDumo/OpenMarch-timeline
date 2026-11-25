@@ -17,7 +17,6 @@ import { touchSafeAccept } from "@/utilities/fileAccept";
 import {
     uniformPackQueryOptions,
     keepSameUniform,
-    uniformEntryOf,
     uniformPacksQueryOptions,
 } from "@/hooks/queries/useUniformPack";
 import {
@@ -35,7 +34,6 @@ import {
     FLATS_PAGE_PX,
     uniformPackFileName,
 } from "@/view3d/core/uniformPack/format";
-import { wornPackProblem } from "@/view3d/core/uniformPack/wornPack";
 import { useCustomUniforms } from "@/view3d/window/uniformArtworkPreview";
 import { PreviewWarningLine, useFirstUseWarning } from "./UniformPreview";
 import { loadFlatsGeometry } from "@/view3d/window/performers/marchers/flatsAtlas";
@@ -69,20 +67,12 @@ export function UniformImportControls() {
 
     const worn = flatsArtworkOf(settings?.uniformArtwork);
     const wornPack = worn && isUniformPackValue(worn) ? worn : null;
-    const { data: pack, isSuccess: packRead } = useQuery({
+    const { data: pack } = useQuery({
         ...uniformPackQueryOptions(wornPack),
         // an item edit's save moves the band to a new version: keep Save uniform file meanwhile
         placeholderData: keepSameUniform(wornPack),
     });
     const { data: packs } = useQuery(uniformPacksQueryOptions());
-    // the venue names a uniform the show doesn't have (an undo after Remove unused…) or whose
-    // file doesn't read: the band wears its preset
-    const wornProblem = wornPackProblem(
-        wornPack,
-        // any version of it: editing items adds versions and replaces them (fork #1258)
-        packs ? uniformEntryOf(packs, wornPack) !== undefined : undefined,
-        packRead ? pack : undefined,
-    );
 
     if (!customUniforms) return null;
 
@@ -226,17 +216,6 @@ export function UniformImportControls() {
                         </span>
                     ))}
                 </div>
-            )}
-            {wornProblem && (
-                <p
-                    className="text-sub text-yellow"
-                    role="status"
-                    data-testid={`view3d-uniform-${wornProblem}`}
-                >
-                    {wornProblem === "missing"
-                        ? t("view3d.uniformImport.missing")
-                        : t("view3d.uniformImport.unreadable")}
-                </p>
             )}
             {problem && (
                 <p className="text-sub text-red" role="alert">
