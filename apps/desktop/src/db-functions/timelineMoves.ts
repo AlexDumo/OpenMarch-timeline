@@ -133,12 +133,6 @@ export interface TimelineMoveResult {
      */
     cleared?: number[];
     /**
-     * A Basic edit that re-cut a page's moves: members of the shape placed at its flag whose
-     * positions there ended up in another move than the one the shape followed
-     * (`recipesFollowMembersInTransaction`), so it no longer lists them. By id, for the toast
-     */
-    droppedFromShapes?: number[];
-    /**
      * Clear this page on the first page of a Held hold that runs on, or on the page a Held hold
      * arrives from: the marchers whose hold on the later pages went too (its arrival went), and
      * those pages, for the toast
@@ -1179,100 +1173,20 @@ async function refuseLockedArrivals(
     );
 }
 
-/** The value occurring most often in `ids` (the smallest of a tie), or null when empty. */
-const mostCommon = (ids: readonly number[]): number | null => {
-    const counts = new Map<number, number>();
-    for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
-    let best: number | null = null;
-    for (const [id, n] of counts)
-        if (
-            best === null ||
-            n > counts.get(best)! ||
-            (n === counts.get(best)! && id < best)
-        )
-            best = id;
-    return best;
-};
-
 const wroteSomething = (r: TimelineMoveResult): boolean =>
     r.homes.length > 0 ||
     r.slots.length > 0 ||
     r.convertedTransitionIds.length > 0 ||
     (r.cleared?.length ?? 0) > 0;
 
-/** The move whose beat range is exactly `range`, if there is one */
-async function timelineWithRange(
-    tx: DbTransaction,
-    range: { readonly start: number; readonly end: number },
-): Promise<number | null> {
-    const row = await tx
-        .select({ id: schema.timelines.id })
-        .from(schema.timelines)
-        .where(
-            and(
-                eq(schema.timelines.start_beat, range.start),
-                eq(schema.timelines.end_beat, range.end),
-            ),
-        )
-        .get();
-    return row?.id ?? null;
-}
-
 /**
- * The move, among those ending at `endBeat` (and starting at `startBeat` when given), that most
- * of `marcherIds` are in (the lowest id on a tie), or null for none: where an edit's positions
- * belong when several moves share its counts (UI-25)
+ * App data an edit writes about the positions it wrote (a shape recipe, ADR 0006), inside the
+ * edit: given the count the positions are written at. `false` says it wrote nothing.
  */
-async function timelineHoldingMost(
-    tx: DbTransaction,
-    marcherIds: readonly number[],
-    endBeat: number,
-    startBeat?: number,
-): Promise<number | null> {
-    const t = schema.timelines;
-    const tr = schema.timeline_transitions;
-    const a = schema.timeline_assignments;
-    const rows = await tx
-        .selectDistinct({ timelineId: t.id, marcherId: a.marcher_id })
-        .from(a)
-        .innerJoin(tr, eq(tr.id, a.transition_id))
-        .innerJoin(t, eq(t.id, tr.timeline_id))
-        .where(
-            and(
-                inArray(a.marcher_id, [...new Set(marcherIds)]),
-                eq(t.end_beat, endBeat),
-                startBeat === undefined
-                    ? undefined
-                    : eq(t.start_beat, startBeat),
-            ),
-        )
-        .all();
-    const counts = new Map<number, number>();
-    for (const r of rows)
-        counts.set(r.timelineId, (counts.get(r.timelineId) ?? 0) + 1);
-    let best: number | null = null;
-    for (const [id, n] of counts)
-        if (
-            best === null ||
-            n > counts.get(best)! ||
-            (n === counts.get(best)! && id < best)
-        )
-            best = id;
-    return best;
-}
-
-/** The move that ends at `beat`, if there is one (where a point edit's positions belong) */
-async function timelineEndingAt(
+export type AfterWrite = (
     tx: DbTransaction,
     beat: number,
-): Promise<number | null> {
-    const row = await tx
-        .select({ id: schema.timelines.id })
-        .from(schema.timelines)
-        .where(eq(schema.timelines.end_beat, beat))
-        .get();
-    return row?.id ?? null;
-}
+) => Promise<void | boolean>;
 
 /**
  * A canvas move as one undoable edit (UI-9 Editing, Home; UI-10): the homes for `{kind: "home"}`,
@@ -1318,15 +1232,13 @@ export const moveMarchersInTarget = async ({
      */
     onStart?: () => void;
     /**
-     * Called inside the edit after the positions are written, with the move they belong to
-     * (`null` for homes, and for a drag inside holds from the starting spots only), so app data about them (a shape recipe, ADR 0006) is part of the same
-     * undo step. Not called for a range with no move to hold the positions. Resolving to `false`
-     * says it wrote nothing, so an edit that changed no positions either is still no undo step.
+     * Called inside the edit after the positions are written, with the count they are written at
+     * (0 for homes, and for a drag inside holds from the starting spots only), so app data about
+     * them (a shape recipe, which stands at a count, ADR 0006) is part of the same undo step.
+     * Resolving to `false` says it wrote nothing, so an edit that changed no positions either is
+     * still no undo step.
      */
-    afterWrite?: (
-        tx: DbTransaction,
-        timelineId: number | null,
-    ) => Promise<void | boolean>;
+    afterWrite?: AfterWrite;
 }): Promise<TimelineMoveResult> => {
     if (allMoves.length === 0) return emptyMoveResult();
     try {
@@ -1359,7 +1271,14 @@ export const moveMarchersInTarget = async ({
                 moves,
                 ghosts: target.ghosts ?? false,
             });
-            await afterWrite?.(tx, target.timelineId);
+            if (afterWrite) {
+                const end = await tx
+                    .select({ end: schema.timelines.end_beat })
+                    .from(schema.timelines)
+                    .where(eq(schema.timelines.id, target.timelineId))
+                    .get();
+                if (end) await afterWrite(tx, end.end);
+            }
             return result;
         }
         if (target.kind === "range" || target.kind === "point") {
@@ -1473,47 +1392,23 @@ export const moveMarchersInTarget = async ({
                 keepUnchanged,
             });
             await moveHeldHomesInTransaction(tx, homes, result);
-            // The selected move, else the one the marchers are in, since a move split off
-            // the page's shares its counts (UI-25). With only Held marchers, the move their
-            // edit went to (the most of them arrive in), so app data about their positions (a
-            // shape recipe) is saved with it; with only marchers Held from their starting
-            // spots, the homes (`null`), where their edit went
+            // The count the edit writes at (0 for marchers Held from their starting spots
+            // only, whose edit went to the homes), so app data about their positions (a shape
+            // recipe) is saved there
             const marcherIds = rest.map((m) => m.marcherId);
             const onlyHomes =
                 marcherIds.length === 0 &&
                 held.length === 0 &&
                 homes.length > 0;
-            const timelineId = !afterWrite
-                ? null
-                : marcherIds.length === 0
-                  ? mostCommon(held.map((h) => h.timelineId))
-                  : target.kind === "range"
-                    ? (target.timelineId ??
-                      (await timelineHoldingMost(
-                          tx,
-                          marcherIds,
-                          target.end,
-                          target.start,
-                      )) ??
-                      (await timelineWithRange(tx, target)))
-                    : // Basic edits only moves over the page box (an Expert move is
-                      // refused), so those first, should a file hold others
-                      ((await timelineHoldingMost(
-                          tx,
-                          marcherIds,
-                          target.beat,
-                          target.box.start,
-                      )) ??
-                      (await timelineHoldingMost(
-                          tx,
-                          marcherIds,
-                          target.beat,
-                      )) ??
-                      (await timelineEndingAt(tx, target.beat)));
+            const editedBeat = onlyHomes
+                ? 0
+                : target.kind === "range"
+                  ? target.end
+                  : target.beat;
             const wroteAppData =
-                afterWrite && (timelineId !== null || onlyHomes)
-                    ? (await afterWrite(tx, onlyHomes ? null : timelineId)) !==
-                      false
+                afterWrite &&
+                (marcherIds.length > 0 || held.length > 0 || onlyHomes)
+                    ? (await afterWrite(tx, editedBeat)) !== false
                     : false;
             // A shape placed at the starting spots is those marchers' hold: their Held
             // holds from the starting spots go, in the same edit (owner, 2026-11-01)
@@ -1538,7 +1433,7 @@ export const moveMarchersInTarget = async ({
             })),
         });
         const placed =
-            afterWrite !== undefined && (await afterWrite(tx, null)) !== false;
+            afterWrite !== undefined && (await afterWrite(tx, 0)) !== false;
         // A shape placed at the starting spots is those marchers' hold, as when it's placed
         // through a hold (above): their Held holds from the starting spots go, in this edit
         if (placed)

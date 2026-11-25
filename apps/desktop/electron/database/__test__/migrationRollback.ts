@@ -21,6 +21,18 @@ export const journal: Journal = JSON.parse(
 );
 export const migrationAt = (idx: number) =>
     journal.entries.find((e) => e.idx === idx)!;
+/** The journal entry of migration `tag` */
+export const migrationTagged = (tag: string) =>
+    journal.entries.find((e) => e.tag === tag)!;
+
+/**
+ * Shapes at a count (ADR 0006 revision of 2026-11-22). Numbered 0030 because fork PR #1322 holds
+ * 0029; found by its tag, so nothing here changes however #1322's migration is merged (it must be
+ * dated after this one, see `0030_shape_recipes_at_count.sql`).
+ */
+export const SHAPE_AT_COUNT_MIGRATION = migrationTagged(
+    "0030_shape_recipes_at_count",
+);
 
 /** The tables and indexes of a file at upstream's 0016, by name. */
 function upstream0016Schema(): Map<
@@ -262,6 +274,55 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
     // Route sources, pathways step 3c: a new table only
     28: (db) => dropTables(db, ["timeline_route_sources"]),
 };
+// Shapes at a count (ADR 0006 revision of 2026-11-22, §1.7): `timeline_shape_recipes` as 0017
+// made it. Registered by tag, so it follows the migration wherever the journal puts it
+ROLLBACKS[SHAPE_AT_COUNT_MIGRATION.idx] = rollBackShapeRecipesAtCount;
+
+/**
+ * Rebuilds `timeline_shape_recipes` as 0017 made it, keeping its ids and so its members. A shape
+ * points at the move where most of its members have a row ending at its count (the lowest id on
+ * a tie; `NULL` for none, or for the starting spots). An order mark goes in no move with its count
+ * in `params.beat`, as this build's marks were saved. Opening the file runs 0030 again, which
+ * reads each recipe back at the same count.
+ */
+function rollBackShapeRecipesAtCount(db: DatabaseSync) {
+    db.exec("PRAGMA legacy_alter_table = ON");
+    db.exec(
+        "ALTER TABLE timeline_shape_recipes RENAME TO timeline_shape_recipes_rollback",
+    );
+    db.exec("PRAGMA legacy_alter_table = OFF");
+    db.exec(`CREATE TABLE \`timeline_shape_recipes\` (
+	\`id\` integer PRIMARY KEY NOT NULL,
+	\`timeline_id\` integer,
+	\`kind\` text NOT NULL,
+	\`kind_version\` integer NOT NULL,
+	\`params\` text NOT NULL,
+	\`order_mode\` text NOT NULL,
+	\`reverse\` integer DEFAULT false NOT NULL,
+	\`created_at\` text DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
+	FOREIGN KEY (\`timeline_id\`) REFERENCES \`timelines\`(\`id\`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "timeline_shape_recipes_params_check" CHECK(json_valid(params))
+)`);
+    db.exec(`
+        INSERT INTO timeline_shape_recipes (id, timeline_id, kind, kind_version, params, order_mode, reverse, created_at)
+        SELECT r.id,
+            CASE WHEN r.kind IN ('order', 'orderClear') OR r.beat = 0 THEN NULL ELSE (
+                SELECT tr.timeline_id
+                FROM timeline_shape_recipe_marchers m
+                JOIN timeline_assignments a ON a.marcher_id = m.marcher_id AND a.end_beat = r.beat
+                JOIN timeline_transitions tr ON tr.id = a.transition_id
+                WHERE m.recipe_id = r.id
+                GROUP BY tr.timeline_id
+                ORDER BY count(DISTINCT m.marcher_id) DESC, tr.timeline_id
+                LIMIT 1
+            ) END,
+            r.kind, r.kind_version,
+            CASE WHEN r.kind IN ('order', 'orderClear') THEN json_set(r.params, '$.beat', r.beat) ELSE r.params END,
+            r.order_mode, r.reverse, r.created_at
+        FROM timeline_shape_recipes_rollback r
+    `);
+    db.exec("DROP TABLE timeline_shape_recipes_rollback");
+}
 
 /**
  * Undoes migration `idx` and every later one the file has taken, newest first. A page-era file

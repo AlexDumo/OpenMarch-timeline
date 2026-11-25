@@ -9,23 +9,18 @@ import {
 import { editingPositionAt } from "@/timeline/timelineIsolationPlan";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { boxesAt, type PlacedBox, type PlacedRecipe } from "./placedBox";
-import { readRecipeMoveEnds } from "./recipeCount";
 
 /**
  * The show's shape recipes, read back for placed boxes
  * (docs/timeline/research/shapes/07-placed-boxes.md). Refreshed after every coordinate edit,
  * whenever the resolver takes a change, and after every undoable edit, undo and redo
  * (`followPlacedBoxChanges`).
- *
- * `ends` is the end beat of each recipe's move, which its count is read from (`recipeCount`), read
- * with the recipes, so `placedBoxesRead` covers both. `storedTimelines` has them too, but it's
- * reloaded on its own after an edit: a copy saved on a new move could be read back before its
- * move, show nowhere for a moment, and be copied again by the next save (#514).
+ * A recipe stores its own count (`beat`, ADR 0006 revision of 2026-11-22), so nothing else is read
+ * with it.
  */
 export const usePlacedBoxStore = create<{
     readonly recipes: readonly PlacedRecipe[];
-    readonly ends: ReadonlyMap<number, number>;
-}>(() => ({ recipes: [], ends: new Map() }));
+}>(() => ({ recipes: [] }));
 
 let reading: Promise<void> | null = null;
 let again = false;
@@ -35,32 +30,17 @@ const sameRecipes = (a: readonly PlacedRecipe[], b: readonly PlacedRecipe[]) =>
     a === b ||
     (a.length === b.length && JSON.stringify(a) === JSON.stringify(b));
 
-const sameEnds = (
-    a: ReadonlyMap<number, number>,
-    b: ReadonlyMap<number, number>,
-) => a.size === b.size && [...a].every(([id, end]) => b.get(id) === end);
-
-/** The recipes, and the end beats of their moves */
-async function readPlacedRecipes() {
-    const recipes = await readAllShapeRecipes(db);
-    const ends = await readRecipeMoveEnds(db, recipes);
-    return { recipes, ends };
-}
-
 /** Reads the recipes again; calls while a read runs fold into one more read after it */
 export function invalidatePlacedBoxes(): void {
     if (reading) {
         again = true;
         return;
     }
-    reading = readPlacedRecipes()
-        .then(({ recipes, ends }) => {
+    reading = readAllShapeRecipes(db)
+        .then((recipes) => {
             const now = usePlacedBoxStore.getState();
-            const next = {
-                ...(sameRecipes(now.recipes, recipes) ? {} : { recipes }),
-                ...(sameEnds(now.ends, ends) ? {} : { ends }),
-            };
-            if (next.recipes || next.ends) usePlacedBoxStore.setState(next);
+            if (!sameRecipes(now.recipes, recipes))
+                usePlacedBoxStore.setState({ recipes });
         })
         .catch((e: unknown) => console.error("Couldn't read shapes", e))
         .finally(() => {
@@ -96,10 +76,8 @@ export function placedBoxesAt(
 ): PlacedBox[] {
     const resolver = useTimelineResolverStore.getState().resolver;
     if (!resolver || recipes.length === 0) return [];
-    const { ends } = usePlacedBoxStore.getState();
     return boxesAt({
         recipes,
-        moveEndOf: (id) => ends.get(id),
         beat,
         positionOf: (id) => {
             try {

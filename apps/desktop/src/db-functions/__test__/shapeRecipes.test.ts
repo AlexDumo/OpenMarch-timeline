@@ -1,5 +1,5 @@
 import { afterEach, describe, expect } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
 import { readShowTiming } from "@/timeline/showTiming";
 import {
@@ -22,6 +22,7 @@ import {
     type TimelineEditTarget,
 } from "../timelineMoves";
 import { mergeMoves, splitMarchersIntoNewMove } from "../timelineSplitMoves";
+import { deleteTimeline } from "../timelineCommands";
 import { addMarchersToTimeline } from "../timelineMembership";
 import {
     readAllShapeRecipes,
@@ -32,7 +33,10 @@ import {
 
 /**
  * Shape recipes (ADR 0006) are saved in the same edit as the positions they place, so undo and
- * redo take both, and a marcher placed by a new shape leaves the move's older recipe.
+ * redo take both. A recipe stands at a count (revision of 2026-11-22): it lists every marcher
+ * placed in it whichever move brings it there, splits and merges leave it alone, a marcher placed
+ * by a new shape leaves any other shape at that count, and a recipe goes with the moves that
+ * brought all its members there (the upkeep after each edit).
  */
 
 afterEach(() => stopTimelineResolver());
@@ -80,10 +84,10 @@ const place = async (
             x: 100 + 20 * i,
             y: 50,
         })),
-        afterWrite: async (tx, timelineId) => {
+        afterWrite: async (tx, beat) => {
             saved = await saveShapeRecipeInTransaction({
                 tx,
-                timelineId,
+                beat,
                 recipe,
                 members: ids.map((marcherId, i) => ({
                     marcherId,
@@ -98,33 +102,48 @@ const place = async (
     return saved!;
 };
 
-/** The move a placed recipe belongs to (the converted show has moves of its own) */
-const recipeTimeline = async (db: DbConnection, recipeId: number) =>
+/** The count a placed recipe stands at, or null once it's gone */
+const recipeBeat = async (db: DbConnection, recipeId: number) =>
     (
         await db
-            .select({ id: schema.timeline_shape_recipes.timeline_id })
+            .select({ beat: schema.timeline_shape_recipes.beat })
             .from(schema.timeline_shape_recipes)
             .where(eq(schema.timeline_shape_recipes.id, recipeId))
             .get()
-    )?.id ?? null;
+    )?.beat ?? null;
+
+/** The move marcher `id` arrives at count `beat` in */
+const moveArriving = async (db: DbConnection, id: number, beat: number) => {
+    const a = schema.timeline_assignments;
+    const t = schema.timeline_transitions;
+    const row = await db
+        .select({ timelineId: t.timeline_id })
+        .from(a)
+        .innerJoin(t, eq(t.id, a.transition_id))
+        .where(and(eq(a.marcher_id, id), eq(a.end_beat, beat)))
+        .get();
+    return row!.timelineId;
+};
 
 describeDbTests("Shape recipes", (it) => {
-    it("are saved with the positions, and undo and redo take both", async ({
+    it("are saved with the positions, at the count placed at, and undo and redo take both", async ({
         db,
         marchersAndPages: _,
     }) => {
         const { a, b } = await show(db);
         const id = await place(db, [a, b], ARC);
-        const timelineId = await recipeTimeline(db, id);
+        expect(await recipeBeat(db, id)).toBe(PAGE2.end);
         const stored = await readShapeRecipes({
             db,
-            timelineId,
+            beat: PAGE2.end,
             marcherIds: [a],
         });
         expect(stored).toEqual([
             {
                 id,
-                timelineId,
+                beat: PAGE2.end,
+                // A new shape is its own: its key is its id
+                shapeKey: id,
                 ...ARC,
                 members: [
                     { marcherId: a, slot: 0, x: 100, y: 50 },
@@ -147,23 +166,22 @@ describeDbTests("Shape recipes", (it) => {
         expect(
             await readShapeRecipes({
                 db,
-                timelineId: await recipeTimeline(db, id),
+                beat: PAGE2.end,
                 marcherIds: [b],
             }),
         ).toEqual(stored);
     });
 
-    it("a new shape takes its marchers out of the move's older recipe", async ({
+    it("a new shape takes its marchers out of the older recipe at its count", async ({
         db,
         marchersAndPages: _,
     }) => {
         const { a, b, c } = await show(db);
         const arc = await place(db, [a, b, c], ARC);
         const line = await place(db, [b, c], LINE);
-        const timelineId = await recipeTimeline(db, arc);
         const stored = await readShapeRecipes({
             db,
-            timelineId,
+            beat: PAGE2.end,
             marcherIds: [a, b, c],
         });
         expect(
@@ -181,7 +199,7 @@ describeDbTests("Shape recipes", (it) => {
         await place(db, [a], LINE);
         const after = await readShapeRecipes({
             db,
-            timelineId,
+            beat: PAGE2.end,
             marcherIds: [a, b, c],
         });
         expect(after.some((r) => r.id === arc)).toBe(false);
@@ -203,11 +221,11 @@ describeDbTests("Shape recipes", (it) => {
                 { marcherId: a, x: 11, y: 22 },
                 { marcherId: b, x: 33, y: 22 },
             ],
-            afterWrite: async (tx, timelineId) => {
-                expect(timelineId).toBeNull();
+            afterWrite: async (tx, beat) => {
+                expect(beat).toBe(0);
                 await saveShapeRecipeInTransaction({
                     tx,
-                    timelineId,
+                    beat,
                     recipe: LINE,
                     members: [
                         { marcherId: a, slot: 0, x: 11, y: 22 },
@@ -217,7 +235,7 @@ describeDbTests("Shape recipes", (it) => {
             },
         });
         expect(
-            await readShapeRecipes({ db, timelineId: null, marcherIds: [a] }),
+            await readShapeRecipes({ db, beat: 0, marcherIds: [a] }),
         ).toHaveLength(1);
         await performUndo(db);
         expect(
@@ -231,10 +249,13 @@ describeDbTests("Shape recipes", (it) => {
         ).toEqual([]);
     });
 
-    it("an edited recipe keeps its id", async ({ db, marchersAndPages: _ }) => {
+    it("an edited recipe keeps its id, its count and its key", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
         const { a, b } = await show(db);
         const id = await place(db, [a, b], ARC);
-        const timelineId = (await recipeTimeline(db, id))!;
+        const timelineId = await moveArriving(db, a, PAGE2.end);
         let replaced: number | null = null;
         await moveMarchersInTarget({
             db,
@@ -243,10 +264,12 @@ describeDbTests("Shape recipes", (it) => {
                 { marcherId: a, x: 0, y: 0 },
                 { marcherId: b, x: 40, y: 0 },
             ],
-            afterWrite: async (tx, written) => {
+            afterWrite: async (tx, beat) => {
+                // The move's end: the count it writes at
+                expect(beat).toBe(PAGE2.end);
                 replaced = await saveShapeRecipeInTransaction({
                     tx,
-                    timelineId: written,
+                    beat,
                     recipe: { ...ARC, params: { bulge: 9 } },
                     members: [
                         { marcherId: a, slot: 0, x: 0, y: 0 },
@@ -259,13 +282,39 @@ describeDbTests("Shape recipes", (it) => {
         expect(replaced).toBe(id);
         const [recipe] = await readShapeRecipes({
             db,
-            timelineId,
+            beat: PAGE2.end,
             marcherIds: [a],
         });
+        expect(recipe!.shapeKey).toBe(id);
         expect(recipe!.params).toEqual({ bulge: 9 });
         expect(recipe!.members.map((m) => [m.x, m.y])).toEqual([
             [0, 0],
             [40, 0],
+        ]);
+    });
+
+    it("a mark of a shape carried to a later count takes the shape's key", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a, b } = await show(db);
+        const id = await place(db, [a, b], ARC);
+        const copy = await transactionWithHistory(db, "copy", (tx) =>
+            saveShapeRecipeInTransaction({
+                tx,
+                beat: PAGE2.end + 8,
+                recipe: ARC,
+                members: [
+                    { marcherId: a, slot: 0, x: 100, y: 50 },
+                    { marcherId: b, slot: 1, x: 120, y: 50 },
+                ],
+                shapeKey: id,
+            }),
+        );
+        const all = await readAllShapeRecipes(db);
+        expect(all.map((r) => [r.id, r.beat, r.shapeKey])).toEqual([
+            [id, PAGE2.end, id],
+            [copy, PAGE2.end + 8, id],
         ]);
     });
 
@@ -311,7 +360,6 @@ describeDbTests("Shape recipes", (it) => {
         try {
             const { a, b } = await show(db);
             const id = await place(db, [a, b], ARC);
-            const timelineId = await recipeTimeline(db, id);
             const bulge = () =>
                 (
                     usePlacedBoxStore
@@ -328,7 +376,7 @@ describeDbTests("Shape recipes", (it) => {
             await transactionWithHistory(db, "editRecipe", async (tx) => {
                 await saveShapeRecipeInTransaction({
                     tx,
-                    timelineId,
+                    beat: PAGE2.end,
                     recipe: { ...ARC, params: { bulge: 9 } },
                     members: [
                         { marcherId: a, slot: 0, x: 100, y: 50 },
@@ -348,37 +396,58 @@ describeDbTests("Shape recipes", (it) => {
         }
     });
 
-    it("placed shapes are read back with the end beats of their moves, a move made by the same edit too (#514)", async ({
+    it("placed shapes are read back with their counts, nothing else needed (#514)", async ({
         db,
         marchersAndPages: _,
     }) => {
         const stop = followPlacedBoxChanges();
         try {
             const { a, b } = await show(db);
-            const before = new Set(
-                (
-                    await db
-                        .select({ id: schema.timelines.id })
-                        .from(schema.timelines)
-                        .all()
-                ).map((t) => t.id),
-            );
             const id = await place(db, [a, b], ARC);
-            const timelineId = (await recipeTimeline(db, id))!;
-            expect(before.has(timelineId)).toBe(false);
-            const [move] = await db
-                .select({ end: schema.timelines.end_beat })
-                .from(schema.timelines)
-                .where(eq(schema.timelines.id, timelineId))
-                .all();
-            // Read back after the edit, as the save queue waits for it: no stored timelines here
             await placedBoxesRead();
-            const { recipes, ends } = usePlacedBoxStore.getState();
-            expect(recipes.map((r) => r.id)).toContain(id);
-            expect(ends.get(timelineId)).toBe(move!.end);
+            const { recipes } = usePlacedBoxStore.getState();
+            expect(recipes.find((r) => r.id === id)?.beat).toBe(PAGE2.end);
         } finally {
             stop();
         }
+    });
+
+    it("lists a marcher who stands still through the count, with no move of its own there", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a, b, c } = await show(db);
+        // c stands where it starts: page 2 writes nothing for it
+        const [cx, cy] = resolver().positionAt(c, PAGE2.end);
+        let id: number | null = null;
+        await moveMarchersInTarget({
+            db,
+            target: { kind: "range", ...PAGE2 },
+            moves: [
+                { marcherId: a, x: 100, y: 50 },
+                { marcherId: b, x: 120, y: 50 },
+            ],
+            afterWrite: async (tx, beat) => {
+                id = await saveShapeRecipeInTransaction({
+                    tx,
+                    beat,
+                    recipe: LINE,
+                    members: [
+                        { marcherId: a, slot: 0, x: 100, y: 50 },
+                        { marcherId: b, slot: 1, x: 120, y: 50 },
+                        { marcherId: c, slot: 2, x: cx!, y: cy! },
+                    ],
+                });
+            },
+        });
+        await timelineResolverSettled();
+        const [recipe] = await readShapeRecipes({
+            db,
+            beat: PAGE2.end,
+            marcherIds: [c],
+        });
+        expect(recipe!.id).toBe(id);
+        expect(recipe!.members.map((m) => m.marcherId)).toEqual([a, b, c]);
     });
 
     describe("with a move split off the page's (UI-25)", () => {
@@ -386,7 +455,7 @@ describeDbTests("Shape recipes", (it) => {
         const splitShow = async (db: DbConnection) => {
             const marchers = await show(db);
             const first = await place(db, [marchers.a, marchers.b], ARC);
-            const pageMove = (await recipeTimeline(db, first))!;
+            const pageMove = await moveArriving(db, marchers.a, PAGE2.end);
             const split = await splitMarchersIntoNewMove({
                 db,
                 timelineId: pageMove,
@@ -401,108 +470,6 @@ describeDbTests("Shape recipes", (it) => {
             };
         };
 
-        it("splitting every marcher off the page takes its shape along whole, and undo puts it back (#581)", async ({
-            db,
-            marchersAndPages: _,
-        }) => {
-            const { a, b } = await show(db);
-            const arc = await place(db, [a, b], ARC);
-            const pageMove = (await recipeTimeline(db, arc))!;
-            const before = await readAllShapeRecipes(db);
-            const split = await splitMarchersIntoNewMove({
-                db,
-                timelineId: pageMove,
-                marcherIds: [a, b],
-            });
-            await timelineResolverSettled();
-            expect(await recipeTimeline(db, arc)).toBe(split.timeline.id);
-            expect(await readAllShapeRecipes(db)).toEqual(
-                before.map((r) => ({ ...r, timelineId: split.timeline.id })),
-            );
-            await performUndo(db);
-            await timelineResolverSettled();
-            expect(await readAllShapeRecipes(db)).toEqual(before);
-        });
-
-        it("a shape placed in the selected split move belongs to it", async ({
-            db,
-            marchersAndPages: _,
-        }) => {
-            const { a, c, splitMove } = await splitShow(db);
-            const id = await place(db, [a, c], LINE, {
-                kind: "range",
-                ...PAGE2,
-                timelineId: splitMove,
-            });
-            expect(await recipeTimeline(db, id)).toBe(splitMove);
-        });
-
-        it("a shape placed over the counts without a selected move belongs to the move its marchers' positions went to", async ({
-            db,
-            marchersAndPages: _,
-        }) => {
-            const { a, splitMove } = await splitShow(db);
-            const id = await place(db, [a], LINE);
-            expect(await recipeTimeline(db, id)).toBe(splitMove);
-        });
-
-        it("in Basic mode too: a shape placed at the page's flag belongs to the move its marchers' positions went to", async ({
-            db,
-            marchersAndPages: _,
-        }) => {
-            const { a, splitMove } = await splitShow(db);
-            const id = await place(db, [a], LINE, {
-                kind: "point",
-                beat: PAGE2.end,
-                box: PAGE2,
-            });
-            expect(await recipeTimeline(db, id)).toBe(splitMove);
-        });
-
-        it("merging the split move back keeps its shape, in the page's move, and undo puts it back", async ({
-            db,
-            marchersAndPages: _,
-        }) => {
-            const { a, pageMove, splitMove } = await splitShow(db);
-            const id = await place(db, [a], LINE, {
-                kind: "range",
-                ...PAGE2,
-                timelineId: splitMove,
-            });
-            const before = await readShapeRecipes({
-                db,
-                timelineId: splitMove,
-                marcherIds: [a],
-            });
-
-            await mergeMoves({ db, sourceId: splitMove, targetId: pageMove });
-            await timelineResolverSettled();
-            const merged = await readShapeRecipes({
-                db,
-                timelineId: pageMove,
-                marcherIds: [a],
-            });
-            expect(merged).toEqual(
-                before.map((r) => ({ ...r, timelineId: pageMove })),
-            );
-            // Where the shape put a is still where a stands at the move's end
-            const member = merged.find((r) => r.id === id)!.members[0]!;
-            expect(resolver().positionAt(a, PAGE2.end)).toEqual([
-                member.x,
-                member.y,
-            ]);
-
-            await performUndo(db);
-            await timelineResolverSettled();
-            expect(
-                await readShapeRecipes({
-                    db,
-                    timelineId: splitMove,
-                    marcherIds: [a],
-                }),
-            ).toEqual(before);
-        });
-
         /** Who recipe `id` lists, or null once it's gone */
         const membersOf = async (db: DbConnection, id: number) => {
             const [r] = (await readAllShapeRecipes(db)).filter(
@@ -511,69 +478,71 @@ describeDbTests("Shape recipes", (it) => {
             return r ? r.members.map((m) => m.marcherId) : null;
         };
 
-        /**
-         * A recipe in move `timelineId` listing `ids`, written as a file from before these rules
-         * could hold it (a shape placed in a split move while the page's still listed its marchers)
-         */
-        const staleRecipe = async (
-            db: DbConnection,
-            timelineId: number,
-            ids: number[],
-        ) =>
-            await transactionWithHistory(db, "staleRecipe", async (tx) => {
-                const row = await tx
-                    .insert(schema.timeline_shape_recipes)
-                    .values({
-                        timeline_id: timelineId,
-                        kind: LINE.kind,
-                        kind_version: LINE.kindVersion,
-                        params: "{}",
-                        order_mode: LINE.orderMode,
-                        reverse: false,
-                    })
-                    .returning({ id: schema.timeline_shape_recipes.id })
-                    .get();
-                await tx
-                    .insert(schema.timeline_shape_recipe_marchers)
-                    .values(
-                        ids.map((marcherId, slot) => ({
-                            recipe_id: row.id,
-                            marcher_id: marcherId,
-                            slot,
-                            x: 100 + 20 * slot,
-                            y: 50,
-                        })),
-                    )
-                    .run();
-                return row.id;
-            });
+        it("splitting marchers off keeps them in the page's shape, at its count", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b, arc, splitMove } = await splitShow(db);
+            expect(await moveArriving(db, a, PAGE2.end)).toBe(splitMove);
+            expect(await membersOf(db, arc)).toEqual([a, b]);
+            expect(await recipeBeat(db, arc)).toBe(PAGE2.end);
+        });
 
-        /** Puts marcher `id` back in recipe `recipeId`, as a file from before these rules may */
-        const staleMember = async (
-            db: DbConnection,
-            recipeId: number,
-            id: number,
-        ) =>
-            await transactionWithHistory(db, "staleMember", async (tx) => {
-                await tx
-                    .insert(schema.timeline_shape_recipe_marchers)
-                    .values({
-                        recipe_id: recipeId,
-                        marcher_id: id,
-                        slot: 9,
-                        x: 0,
-                        y: 0,
-                    })
-                    .run();
+        it("splitting every marcher off the page leaves its shape as it is, and undo too (#581)", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b } = await show(db);
+            const arc = await place(db, [a, b], ARC);
+            const pageMove = await moveArriving(db, a, PAGE2.end);
+            const before = await readAllShapeRecipes(db);
+            await splitMarchersIntoNewMove({
+                db,
+                timelineId: pageMove,
+                marcherIds: [a, b],
             });
+            await timelineResolverSettled();
+            expect(await readAllShapeRecipes(db)).toEqual(before);
+            expect(await membersOf(db, arc)).toEqual([a, b]);
+            await performUndo(db);
+            await timelineResolverSettled();
+            expect(await readAllShapeRecipes(db)).toEqual(before);
+        });
 
-        it("a shape placed in the split move takes its marchers out of the page's shape, at the same counts, in one undo step", async ({
+        it("a shape over marchers in different moves lists every one of them", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b, c, pageMove } = await splitShow(db);
+            // a arrives in a move of its own; the shape is written to the page's
+            const id = await place(db, [a, b, c], LINE, {
+                kind: "range",
+                ...PAGE2,
+                timelineId: pageMove,
+            });
+            expect(await recipeBeat(db, id)).toBe(PAGE2.end);
+            expect(await membersOf(db, id)).toEqual([a, b, c]);
+        });
+
+        it("in Basic mode too: a shape placed at the page's flag lists every marcher, whichever move it arrives in", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b } = await splitShow(db);
+            const id = await place(db, [a, b], LINE, {
+                kind: "point",
+                beat: PAGE2.end,
+                box: PAGE2,
+            });
+            expect(await recipeBeat(db, id)).toBe(PAGE2.end);
+            expect(await membersOf(db, id)).toEqual([a, b]);
+        });
+
+        it("a shape placed in the split move takes its marchers out of the page's shape, at the same count, in one undo step", async ({
             db,
             marchersAndPages: _,
         }) => {
             const { a, b, c, arc, splitMove } = await splitShow(db);
-            // As a file from before splits carried shapes may hold: the page's shape lists a
-            await staleMember(db, arc, a);
             await place(db, [a, c], LINE, {
                 kind: "range",
                 ...PAGE2,
@@ -581,16 +550,42 @@ describeDbTests("Shape recipes", (it) => {
             });
             expect(await membersOf(db, arc)).toEqual([b]);
             await performUndo(db);
-            expect((await membersOf(db, arc))?.sort()).toEqual([a, b].sort());
+            expect(await membersOf(db, arc)).toEqual([a, b]);
         });
 
-        it("a shape saved at a page's flag leaves alone the shape of a move that only passes over it", async ({
+        it("merging the split move back keeps every shape and member, and undo too", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b, c, arc, pageMove, splitMove } = await splitShow(db);
+            const line = await place(db, [a, c], LINE, {
+                kind: "range",
+                ...PAGE2,
+                timelineId: splitMove,
+            });
+            const before = await readAllShapeRecipes(db);
+            await mergeMoves({ db, sourceId: splitMove, targetId: pageMove });
+            await timelineResolverSettled();
+            expect(await readAllShapeRecipes(db)).toEqual(before);
+            expect(await membersOf(db, arc)).toEqual([b]);
+            expect(await membersOf(db, line)).toEqual([a, c]);
+            // Where the shape put a is still where a stands at its count
+            const member = before.find((r) => r.id === line)!.members[0]!;
+            expect(resolver().positionAt(a, PAGE2.end)).toEqual([
+                member.x,
+                member.y,
+            ]);
+            await performUndo(db);
+            await timelineResolverSettled();
+            expect(await readAllShapeRecipes(db)).toEqual(before);
+        });
+
+        it("a shape saved at a page's flag leaves alone a shape at another count (a move that only passes over the flag)", async ({
             db,
             marchersAndPages: _,
         }) => {
             const { a } = await show(db);
             const arc = await place(db, [a], ARC);
-            const pageMove = (await recipeTimeline(db, arc))!;
             // An Expert move over page 2's flag, on a layer above a's page move
             const { timelineId: over } = await addMarchersToTimeline({
                 db,
@@ -598,13 +593,15 @@ describeDbTests("Shape recipes", (it) => {
                 marcherIds: [a],
             });
             await timelineResolverSettled();
-            const theirs = await staleRecipe(db, over, [a]);
-            // The page's shape edited (a placement there is refused: a's position at the flag is
-            // the Expert move's now)
+            const theirs = await place(db, [a], LINE, {
+                kind: "timeline",
+                timelineId: over,
+            });
+            expect(await recipeBeat(db, theirs)).toBe(PAGE2.end + 4);
             await transactionWithHistory(db, "editShape", (tx) =>
                 saveShapeRecipeInTransaction({
                     tx,
-                    timelineId: pageMove,
+                    beat: PAGE2.end,
                     recipe: LINE,
                     members: [{ marcherId: a, slot: 0, x: 100, y: 50 }],
                     replaces: arc,
@@ -613,83 +610,79 @@ describeDbTests("Shape recipes", (it) => {
             expect(await membersOf(db, arc)).toEqual([a]);
             expect(await membersOf(db, theirs)).toEqual([a]);
         });
+    });
 
-        it("a shape over marchers in different moves lists only those in its own move", async ({
+    describe("upkeep in place of the cascade from moves", () => {
+        it("deleting the move that brought every member deletes the shape in the same undo step", async ({
             db,
             marchersAndPages: _,
         }) => {
-            const { a, b, pageMove } = await splitShow(db);
-            // a has a move of its own over these counts; the shape goes to the page's
-            const id = await place(db, [a, b], LINE, {
-                kind: "range",
-                ...PAGE2,
-                timelineId: pageMove,
-            });
-            expect(await recipeTimeline(db, id)).toBe(pageMove);
-            expect(await membersOf(db, id)).toEqual([b]);
-        });
-
-        it("splitting marchers off drops them from the page's shape, which they don't make up, in one undo step", async ({
-            db,
-            marchersAndPages: _,
-        }) => {
-            const { a, b, arc, splitMove } = await splitShow(db);
-            expect(await membersOf(db, arc)).toEqual([b]);
-            expect(await recipeTimeline(db, arc)).not.toBe(splitMove);
-            await performUndo(db);
-            expect(await membersOf(db, arc)).toEqual([a, b]);
-        });
-
-        it("splitting off a shape's whole member set takes the shape to the new move, and undo brings it back", async ({
-            db,
-            marchersAndPages: _,
-        }) => {
-            const { a, b, c } = await show(db);
-            const line = await place(db, [c], LINE);
+            const { a, b } = await show(db);
             const arc = await place(db, [a, b], ARC);
-            const pageMove = (await recipeTimeline(db, arc))!;
-            const split = await splitMarchersIntoNewMove({
+            const pageMove = await moveArriving(db, a, PAGE2.end);
+            const before = await readAllShapeRecipes(db);
+            await deleteTimeline({ db, timelineId: pageMove });
+            expect(await recipeBeat(db, arc)).toBeNull();
+            await performUndo(db);
+            expect(await readAllShapeRecipes(db)).toEqual(before);
+        });
+
+        it("keeps a shape while any member still arrives at its count, its other members listed", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b, arc, splitMove } = await (async () => {
+                const marchers = await show(db);
+                const first = await place(db, [marchers.a, marchers.b], ARC);
+                const split = await splitMarchersIntoNewMove({
+                    db,
+                    timelineId: await moveArriving(db, marchers.a, PAGE2.end),
+                    marcherIds: [marchers.a],
+                });
+                await timelineResolverSettled();
+                return {
+                    ...marchers,
+                    arc: first,
+                    splitMove: split.timeline.id,
+                };
+            })();
+            await deleteTimeline({ db, timelineId: splitMove });
+            expect(
+                (await readAllShapeRecipes(db))
+                    .find((r) => r.id === arc)
+                    ?.members.map((m) => m.marcherId),
+            ).toEqual([a, b]);
+        });
+
+        it("keeps a shape with a member standing still through its count", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, c } = await show(db);
+            const [cx, cy] = resolver().positionAt(c, PAGE2.end);
+            let id: number | null = null;
+            await moveMarchersInTarget({
                 db,
-                timelineId: pageMove,
-                marcherIds: [a, b],
+                target: { kind: "range", ...PAGE2 },
+                moves: [{ marcherId: a, x: 100, y: 50 }],
+                afterWrite: async (tx, beat) => {
+                    id = await saveShapeRecipeInTransaction({
+                        tx,
+                        beat,
+                        recipe: LINE,
+                        members: [
+                            { marcherId: a, slot: 0, x: 100, y: 50 },
+                            { marcherId: c, slot: 1, x: cx!, y: cy! },
+                        ],
+                    });
+                },
             });
-            expect(await recipeTimeline(db, arc)).toBe(split.timeline.id);
-            expect(await membersOf(db, arc)).toEqual([a, b]);
-            expect(await recipeTimeline(db, line)).toBe(pageMove);
-            await performUndo(db);
-            expect(await recipeTimeline(db, arc)).toBe(pageMove);
-            expect(await membersOf(db, arc)).toEqual([a, b]);
-        });
-
-        it("undoing a merge gives the page's shape back the marcher the merged shape took", async ({
-            db,
-            marchersAndPages: _,
-        }) => {
-            const { a, b, arc, pageMove, splitMove } = await splitShow(db);
-            // As a file from before these rules may hold: the page's shape still lists a
-            await staleMember(db, arc, a);
-            const line = await staleRecipe(db, splitMove, [a]);
-            await mergeMoves({ db, sourceId: splitMove, targetId: pageMove });
-            expect(await membersOf(db, arc)).toEqual([b]);
-            expect(await recipeTimeline(db, line)).toBe(pageMove);
-            await performUndo(db);
-            expect((await membersOf(db, arc))?.sort()).toEqual([a, b].sort());
-            expect(await recipeTimeline(db, line)).toBe(splitMove);
-        });
-
-        it("a merge that empties the page's shape deletes it, and undo brings it back", async ({
-            db,
-            marchersAndPages: _,
-        }) => {
-            const { a, pageMove, splitMove } = await splitShow(db);
-            const line = await staleRecipe(db, splitMove, [a]);
-            const stale = await staleRecipe(db, pageMove, [a]);
-            await mergeMoves({ db, sourceId: splitMove, targetId: pageMove });
-            expect(await membersOf(db, stale)).toBeNull();
-            expect(await membersOf(db, line)).toEqual([a]);
-            await performUndo(db);
-            expect(await membersOf(db, stale)).toEqual([a]);
-            expect(await recipeTimeline(db, line)).toBe(splitMove);
+            await timelineResolverSettled();
+            await deleteTimeline({
+                db,
+                timelineId: await moveArriving(db, a, PAGE2.end),
+            });
+            expect(await recipeBeat(db, id!)).toBe(PAGE2.end);
         });
     });
 });

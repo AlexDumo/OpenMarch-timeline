@@ -341,7 +341,7 @@ describeDbTests(
                         .where(eq(schema.timelines.id, timeline.id));
                     return await saveShapeRecipeInTransaction({
                         tx,
-                        timelineId: timeline.id,
+                        beat: timeline.end_beat,
                         recipe: {
                             kind: "line",
                             kindVersion: 1,
@@ -371,7 +371,8 @@ describeDbTests(
                 .from(schema.timeline_shape_recipes)
                 .where(eq(schema.timeline_shape_recipes.id, recipeId))
                 .get();
-            expect(recipe?.timeline_id).toBe(timeline.id);
+            // It stands at the count the move ends at, which the split doesn't change
+            expect(recipe?.beat).toBe(timeline.end_beat);
             const recipeMembers = (
                 await db
                     .select({

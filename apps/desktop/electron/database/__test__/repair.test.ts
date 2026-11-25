@@ -14,6 +14,11 @@ import {
     orderTablesForCopy,
 } from "../repair";
 import { getOrm } from "../db";
+import { SHAPE_AT_COUNT_USER_VERSION } from "../fileVersion";
+import {
+    rollBackMigrationsFrom,
+    SHAPE_AT_COUNT_MIGRATION,
+} from "./migrationRollback";
 import { DrizzleMigrationService } from "../services/DrizzleMigrationService";
 import { app } from "electron";
 import { runInSqliteTransaction } from "@/test/sqliteTransaction";
@@ -89,7 +94,7 @@ describe("DatabaseSync Repair", () => {
     };
 
     describe("initializeAndMigrateDatabase", () => {
-        it("should successfully initialize database with user_version 8 (a new file's)", async () => {
+        it("should successfully initialize database as a new file, written as 20 once 0030 has run", async () => {
             const dbPath = path.join(tempDir, "test.db");
             const db = new DatabaseSync(dbPath);
 
@@ -100,7 +105,7 @@ describe("DatabaseSync Repair", () => {
                     user_version: number;
                 }
             ).user_version;
-            expect(userVersion).toBe(8);
+            expect(userVersion).toBe(SHAPE_AT_COUNT_USER_VERSION);
 
             db.close();
             fs.unlinkSync(dbPath);
@@ -967,7 +972,7 @@ describe("DatabaseSync Repair", () => {
             fs.unlinkSync(originalDbPath);
         });
 
-        it("keeps a timeline-model file (user_version 8) at 8", async () => {
+        it("repairs a timeline-model file (user_version 8) as a new file is, at 20", async () => {
             const originalDbPath = path.join(tempDir, "timeline.dots");
             const originalDb =
                 await createNewDatabaseWithMigrations(originalDbPath);
@@ -983,7 +988,7 @@ describe("DatabaseSync Repair", () => {
                 }
             ).user_version;
             fixedDb.close();
-            expect(userVersion).toBe(8);
+            expect(userVersion).toBe(SHAPE_AT_COUNT_USER_VERSION);
         });
 
         it("copies timeline rows parents first, so the invariant triggers accept them", async () => {
@@ -1046,6 +1051,64 @@ describe("DatabaseSync Repair", () => {
                         .prepare("SELECT * FROM timeline_commit_violations")
                         .all(),
                 ).toEqual([]);
+            } finally {
+                fixedDb.close();
+            }
+        });
+
+        it("gives the shape recipes of a file from before 0030 the counts and clean-up 0030 would", async () => {
+            const originalDbPath = path.join(tempDir, "before-0030.dots");
+            (await createNewDatabaseWithMigrations(originalDbPath)).close();
+            rollBackMigrationsFrom(
+                originalDbPath,
+                SHAPE_AT_COUNT_MIGRATION.idx,
+            );
+            const originalDb = new DatabaseSync(originalDbPath);
+            originalDb.exec(`
+                PRAGMA foreign_keys = OFF;
+                PRAGMA user_version = 8;
+                INSERT INTO marchers (id, section, drill_prefix, drill_order) VALUES (1, 'Brass', 'B', 1);
+                INSERT INTO timelines (id, start_beat, end_beat) VALUES (1, 0, 16);
+                INSERT INTO timeline_shape_recipes (id, timeline_id, kind, kind_version, params, order_mode) VALUES
+                    (1, 1, 'line', 1, '{}', 'nearest'),
+                    (2, NULL, 'line', 1, '{}', 'nearest'),
+                    (3, NULL, 'order', 1, '{"beat":6.5}', 'keep'),
+                    (4, 1, 'arc', 1, '{}', 'nearest'),
+                    (5, 99, 'line', 1, '{}', 'nearest');
+                INSERT INTO timeline_shape_recipe_marchers (recipe_id, marcher_id, slot, x, y) VALUES
+                    (1, 1, 0, 0, 0), (2, 1, 0, 0, 0), (3, 1, 0, 0, 0), (4, 1, 0, 0, 0), (5, 1, 0, 0, 0);
+            `);
+            originalDb.close();
+
+            const fixedPath = await repairDatabase(originalDbPath);
+
+            const fixedDb = new DatabaseSync(fixedPath, { readOnly: true });
+            try {
+                expect(
+                    fixedDb
+                        .prepare(
+                            "SELECT id, beat, shape_key, params FROM timeline_shape_recipes ORDER BY id",
+                        )
+                        .all()
+                        .map((row) => ({ ...row })),
+                ).toEqual([
+                    // 1 lost marcher 1 to the newer 4 at the same count and went; 5's move is gone
+                    { id: 2, beat: 0, shape_key: 2, params: "{}" },
+                    { id: 3, beat: 6.5, shape_key: 3, params: "{}" },
+                    { id: 4, beat: 16, shape_key: 4, params: "{}" },
+                ]);
+                expect(
+                    fixedDb
+                        .prepare(
+                            "SELECT recipe_id FROM timeline_shape_recipe_marchers ORDER BY recipe_id",
+                        )
+                        .all()
+                        .map((row) => ({ ...row })),
+                ).toEqual([
+                    { recipe_id: 2 },
+                    { recipe_id: 3 },
+                    { recipe_id: 4 },
+                ]);
             } finally {
                 fixedDb.close();
             }
@@ -1161,21 +1224,25 @@ describe("DatabaseSync Repair", () => {
             },
         );
 
-        it("repairs a timeline file (8) as a timeline file without page-era tables", async () => {
+        it("repairs a timeline file (20, a new one) as a timeline file without page-era tables", async () => {
             const originalDbPath = path.join(tempDir, "timeline-8.dots");
             const originalDb =
                 await createNewDatabaseWithMigrations(originalDbPath);
             originalDb.exec(`
                 INSERT INTO marchers (id, section, drill_prefix, drill_order) VALUES (1, 'Brass', 'B', 1);
             `);
-            expect(readUserVersionOf(originalDb)).toBe(8);
+            expect(readUserVersionOf(originalDb)).toBe(
+                SHAPE_AT_COUNT_USER_VERSION,
+            );
             originalDb.close();
 
             const fixedPath = await repairDatabase(originalDbPath);
 
             const fixedDb = new DatabaseSync(fixedPath, { readOnly: true });
             try {
-                expect(readUserVersionOf(fixedDb)).toBe(8);
+                expect(readUserVersionOf(fixedDb)).toBe(
+                    SHAPE_AT_COUNT_USER_VERSION,
+                );
                 expect(tableNamesOf(fixedDb)).not.toContain("marcher_pages");
                 expect(
                     fixedDb.prepare("SELECT id FROM marchers").all(),
@@ -1202,7 +1269,9 @@ describe("DatabaseSync Repair", () => {
 
             const fixedDb = new DatabaseSync(fixedPath, { readOnly: true });
             try {
-                expect(readUserVersionOf(fixedDb)).toBe(8);
+                expect(readUserVersionOf(fixedDb)).toBe(
+                    SHAPE_AT_COUNT_USER_VERSION,
+                );
             } finally {
                 fixedDb.close();
             }
@@ -1286,7 +1355,7 @@ describe("DatabaseSync Repair", () => {
                     user_version: number;
                 }
             ).user_version;
-            expect(userVersion).toBe(8);
+            expect(userVersion).toBe(SHAPE_AT_COUNT_USER_VERSION);
 
             // Verify migrations were applied
             const orm = getOrm(fixedDb);
@@ -1401,7 +1470,7 @@ describe("DatabaseSync Repair", () => {
                     user_version: number;
                 }
             ).user_version;
-            expect(userVersion).toBe(8);
+            expect(userVersion).toBe(SHAPE_AT_COUNT_USER_VERSION);
 
             fixedDb.close();
             fs.unlinkSync(fixedPath);
@@ -1520,7 +1589,7 @@ describe("DatabaseSync Repair", () => {
                     user_version: number;
                 }
             ).user_version;
-            expect(userVersion).toBe(8);
+            expect(userVersion).toBe(SHAPE_AT_COUNT_USER_VERSION);
 
             // Verify migrations were applied
             const orm = getOrm(fixedDb);
@@ -1564,7 +1633,7 @@ describe("DatabaseSync Repair", () => {
                     user_version: number;
                 }
             ).user_version;
-            expect(userVersion).toBe(8); // Should be a valid database, not "old content"
+            expect(userVersion).toBe(SHAPE_AT_COUNT_USER_VERSION); // Should be a valid database, not "old content"
 
             fixedDb.close();
             fs.unlinkSync(fixedPath);

@@ -9,7 +9,6 @@ import {
 } from "@/timeline/timelineStore";
 import type { CanvasEditPlan } from "@/timeline/timelineCoordinateWrites";
 import { moveMarchersInTarget } from "@/db-functions/timelineMoves";
-import { timelinesWithRange } from "@/db-functions/timelines";
 import {
     readAllShapeRecipes,
     type ShapeRecipeMember,
@@ -65,7 +64,7 @@ describeDbTests(
                 start: number,
                 end: number,
                 members: ShapeRecipeMember[],
-                replaces?: { id: number; timelineId: number | null },
+                replaces?: { id: number; beat: number; shapeKey: number },
             ) => {
                 expect(
                     await writePlacement(
@@ -98,17 +97,15 @@ describeDbTests(
             });
             await timelineResolverSettled();
             await place(9, 17, row(100, 20));
-            const page2 = (
-                await timelinesWithRange(db, { start: 9, end: 17 })
-            )[0]!.id;
             const recipe = (await readAllShapeRecipes(db)).find(
-                (r) => r.timelineId === page2,
+                (r) => r.beat === 17,
             )!;
 
             // Widened on page 2: the last one lands on 160, where it stands at the page's start
             await place(9, 17, row(100, 30), {
                 id: recipe.id,
-                timelineId: page2,
+                beat: recipe.beat,
+                shapeKey: recipe.shapeKey,
             });
 
             expect(ids.map((id) => resolver().positionAt(id, 17))).toEqual([

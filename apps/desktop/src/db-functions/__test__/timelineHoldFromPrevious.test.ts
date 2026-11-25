@@ -2,7 +2,7 @@ import { refusalText } from "@/test/refusalText";
 import { afterEach, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { countDistinct, eq as eqId, getTableName, sql } from "drizzle-orm";
+import { and, countDistinct, eq as eqId, getTableName, sql } from "drizzle-orm";
 import type { XY } from "@openmarch/core";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
 import { keepFixturesInPageMode } from "@/test/timelineMode";
@@ -377,7 +377,8 @@ describeDbTests("Hold from last keyframe", (it) => {
             const [recipe] = await tx
                 .insert(schema.timeline_shape_recipes)
                 .values({
-                    timeline_id: transition!.timeline_id,
+                    beat: transition!.end_beat,
+                    shape_key: 0,
                     kind: "line",
                     kind_version: 1,
                     params: "{}",
@@ -421,7 +422,8 @@ describeDbTests("Hold from last keyframe", (it) => {
             const [recipe] = await tx
                 .insert(schema.timeline_shape_recipes)
                 .values({
-                    timeline_id: transition!.timeline_id,
+                    beat: transition!.end_beat,
+                    shape_key: 0,
                     kind: UNGROUPED_RECIPE_KIND,
                     kind_version: 1,
                     params: "{}",
@@ -487,7 +489,8 @@ const homeRecipe = (db: DbConnection, marcherId: number, kind: string) =>
         const [recipe] = await tx
             .insert(schema.timeline_shape_recipes)
             .values({
-                timeline_id: null,
+                beat: 0,
+                shape_key: 0,
                 kind,
                 kind_version: 1,
                 params: "{}",
@@ -822,7 +825,8 @@ describeDbTests("A drag inside a Held hold", (it) => {
             const [recipe] = await tx
                 .insert(schema.timeline_shape_recipes)
                 .values({
-                    timeline_id: transition!.timeline_id,
+                    beat: transition!.end_beat,
+                    shape_key: 0,
                     kind: "line",
                     kind_version: 1,
                     params: "{}",
@@ -902,7 +906,7 @@ describeDbTests(
             expect((await atFlags(db, a))[3]).toEqual(FAR);
         });
 
-        it("with only Held marchers dragged, the after-write step gets the arrival's move, and keepUnchanged writes a stay", async ({
+        it("with only Held marchers dragged, the after-write step gets the count the edit writes at, and keepUnchanged writes a stay", async ({
             db,
             marchersAndPages: _,
         }) => {
@@ -932,11 +936,13 @@ describeDbTests(
                     { marcherId: b, x: UP2[0], y: UP2[1] },
                 ],
                 keepUnchanged: true,
-                afterWrite: async (_tx, timelineId) => {
-                    seen.push(timelineId);
+                afterWrite: async (_tx, beat) => {
+                    seen.push(beat);
                 },
             });
-            expect(seen).toEqual([transition!.timeline_id]);
+            // The count the edit writes at: the end of the window (page 3), not the end of the
+            // arrival's move (page 2's flag), which is where the Held marchers' rows end
+            expect(seen).toEqual([PAGE3.end]);
             expect(result.slots.map((s) => s.marcherId).sort()).toEqual(
                 [a, b].sort(),
             );
@@ -1494,16 +1500,25 @@ const moveEndingAt = async (db: DbConnection, id: number, beat: number) => {
     return transition!.timeline_id;
 };
 
-/** Marks marchers ungrouped on move `timelineId`, as Ungroup does (`ungroupShape`) */
-const markUngrouped = (
+/** Where move `timelineId` ends: the count a recipe placed with it stands at */
+const endOfMove = async (db: DbConnection, timelineId: number) =>
+    (await db
+        .select({ end: schema.timelines.end_beat })
+        .from(schema.timelines)
+        .where(eqId(schema.timelines.id, timelineId))
+        .get())!.end;
+
+/** Marks marchers ungrouped at the end of move `timelineId`, as Ungroup does (`ungroupShape`) */
+const markUngrouped = async (
     db: DbConnection,
     timelineId: number,
     members: readonly { marcherId: number; xy: XY }[],
-) =>
-    transactionWithHistory(db, "test", (tx) =>
+) => {
+    const beat = await endOfMove(db, timelineId);
+    return transactionWithHistory(db, "test", (tx) =>
         saveShapeRecipeInTransaction({
             tx,
-            timelineId,
+            beat,
             recipe: {
                 kind: UNGROUPED_RECIPE_KIND,
                 kindVersion: 1,
@@ -1519,6 +1534,7 @@ const markUngrouped = (
             })),
         }),
     );
+};
 
 /** Both recipe tables, for exact undo/redo checks */
 const recipeTables = async (db: DbConnection) => ({
@@ -1529,9 +1545,9 @@ const recipeTables = async (db: DbConnection) => ({
         .all(),
 });
 
-/** Who move `timelineId`'s ungrouped marks list */
-const ungroupedOn = async (db: DbConnection, timelineId: number) =>
-    (
+/** Who the ungrouped marks at count `beat` list */
+const ungroupedOn = async (db: DbConnection, beat: number) => {
+    return (
         await db
             .select({
                 marcherId: schema.timeline_shape_recipe_marchers.marcher_id,
@@ -1544,11 +1560,20 @@ const ungroupedOn = async (db: DbConnection, timelineId: number) =>
                     schema.timeline_shape_recipe_marchers.recipe_id,
                 ),
             )
-            .where(eqId(schema.timeline_shape_recipes.timeline_id, timelineId))
+            .where(
+                and(
+                    eqId(schema.timeline_shape_recipes.beat, beat),
+                    eqId(
+                        schema.timeline_shape_recipes.kind,
+                        UNGROUPED_RECIPE_KIND,
+                    ),
+                ),
+            )
             .all()
     )
         .map((r) => r.marcherId)
         .sort((x, y) => x - y);
+};
 
 describeDbTests(
     "Holds and a shape ungrouped on a page it was carried onto (#618 review)",
@@ -1561,10 +1586,11 @@ describeDbTests(
             const arrival = await moveEndingAt(db, a, PAGE3.start);
             // A shape on page 2 holds a; Ungroup on page 3, where it's only carried, sets a and b
             // there and marks them ungrouped on page 3's move
+            const arrivalEnd = await endOfMove(db, arrival);
             await transactionWithHistory(db, "test", (tx) =>
                 saveShapeRecipeInTransaction({
                     tx,
-                    timelineId: arrival,
+                    beat: arrivalEnd,
                     recipe: {
                         kind: "line",
                         kindVersion: 1,
@@ -1603,6 +1629,7 @@ describeDbTests(
         }) => {
             const { a, b } = await show(db);
             const page2 = await moveEndingAt(db, a, PAGE3.start);
+            const page2End = PAGE3.start;
             await markUngrouped(db, page2, [
                 { marcherId: a, xy: UP },
                 { marcherId: b, xy: UP2 },
@@ -1623,7 +1650,7 @@ describeDbTests(
             const recipesBefore = await recipeTables(db);
             expect(await clear([a])).toBe(1);
             // The mark lists only who is still in the move, as when the move empties
-            expect(await ungroupedOn(db, page2)).toEqual([b]);
+            expect(await ungroupedOn(db, page2End)).toEqual([b]);
             // One undo step, exact both ways
             const recipesAfter = await recipeTables(db);
             await performUndo(db);
@@ -1631,7 +1658,7 @@ describeDbTests(
             await performRedo(db);
             expect(await recipeTables(db)).toEqual(recipesAfter);
             expect(await clear([b])).toBe(1);
-            expect(await ungroupedOn(db, page2)).toEqual([]);
+            expect(await ungroupedOn(db, page2End)).toEqual([]);
             expect(
                 await db
                     .select()
@@ -1659,6 +1686,8 @@ describeDbTests(
                 { marcherId: b, xy: there2 },
             ]);
             const page3 = await moveEndingAt(db, a, PAGE3.end);
+            const page2End = PAGE3.start;
+            const page3End = PAGE3.end;
             await markUngrouped(db, page2, [
                 { marcherId: a, xy: UP },
                 { marcherId: b, xy: UP2 },
@@ -1679,8 +1708,8 @@ describeDbTests(
                 notify: { success: vi.fn(), error: vi.fn() },
                 t: english,
             });
-            expect(await ungroupedOn(db, page2)).toEqual([b]);
-            expect(await ungroupedOn(db, page3)).toEqual(
+            expect(await ungroupedOn(db, page2End)).toEqual([b]);
+            expect(await ungroupedOn(db, page3End)).toEqual(
                 [a, b].sort((x, y) => x - y),
             );
         });
@@ -1766,11 +1795,11 @@ describeDbTests(
                     { marcherId: a, x: FAR[0], y: FAR[1] },
                     { marcherId: c, x: LEFT[0], y: LEFT[1] },
                 ],
-                afterWrite: async (tx, timelineId) => {
-                    seen.push(timelineId);
+                afterWrite: async (tx, beat) => {
+                    seen.push(beat);
                     await saveShapeRecipeInTransaction({
                         tx,
-                        timelineId,
+                        beat,
                         recipe: {
                             kind: "box",
                             kindVersion: 1,
@@ -1785,9 +1814,9 @@ describeDbTests(
                     });
                 },
             });
-            expect(seen).toEqual([null]);
+            expect(seen).toEqual([0]);
             const [recipe] = await recipes(db);
-            expect(recipe?.timeline_id).toBeNull();
+            expect(recipe?.beat).toBe(0);
             expect(await homeOf(db, a)).toEqual(FAR);
             expect(await homeOf(db, c)).toEqual(LEFT);
             // A shape's starting spots get no Held hold: the shape carried on is the hold
@@ -1812,10 +1841,10 @@ describeDbTests(
                 db,
                 target: { kind: "range", ...PAGE1 },
                 moves: [{ marcherId: c, x: LEFT[0], y: LEFT[1] }],
-                afterWrite: (tx, timelineId) =>
+                afterWrite: (tx, beat) =>
                     saveShapeRecipeInTransaction({
                         tx,
-                        timelineId,
+                        beat,
                         recipe: {
                             kind: "box",
                             kindVersion: 1,
@@ -1851,12 +1880,12 @@ describeDbTests(
                 db,
                 target: { kind: "range", ...PAGE1 },
                 moves: [{ marcherId: c, x: LEFT[0], y: LEFT[1] }],
-                afterWrite: async (_tx, timelineId) => {
-                    seen.push(timelineId);
+                afterWrite: async (_tx, beat) => {
+                    seen.push(beat);
                     return false;
                 },
             });
-            expect(seen).toEqual([null]);
+            expect(seen).toEqual([0]);
             expect(await marksOf(db, c)).toEqual([PAGE1]);
         });
     },
@@ -1961,7 +1990,7 @@ describeDbTests(
             return transactionWithHistory(db, "test", (tx) =>
                 saveShapeRecipeInTransaction({
                     tx,
-                    timelineId: null,
+                    beat: 0,
                     recipe: box,
                     members: [
                         { marcherId: c, slot: 0, x: LEFT[0], y: LEFT[1] },
@@ -1988,7 +2017,7 @@ describeDbTests(
                     {
                         recipe: {
                             id,
-                            timelineId: stored.timeline_id,
+                            beat: stored.beat,
                             members: [],
                         },
                         endBeat: 0,
@@ -2001,10 +2030,10 @@ describeDbTests(
                 target: { kind: "range", ...PAGE1 },
                 moves: [{ marcherId: c, x: LEFT[0], y: LEFT[1] }],
                 keepUnchanged: true,
-                afterWrite: (tx, timelineId) =>
+                afterWrite: (tx, beat) =>
                     saveShapeRecipeInTransaction({
                         tx,
-                        timelineId,
+                        beat,
                         recipe: ungrouped,
                         members: [
                             { marcherId: c, slot: 0, x: LEFT[0], y: LEFT[1] },
@@ -2033,7 +2062,7 @@ describeDbTests(
             const id = await placeAtHome(db, c);
             expect(
                 carriedOnto({ ok: true, target: { kind: "home" }, beat: 0 }, {
-                    recipe: { id, timelineId: null, members: [] },
+                    recipe: { id, beat: 0, members: [] },
                     endBeat: 0,
                 } as unknown as Parameters<typeof carriedOnto>[1]),
             ).toBe(false);
@@ -2041,7 +2070,7 @@ describeDbTests(
             await transactionWithHistory(db, "ungroupShape", (tx) =>
                 saveShapeRecipeInTransaction({
                     tx,
-                    timelineId: null,
+                    beat: 0,
                     recipe: ungrouped,
                     members: [
                         { marcherId: c, slot: 0, x: LEFT[0], y: LEFT[1] },
@@ -2203,10 +2232,10 @@ describeDbTests(
                 db,
                 target: { kind: "home" },
                 moves: [{ marcherId: c, x: LEFT[0], y: LEFT[1] }],
-                afterWrite: (tx, timelineId) =>
+                afterWrite: (tx, beat) =>
                     saveShapeRecipeInTransaction({
                         tx,
-                        timelineId,
+                        beat,
                         recipe: {
                             kind: "box",
                             kindVersion: 1,

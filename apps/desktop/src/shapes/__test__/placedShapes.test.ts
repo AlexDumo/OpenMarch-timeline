@@ -67,7 +67,8 @@ function recipeOf(t: ToolState): PlacedRecipe {
     return {
         ...placement.recipe,
         id: 1,
-        timelineId: 10,
+        beat: 8,
+        shapeKey: 1,
         members: placement.members,
         params: JSON.parse(JSON.stringify(placement.recipe.params)),
     };
@@ -83,7 +84,6 @@ function readBack(
     );
     return boxesAt({
         recipes,
-        moveEndOf: () => 8,
         beat: 8,
         positionOf: (id) => at.get(id),
         ...(kinds ? { kinds } : {}),

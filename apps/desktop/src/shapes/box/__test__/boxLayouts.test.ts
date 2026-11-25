@@ -154,14 +154,14 @@ describe("picking a layout", () => {
         const recipe: PlacedRecipe = {
             ...placement.recipe,
             id: 1,
-            timelineId: 10,
+            beat: 8,
+            shapeKey: 1,
             members: placement.members,
             params: JSON.parse(JSON.stringify(placement.recipe.params)),
         };
         const at = new Map(placement.members.map((m) => [m.marcherId, m]));
         const [box] = boxesAt({
             recipes: [recipe],
-            moveEndOf: () => 8,
             beat: 8,
             positionOf: (id) => at.get(id),
         });

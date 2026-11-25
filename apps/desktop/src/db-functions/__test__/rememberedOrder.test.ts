@@ -340,10 +340,10 @@ describeDbTests("Remembered order in the show", (it) => {
                 marcherId,
                 ...SPOTS[slot]!,
             })),
-            afterWrite: async (tx, timelineId) => {
+            afterWrite: async (tx, beat) => {
                 await saveShapeRecipeInTransaction({
                     tx,
-                    timelineId,
+                    beat,
                     recipe: {
                         kind: "line",
                         kindVersion: 2,

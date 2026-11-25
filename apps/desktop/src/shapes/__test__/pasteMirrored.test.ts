@@ -98,7 +98,13 @@ function copiedShape(tool: ToolState): CopiedPicture {
     return pictureOf({
         positions: placement.members,
         shape: {
-            recipe: { ...placement.recipe, id: 1, timelineId: 1, members: [] },
+            recipe: {
+                ...placement.recipe,
+                id: 1,
+                beat: 8,
+                shapeKey: 1,
+                members: [],
+            },
             params,
         },
         stepPx: STEP,

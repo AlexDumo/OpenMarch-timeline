@@ -5,11 +5,7 @@ import {
     type PlacedBox,
     type PlacedRecipe,
 } from "@/shapes/placed/placedBox";
-import {
-    recipeCount,
-    recipeMoveEnd,
-    type MoveEndOf,
-} from "@/shapes/placed/recipeCount";
+import { recipeCount } from "@/shapes/placed/recipeCount";
 import { isOrderMarkKind } from "@/db-functions/shapeRecipes";
 import type { AnyToolKind } from "@/shapes/tool/toolKind";
 import type { XY } from "@/shapes/types";
@@ -59,7 +55,6 @@ interface Range {
  * look covers the counts between them, and one more covers the count on the later one.
  *
  * @param within the ranges to answer for (the selection's holds), any order
- * @param moveEndOf the end beat of a move, undefined for a move that's gone (`boxesAt`)
  * @param spansOf a marcher's resolver spans, for where the shapes' members move
  * @param positionAt where a marcher stands at a beat (as the field reads it)
  */
@@ -67,7 +62,6 @@ export function carriedStretches({
     marcherIds,
     within,
     recipes,
-    moveEndOf,
     spansOf,
     positionAt,
     kinds = PLACED_KINDS,
@@ -75,7 +69,6 @@ export function carriedStretches({
     marcherIds: readonly number[];
     within: readonly Range[];
     recipes: readonly PlacedRecipe[];
-    moveEndOf: MoveEndOf;
     spansOf: (marcherId: number) => readonly CarrySpan[];
     positionAt: (marcherId: number, beat: number) => XY | undefined;
     kinds?: readonly AnyToolKind[];
@@ -88,7 +81,7 @@ export function carriedStretches({
     );
     if (!inAnyShape || within.length === 0) return out;
 
-    const sortedCuts = shapeCuts(recipes, moveEndOf, spansOf);
+    const sortedCuts = shapeCuts(recipes, spansOf);
 
     const looks = new Map<number, Set<number>>();
     const carriedOn = (beat: number) => {
@@ -98,7 +91,6 @@ export function carriedStretches({
             carried = carriedMembers(
                 boxesAt({
                     recipes,
-                    moveEndOf,
                     beat,
                     kinds,
                     positionOf: (id) => {
@@ -149,22 +141,18 @@ export function carriedStretches({
 
 /**
  * Where who's in a shape can change: at a recipe's count, or where a member starts or stops moving.
- * An order mark draws nothing, but its cut stays where its move ends, as before (`recipeMoveEnd`):
- * a cut at its own beat, which can fall partway through a count, would change which count the
- * range before it is answered at.
+ * An order mark draws nothing and claims no one, so it cuts nothing: a cut at its own beat, which
+ * can fall partway through a count, would change which count the range before it is answered at.
  */
 function shapeCuts(
     recipes: readonly PlacedRecipe[],
-    moveEndOf: MoveEndOf,
     spansOf: (marcherId: number) => readonly CarrySpan[],
 ): number[] {
     const cuts = new Set<number>();
     const members = new Set<number>();
     for (const recipe of recipes) {
-        const end = isOrderMarkKind(recipe.kind)
-            ? recipeMoveEnd(recipe, moveEndOf)
-            : recipeCount(recipe, moveEndOf);
-        if (end !== undefined) cuts.add(end);
+        if (isOrderMarkKind(recipe.kind)) continue;
+        cuts.add(recipeCount(recipe));
         for (const m of recipe.members) members.add(m.marcherId);
     }
     for (const id of members)

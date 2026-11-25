@@ -70,7 +70,8 @@ function placedWithout(
         {
             ...placement.recipe,
             id: 1,
-            timelineId: 10,
+            beat: 8,
+            shapeKey: 1,
             members: placement.members,
             params: JSON.parse(JSON.stringify(placement.recipe.params)),
         },
@@ -79,7 +80,6 @@ function placedWithout(
     const at = new Map(recipe.members.map((m) => [m.marcherId, m] as const));
     const [box] = boxesAt({
         recipes: [recipe],
-        moveEndOf: () => 8,
         beat: 8,
         positionOf: (id) => at.get(id),
         ...(kinds ? { kinds } : {}),

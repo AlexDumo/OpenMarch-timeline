@@ -17,6 +17,7 @@ import {
 } from "../../services/DrizzleMigrationService";
 import {
     ADJUST_MODEL_USER_VERSION,
+    SHAPE_AT_COUNT_USER_VERSION,
     decideFileVersion,
     LANE_MODEL_USER_VERSION,
     readUserVersion,
@@ -26,7 +27,11 @@ import {
     migrationsFolder,
     withDb,
 } from "../../__test__/convertOnOpenFixtures";
-import { migrationAt } from "../../__test__/migrationRollback";
+import {
+    migrationAt,
+    rollBackMigrationsFrom,
+    SHAPE_AT_COUNT_MIGRATION,
+} from "../../__test__/migrationRollback";
 
 const ADJUST_MIGRATION = migrationAt(26);
 
@@ -52,6 +57,8 @@ const ROUTE = JSON.stringify({
 /** A new show put back to before 0026: a group lane, version 11, the column gone */
 async function fileBefore0026(file: string) {
     await createNewTimelineShow(file);
+    // 0030 too, so opening runs every later migration again, as for a real older file
+    rollBackMigrationsFrom(file, SHAPE_AT_COUNT_MIGRATION.idx);
     withDb(file, (db) => {
         db.exec(`
             DROP VIEW IF EXISTS timeline_route_violations;
@@ -102,17 +109,17 @@ describe(`Migration ${ADJUST_MIGRATION.tag}`, () => {
         expect(sql).toHaveLength(1);
     });
 
-    it("a new file has the column, stays a timeline file, and its view reads it", async () => {
+    it("a new file has the column, is written as 20 by 0030, and its view reads it", async () => {
         await createNewTimelineShow(file);
         withDb(file, (db) => {
-            expect(readUserVersion(db)).toBe(8);
+            expect(readUserVersion(db)).toBe(SHAPE_AT_COUNT_USER_VERSION);
             expect(
                 db.prepare("SELECT * FROM timeline_route_violations").all(),
             ).toEqual([]);
         });
     });
 
-    it("a file with lanes keeps every lane, adjust NULL, and stays at 11", async () => {
+    it("a file with lanes keeps every lane, adjust NULL, and is written as 20 only by 0030", async () => {
         await fileBefore0026(file);
         await open(file);
         withDb(file, (db) => {
@@ -133,7 +140,8 @@ describe(`Migration ${ADJUST_MIGRATION.tag}`, () => {
                     adjust: null,
                 },
             ]);
-            expect(readUserVersion(db)).toBe(LANE_MODEL_USER_VERSION);
+            // 0026 leaves it at 11; 0030 writes every file as 20
+            expect(readUserVersion(db)).toBe(SHAPE_AT_COUNT_USER_VERSION);
             // The change-log trigger was rebuilt with the column (J.1)
             db.exec(
                 `UPDATE timeline_lanes SET adjust = '{"v":1,"keys":[]}' WHERE id = 1`,

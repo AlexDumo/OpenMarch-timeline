@@ -17,10 +17,6 @@ import { createTimelinesInTransaction, findTimelineByRange } from "./timelines";
 import { readPageGrid } from "./timelineRipple";
 import { updateTimelineSlotDestinationInTransaction } from "./timelineTransitions";
 import { clearOwnPageMoves } from "./timelineMoveHelpers";
-import {
-    recipesFollowMembersInTransaction,
-    snapshotRecipesInTransaction,
-} from "./shapeRecipes";
 import { hasHeldMarksTable, readHeldMarks } from "./timelineHeldArrival";
 import {
     isPageBox,
@@ -449,11 +445,6 @@ const writePlan = async (
             slotIndex: row.slotIndex,
         });
     }
-    // Shapes placed in the moves this re-cuts, to follow their members afterwards
-    const recipes = await snapshotRecipesInTransaction(
-        tx,
-        plan.removed.map((r) => r.timelineId),
-    );
     if (plan.removed.length > 0) {
         const a = schema.timeline_assignments;
         const removed = await tx
@@ -504,8 +495,6 @@ const writePlan = async (
                 slotIndex: 0,
             });
     }
-    const dropped = await recipesFollowMembersInTransaction(tx, recipes);
-    if (dropped.length > 0) result.droppedFromShapes = dropped;
     if (plan.cleared.length > 0)
         result.cleared = [...new Set(plan.cleared)].sort((x, y) => x - y);
     return result;
@@ -727,12 +716,6 @@ export interface SplitMovesResult {
     split: number[];
     /** Marchers with a move across the beat that isn't simple on the box, left alone, by id */
     leftAlone: number[];
-    /**
-     * Members of a shape whose move the split re-cut that it no longer lists: they arrive at its
-     * count in another move than the one it followed, as `TimelineMoveResult.droppedFromShapes`.
-     * By id, for the toast
-     */
-    droppedFromShapes?: number[];
 }
 
 /**
@@ -822,12 +805,9 @@ export async function splitMovesAtBeatInTransaction({
         );
         split.push(marcherId);
     }
-    const written = await writePlan(tx, plan);
+    await writePlan(tx, plan);
     return {
         split,
         leftAlone: [...state.locked].sort((x, y) => x - y),
-        ...(written.droppedFromShapes
-            ? { droppedFromShapes: written.droppedFromShapes }
-            : {}),
     };
 }

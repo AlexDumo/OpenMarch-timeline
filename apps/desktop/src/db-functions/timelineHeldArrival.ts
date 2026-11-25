@@ -1,4 +1,4 @@
-import { and, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import * as schema from "@om-electron/database/migrations/schema";
 import type { DbConnection, DbTransaction } from "./types";
 import { shapeRecipesOnly } from "./shapeRecipes";
@@ -202,7 +202,7 @@ export async function marchersWithShapeHome(
         .innerJoin(r, sql`${r.id} = ${m.recipe_id}`)
         .where(
             and(
-                isNull(r.timeline_id),
+                eq(r.beat, 0),
                 shapeRecipesOnly(),
                 inArray(m.marcher_id, [...new Set(marcherIds)]),
             ),

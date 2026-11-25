@@ -25,7 +25,8 @@ describe("a Curve saved before step 4c", () => {
             recipes: [
                 {
                     id: 1,
-                    timelineId: null,
+                    beat: 0,
+                    shapeKey: 1,
                     kind: "line",
                     kindVersion: 2,
                     params: { ...STORED_CURVE, spots: 5 },
@@ -42,7 +43,6 @@ describe("a Curve saved before step 4c", () => {
                     y: 0,
                 })),
             })),
-            moveEndOf: () => 0,
             beat: 0,
             positionOf: () => ({ x: 0, y: 0 }),
         });

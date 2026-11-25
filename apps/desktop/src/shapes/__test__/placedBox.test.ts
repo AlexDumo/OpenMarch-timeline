@@ -28,18 +28,20 @@ const env: ToolEnv = {
 };
 const ctx: ShapeContext = { stepPx: STEP, snapPoint: (p) => p };
 
-/** A placed box of `n` marchers (ids 1..n) drawn from (0,0) to `to`, in move `timelineId` */
-function recipe(
-    n: number,
-    to: XY,
-    timelineId: number | null,
-    id = 1,
-): PlacedRecipe {
+/** Moves 10, 20 and 30 end at counts 8, 16 and 24; `null` is the starting spots */
+const countOf = (move: number | null): number =>
+    move === null
+        ? 0
+        : ({ 10: 8, 20: 16, 30: 24 } as Record<number, number>)[move]!;
+
+/** A placed box of `n` marchers (ids 1..n) drawn from (0,0) to `to`, at the end of move `move` */
+function recipe(n: number, to: XY, move: number | null, id = 1): PlacedRecipe {
     const params = drawBox({ x: 0, y: 0 }, to, n, env)!;
     const slots = boxShape.generate(params, n, ctx);
     return {
         id,
-        timelineId,
+        beat: countOf(move),
+        shapeKey: id,
         kind: "block",
         kindVersion: 1,
         params: { ...params, spots: n },
@@ -58,20 +60,12 @@ const at = (r: PlacedRecipe) =>
     new Map(r.members.map((m) => [m.marcherId, { x: m.x, y: m.y }]));
 
 describe("which placed box holds at a moment", () => {
-    const ends = new Map<number | null, number>([
-        [null, 0],
-        [10, 8],
-        [20, 16],
-    ]);
-    const moveEndOf = (id: number | null) => ends.get(id);
-
     it("shows a box at its move's end and later, while every member stands on its spot", () => {
         const r = recipe(4, { x: 40, y: 40 }, 10);
         const positions = at(r);
         const find = (beat: number) =>
             boxesAt({
                 recipes: [r],
-                moveEndOf,
                 beat,
                 positionOf: (id) => positions.get(id),
             });
@@ -88,7 +82,6 @@ describe("which placed box holds at a moment", () => {
         expect(
             boxesAt({
                 recipes: [r],
-                moveEndOf,
                 beat: 12,
                 positionOf: (id) => positions.get(id),
             }),
@@ -101,7 +94,6 @@ describe("which placed box holds at a moment", () => {
         const positions = at(late);
         const found = boxesAt({
             recipes: [early, late],
-            moveEndOf,
             beat: 20,
             positionOf: (id) => positions.get(id),
         });
@@ -114,7 +106,6 @@ describe("which placed box holds at a moment", () => {
         const positions = at(r);
         const [box] = boxesAt({
             recipes: [r],
-            moveEndOf,
             beat: 0,
             positionOf: (id) => positions.get(id),
         });
@@ -128,7 +119,6 @@ describe("which placed box holds at a moment", () => {
         expect(
             boxesAt({
                 recipes: [r, line],
-                moveEndOf,
                 beat: 20,
                 positionOf: () => ({ x: 0, y: 0 }),
             }),
@@ -137,17 +127,11 @@ describe("which placed box holds at a moment", () => {
 });
 
 describe("ungrouped marchers", () => {
-    const ends = new Map<number | null, number>([
-        [10, 8],
-        [20, 16],
-        [30, 24],
-    ]);
-    const moveEndOf = (id: number | null) => ends.get(id);
-    /** Marks the members of `r` ungrouped in move `timelineId` */
-    const ungrouped = (r: PlacedRecipe, timelineId: number): PlacedRecipe => ({
+    /** Marks the members of `r` ungrouped at the end of move `move` */
+    const ungrouped = (r: PlacedRecipe, move: number): PlacedRecipe => ({
         ...r,
         id: 99,
-        timelineId,
+        beat: countOf(move),
         kind: UNGROUPED_KIND,
         params: {},
     });
@@ -158,7 +142,6 @@ describe("ungrouped marchers", () => {
         const find = (beat: number) =>
             boxesAt({
                 recipes: [r, ungrouped(r, 20)],
-                moveEndOf,
                 beat,
                 positionOf: (id) => positions.get(id),
             });
@@ -179,7 +162,6 @@ describe("ungrouped marchers", () => {
         expect(
             boxesAt({
                 recipes: [r, moved],
-                moveEndOf,
                 beat: 24,
                 positionOf: (id) => positions.get(id),
             }),
@@ -189,11 +171,11 @@ describe("ungrouped marchers", () => {
     it("keeps the members a later shape didn't take, so an older shape over them stays hidden", () => {
         const early = recipe(4, { x: 40, y: 40 }, 10, 1);
         const positions = at(early);
-        /** A shape of `early`'s members `ids`, where they stand, in move `timelineId` */
-        const over = (id: number, timelineId: number, ids: number[]) => ({
+        /** A shape of `early`'s members `ids`, where they stand, at the end of move `move` */
+        const over = (id: number, move: number, ids: number[]) => ({
             ...early,
             id,
-            timelineId,
+            beat: countOf(move),
             members: early.members.filter((m) => ids.includes(m.marcherId)),
             params: { ...(early.params as object), spots: ids.length },
         });
@@ -204,7 +186,6 @@ describe("ungrouped marchers", () => {
                 ungrouped(early, 20),
                 over(2, 30, [1, 2]),
             ],
-            moveEndOf,
             beat: 24,
             positionOf: (id) => positions.get(id),
         });
@@ -219,7 +200,6 @@ describe("ungrouped marchers", () => {
         expect(
             boxesAt({
                 recipes: [early, ungrouped(early, 20), late],
-                moveEndOf,
                 beat: 24,
                 positionOf: (id) => positions.get(id),
             }).map((b) => b.recipe.id),
@@ -329,7 +309,6 @@ describe("a box recipe edited by hand (B4)", () => {
             const show = (rec: PlacedRecipe) =>
                 boxesAt({
                     recipes: [rec],
-                    moveEndOf: () => 8,
                     beat: 8,
                     positionOf: (id) => at(r).get(id),
                 });

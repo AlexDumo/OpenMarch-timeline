@@ -21,6 +21,7 @@ import {
     keepHeldMarksTrueInTransaction,
     readHeldUpkeepBefore,
 } from "./timelineHeldUpkeep";
+import { keepShapeRecipesTrueInTransaction } from "./shapeRecipeUpkeep";
 import {
     bumpTimelineDisplayVersion,
     historyStatementTable,
@@ -190,6 +191,10 @@ export const transactionWithHistory = async <T>(
                 // where a re-timed row covers them, in the edit's undo step. Never in undo or
                 // redo replay
                 await keepHeldMarksTrueInTransaction(tx, heldBefore);
+                // Shapes whose members' arrivals all went with moves this edit deleted go too, in
+                // the edit's undo step, in place of the old cascade from moves (ADR 0006 revision
+                // of 2026-11-22, §4); read from the change log, before it's drained below
+                await keepShapeRecipesTrueInTransaction(tx);
 
                 const groupAfter =
                     (

@@ -858,7 +858,8 @@ describeDbTests(
                 const [recipe] = await tx
                     .insert(schema.timeline_shape_recipes)
                     .values({
-                        timeline_id: shared.id,
+                        beat: shared.end_beat,
+                        shape_key: 0,
                         kind: "line",
                         kind_version: 1,
                         params: "{}",
@@ -904,7 +905,7 @@ describeDbTests(
             const recipes = async () =>
                 (
                     await db.select().from(schema.timeline_shape_recipes).all()
-                ).map((r) => r.timeline_id);
+                ).map((r) => r.beat);
 
             const original = {
                 rows: await theirMoves(),
@@ -1293,7 +1294,8 @@ describeDbTests(
                 const [recipe] = await tx
                     .insert(schema.timeline_shape_recipes)
                     .values({
-                        timeline_id: page3Move.id,
+                        beat: page3Move.end_beat,
+                        shape_key: 0,
                         kind: "line",
                         kind_version: 1,
                         params: "{}",

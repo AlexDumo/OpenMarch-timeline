@@ -15,7 +15,8 @@ import {
     type SplitIdKeeper,
     type SplitTimelineResult,
 } from "./timelineSplitAtBeat";
-import { hasShapeRecipes, shapeRecipesOnly } from "./shapeRecipes";
+import { hasShapeRecipes } from "./shapeRecipes";
+import { marcherRecipeTimelines } from "./timelineHeldMarks";
 import { setTimelineTransitionDestinationInTransaction } from "./timelineTransitionsInTransaction";
 import { timelinesWithRange } from "./timelines";
 import { clearOwnPageMoves, sampleShape } from "./timelineMoveHelpers";
@@ -403,34 +404,13 @@ async function membersThatStay(
     for (const r of rows)
         if (r.pathStyle === "follow_the_leader") note(r, "followTheLeader");
     if (rows.length === 0 || !(await hasShapeRecipes(tx))) return out;
-    const recipes = schema.timeline_shape_recipes;
-    const members = schema.timeline_shape_recipe_marchers;
-    const inRecipes = await tx
-        .selectDistinct({
-            marcherId: members.marcher_id,
-            timelineId: recipes.timeline_id,
-        })
-        .from(members)
-        .innerJoin(recipes, eq(recipes.id, members.recipe_id))
-        .where(
-            and(
-                inArray(
-                    members.marcher_id,
-                    ascending(rows.map((r) => r.row.marcher_id)),
-                ),
-                inArray(
-                    recipes.timeline_id,
-                    ascending(rows.map((r) => r.timelineId)),
-                ),
-                shapeRecipesOnly(),
-            ),
-        )
-        .all();
-    const recipeKeys = new Set(
-        inRecipes.map((m) => `${m.marcherId}:${m.timelineId}`),
+    // Members of a shape at the move's end that the move brings there
+    const inRecipes = await marcherRecipeTimelines(
+        tx,
+        ascending(rows.map((r) => r.timelineId)),
     );
     for (const r of rows)
-        if (recipeKeys.has(`${r.row.marcher_id}:${r.timelineId}`))
+        if (inRecipes.get(r.timelineId)?.has(r.row.marcher_id))
             note(r, "shape");
     return out;
 }

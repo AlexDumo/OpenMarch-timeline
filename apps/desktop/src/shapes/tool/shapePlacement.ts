@@ -2,8 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { db } from "@/global/database/db";
 import { transactionWithHistory } from "@/db-functions/history";
 import {
-    leftOutByOtherCounts,
-    moveHoldsAnyOf,
+    anyArrivesAt,
     saveShapeRecipeInTransaction,
     type ShapeRecipeMember,
     type ShapeRecipeRecord,
@@ -16,9 +15,8 @@ import {
     transformMarchersInSelection,
     type CanvasEditPlan,
 } from "@/timeline/timelineCoordinateWrites";
-import { withoutLockedMarchers } from "@/timeline/basicLocks";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
-import { showLeftOutToast } from "../placed/leftOutToast";
+import { sameCount } from "../placed/recipeCount";
 import { invalidatePlacedBoxes, placedBoxesAt } from "../placed/placedBoxStore";
 import type { ShapeContext } from "../types";
 import { orderOf, targetsOf, type ToolState } from "./toolMachine";
@@ -32,12 +30,14 @@ export interface ShapePlacement {
     readonly recipe: ShapeRecipeRecord;
     readonly members: readonly ShapeRecipeMember[];
     /**
-     * The recipe this placement edits (a placed shape changed again): replaced when it belongs to
-     * the move being written, kept as the earlier move's own otherwise
+     * The recipe this placement edits (a placed shape changed again): replaced when it stands at
+     * the count being written, kept as the earlier count's own otherwise, the new one a mark of
+     * the same shape (its `shapeKey`)
      */
     readonly replaces?: {
         readonly id: number;
-        readonly timelineId: number | null;
+        readonly beat: number;
+        readonly shapeKey: number;
     };
     /**
      * Set every member even when nobody moves. The caller decides when: a shape changed on a later
@@ -125,9 +125,8 @@ export function placesNothing(
  * leave the start flag and arrive at the playhead), and the recipe is saved in the same edit, so
  * the two are one undo step. False when the write failed (a toast says why).
  *
- * In Basic, a marcher whose last mid-page position on the page is at another count than the
- * others' arrives at the flag in a move of its own, so the recipe can't list it (ADR 0006): it
- * is set on its spot, and a toast names it, since Basic shows no moves (`showLeftOutToast`).
+ * The recipe stands at the count the edit writes at and lists every member, whichever move brings
+ * it there or none (ADR 0006 revision of 2026-11-22, §1.3).
  */
 export async function writePlacement(
     placement: ShapePlacement,
@@ -153,7 +152,6 @@ export async function writePlacement(
                 ? [{ marcher_id: c.marcher_id, x: spot.x, y: spot.y }]
                 : [];
         });
-    let leftOut: number[] = [];
     try {
         if (placement.plain) {
             // Plain marchers moved to their spots: no recipe, and nobody set who doesn't move
@@ -168,16 +166,6 @@ export async function writePlacement(
             return true;
         }
         const edit = plan ?? planCanvasEdit();
-        const basic = edit.ok && edit.target.kind === "point";
-        // Locked marchers aren't moved (V-203) and have their own toast, so aren't named as left out
-        const locked = new Set(
-            edit.ok
-                ? withoutLockedMarchers(
-                      edit.target,
-                      marcherIds.map((marcherId) => ({ marcherId })),
-                  ).locked
-                : [],
-        );
         await transformMarchersInSelection({
             db,
             marcherIds,
@@ -186,42 +174,44 @@ export async function writePlacement(
             keepPlayhead,
             writesShapes: true,
             // Every member is set where the shape is, the one at its pivot included, so each
-            // is in the move its recipe keeps; a change that moves nobody sets no one, unless
+            // arrives at the shape's count; a change that moves nobody sets no one, unless
             // `setAll`
             setUnmoved: true,
             setAll: placement.setAll,
-            afterWrite: async (tx, timelineId) => {
-                // A move none of the members are in would keep no one: the edit moved nobody there,
-                // and is saved below instead (#485)
-                if (!(await moveHoldsAnyOf(tx, timelineId, marcherIds)))
-                    return false;
+            afterWrite: async (tx, beat) => {
                 saved = true;
+                // A shape changed at a later count its members only stand still through, with
+                // nobody set there (#485; Held members, whose edit moved their arrival and the
+                // whole hold): the change is the shape's own, at its own count, in this same edit.
+                // Otherwise it's saved here: in place at its own count, or as a copy at a later one
+                const there =
+                    replaces !== undefined &&
+                    !sameCount(replaces.beat, beat) &&
+                    !(await anyArrivesAt(tx, beat, marcherIds))
+                        ? replaces.beat
+                        : beat;
+                const own =
+                    replaces !== undefined && sameCount(replaces.beat, there);
                 await saveShapeRecipeInTransaction({
                     tx,
-                    timelineId,
+                    beat: there,
                     recipe: placement.recipe,
                     members,
-                    replaces:
-                        replaces && replaces.timelineId === timelineId
-                            ? replaces.id
-                            : undefined,
+                    ...(own
+                        ? { replaces: replaces.id }
+                        : replaces
+                          ? { shapeKey: replaces.shapeKey }
+                          : {}),
                 });
-                if (basic && timelineId !== null)
-                    leftOut = await leftOutByOtherCounts(
-                        tx,
-                        timelineId,
-                        marcherIds.filter((id) => !locked.has(id)),
-                    );
             },
         });
-        showLeftOutToast(leftOut);
-        // Nobody moved and no move here holds the shape's members (a change without `setAll`):
-        // the change goes to the recipe shown, in its own move
+        // The edit wrote nothing, not even the recipe (Basic locked every member): the change
+        // goes to the recipe shown, at its own count
         if (!saved && replaces) {
             await transactionWithHistory(db, "editShapeRecipe", (tx) =>
                 saveShapeRecipeInTransaction({
                     tx,
-                    timelineId: replaces.timelineId,
+                    beat: replaces.beat,
                     recipe: placement.recipe,
                     members,
                     replaces: replaces.id,

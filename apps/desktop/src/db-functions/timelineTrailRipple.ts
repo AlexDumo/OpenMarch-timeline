@@ -17,7 +17,7 @@ import type { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import { refuse } from "./timelineErrors";
 import { marcherName, type RoutePointInput } from "./timelineRoutes";
-import { shapeRecipesOnly } from "./shapeRecipes";
+import { recipesAtBeat, shapeRecipesOnly } from "./shapeRecipes";
 import { readTimeline } from "./timelineMemberRows";
 import {
     endSpotsInMove,
@@ -94,7 +94,8 @@ export interface RippleResult extends FollowTrailResult {
 }
 
 /**
- * RP-3, AP-T12: every shape recipe of move `timelineId` (not order marks) re-deals its rows of
+ * RP-3, AP-T12: every shape recipe at the count move `timelineId` ends at (not order marks)
+ * re-deals its rows of
  * the members: the row of a spot names whoever stands on it now (`holder`: who stood there →
  * who stands there), keeping its id, slot and point. Rows are deleted and written again with
  * their ids, since the unique (recipe, marcher) pair forbids swapping two in place.
@@ -106,6 +107,14 @@ async function dealRecipesAgainInTransaction(
 ): Promise<number> {
     const R = schema.timeline_shape_recipes;
     const M = schema.timeline_shape_recipe_marchers;
+    const end = (
+        await tx
+            .select({ end: schema.timelines.end_beat })
+            .from(schema.timelines)
+            .where(eq(schema.timelines.id, timelineId))
+            .get()
+    )?.end;
+    if (end === undefined) return 0;
     // Shapes only: an ungrouped mark or an order mark holds no spots to deal
     const rows = (
         await tx
@@ -114,7 +123,7 @@ async function dealRecipesAgainInTransaction(
             .innerJoin(R, eq(R.id, M.recipe_id))
             .where(
                 and(
-                    eq(R.timeline_id, timelineId),
+                    recipesAtBeat(end),
                     inArray(M.marcher_id, [...holder.keys()]),
                     shapeRecipesOnly(),
                 ),

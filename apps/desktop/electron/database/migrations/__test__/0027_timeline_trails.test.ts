@@ -21,13 +21,18 @@ import {
     decideFileVersion,
     readUserVersion,
     TRAIL_MODEL_USER_VERSION,
+    SHAPE_AT_COUNT_USER_VERSION,
 } from "../../fileVersion";
 import {
     createNewTimelineShow,
     migrationsFolder,
     withDb,
 } from "../../__test__/convertOnOpenFixtures";
-import { migrationAt } from "../../__test__/migrationRollback";
+import {
+    migrationAt,
+    rollBackMigrationsFrom,
+    SHAPE_AT_COUNT_MIGRATION,
+} from "../../__test__/migrationRollback";
 
 const TRAIL_MIGRATION = migrationAt(27);
 
@@ -83,6 +88,8 @@ const TABLES = [
  */
 async function fileBefore0027(file: string) {
     await createNewTimelineShow(file);
+    // 0030 too, so opening runs every later migration again, as for a real older file
+    rollBackMigrationsFrom(file, SHAPE_AT_COUNT_MIGRATION.idx);
     withDb(file, (db) => {
         const triggers = db
             .prepare("SELECT name FROM sqlite_schema WHERE type = 'trigger'")
@@ -178,7 +185,8 @@ describe(`Migration ${TRAIL_MIGRATION.tag}`, () => {
             expect(TABLES.map((t) => rowsOf(db, t))).toEqual(before);
             expect(before[0]).toHaveLength(2);
             expect(before[1]).toHaveLength(2);
-            expect(readUserVersion(db)).toBe(ADJUST_MODEL_USER_VERSION);
+            // 0027 leaves it at 12; 0030 writes every file as 20
+            expect(readUserVersion(db)).toBe(SHAPE_AT_COUNT_USER_VERSION);
             expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
             expect(
                 db.prepare("SELECT * FROM timeline_route_violations").all(),

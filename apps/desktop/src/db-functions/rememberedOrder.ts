@@ -28,7 +28,7 @@ import {
     UNGROUPED_RECIPE_KIND,
 } from "./shapeRecipes";
 import { readTimelineEndBeats } from "./timelines";
-import { recipeCount, recipeMoveIds } from "@/shapes/placed/recipeCount";
+import { recipeCount } from "@/shapes/placed/recipeCount";
 import { readTrails, type MoveTrail } from "./timelineTrails";
 import type { DbConnection, DbTransaction } from "./types";
 
@@ -201,7 +201,7 @@ async function trailsOf(
 
 /**
  * The forms that hold any of `marcherIds`: their trails, and the shape recipes and ungrouped marks
- * they are in. A form in a move that's gone is skipped.
+ * they are in. A trail in a move that's gone is skipped.
  */
 export async function readOrderForms(
     db: DbConnection | DbTransaction,
@@ -211,15 +211,15 @@ export async function readOrderForms(
     const want = new Set(marcherIds);
     const recipes = await readShapeRecipesOf({ db, marcherIds });
     const trails = await trailsOf(db, want);
-    const endBeats = await readTimelineEndBeats(db, [
-        ...recipeMoveIds(recipes),
-        ...trails.map((t) => t.timelineId),
-    ]);
+    const endBeats = await readTimelineEndBeats(
+        db,
+        trails.map((t) => t.timelineId),
+    );
     const forms: OrderForm[] = [];
     for (const recipe of recipes) {
-        // An order mark is made at its own beat; one saved before marks kept it, at its move's end
-        const endBeat = recipeCount(recipe, (id) => endBeats.get(id));
-        if (endBeat === undefined || recipe.members.length === 0) continue;
+        // A recipe is made at its count, an order mark too
+        const endBeat = recipeCount(recipe);
+        if (recipe.members.length === 0) continue;
         if (recipe.kind === ORDER_CLEAR_RECIPE_KIND) {
             forms.push({
                 endBeat,

@@ -148,7 +148,7 @@ describeDbTests(
                     .where(eq(schema.timelines.id, after.id));
                 await saveShapeRecipeInTransaction({
                     tx,
-                    timelineId: after.id,
+                    beat: after.end_beat,
                     recipe: {
                         kind: "line",
                         kindVersion: 1,

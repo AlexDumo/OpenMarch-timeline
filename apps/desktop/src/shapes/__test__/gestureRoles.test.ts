@@ -410,7 +410,8 @@ function placed(across = 4, deep = across): PlacedBox<BoxParams> {
     return {
         recipe: {
             id: 7,
-            timelineId: 3,
+            beat: 8,
+            shapeKey: 7,
             kind: "block",
             kindVersion: 1,
             params: { ...params, spots: 4 },

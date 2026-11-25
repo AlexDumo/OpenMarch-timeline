@@ -21,14 +21,14 @@ import type { ShapeContext, XY } from "../types";
 import { frameToField, pivotPoint } from "../frame/frame";
 import { pivotOf } from "../frame/pivot";
 import { closedOf } from "../distribute/modes";
-import { recipeCount, type MoveEndOf } from "./recipeCount";
+import { recipeCount } from "./recipeCount";
 
 /**
  * Placed shapes (docs/timeline/research/shapes/07-placed-boxes.md): a shape's recipe, read back.
  * The box came first, so the names say box; a placed shape of any kind the shape tool draws works
  * the same way (#397), through its tool kind, which the recipe's kind and version name.
  *
- * A shape is shown at the end of the move it was placed in, and at every later moment while each
+ * A shape is shown at the count it was placed at, and at every later moment while each
  * of its members still stands on its spot (the form is held). Its members are exactly the marchers
  * on its spots: one that moves away leaves the shape, leaving a hole, and moving every member the
  * same way moves the shape. Everything here is pure.
@@ -129,28 +129,24 @@ export function placedOf(
  * marcher is in one shape at a time, the latest placed; one ungrouped since (`UNGROUPED_KIND`) is
  * in none.
  *
- * @param moveEndOf the end beat of a move, undefined for a move that's gone: what a recipe's count
- *   (`recipeCount`) is read from
  * @param positionOf where a marcher stands at `beat`
  * @param kinds the kinds recipes are read back as: every kind the shape tool draws
  */
 export function boxesAt({
     recipes,
-    moveEndOf,
     beat,
     positionOf,
     kinds = PLACED_KINDS,
 }: {
     recipes: readonly PlacedRecipe[];
-    moveEndOf: MoveEndOf;
     beat: number;
     positionOf: (marcherId: number) => XY | undefined;
     kinds?: readonly AnyToolKind[];
 }): PlacedBox[] {
     const candidates: (PlacedBox | Ungrouped)[] = [];
     for (const recipe of recipes) {
-        const endBeat = recipeCount(recipe, moveEndOf);
-        if (endBeat === undefined || endBeat > beat + 1e-9) continue;
+        const endBeat = recipeCount(recipe);
+        if (endBeat > beat + 1e-9) continue;
         if (recipe.members.length === 0) continue;
         // Ungrouped stays ungrouped wherever its members go next, until a later shape takes them
         if (isUngrouped(recipe)) {

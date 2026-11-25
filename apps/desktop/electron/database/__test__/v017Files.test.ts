@@ -34,6 +34,7 @@ import * as DatabaseServices from "../database.services";
 import { getOrm } from "../db";
 import { NEEDS_CONVERSION_STATUS } from "../convertOnOpenGate";
 import { DrizzleMigrationService } from "../services/DrizzleMigrationService";
+import { SHAPE_AT_COUNT_USER_VERSION } from "../fileVersion";
 import type { ConvertOnOpenDialogs } from "@om-electron/main/convertOnOpenFlow";
 import { openShowFile } from "@om-electron/main/openShow";
 import { createResolver } from "@openmarch/core";
@@ -309,9 +310,31 @@ describe.each(["in-thread", "worker"] as const)(
                         ),
                     ).toEqual(contentsOf(file));
 
-                    // This build's schema: a timeline file with every migration applied
+                    // This build's schema: a timeline file with every migration applied, written
+                    // as 20 once 0030 has run (ADR 0006 revision of 2026-11-22, §1.8-§1.9)
                     const after = stateOf(showPath);
-                    expect(after.userVersion).toBe(8);
+                    expect(after.userVersion).toBe(SHAPE_AT_COUNT_USER_VERSION);
+                    // 0030 ran inside the conversion with no recipes: shapes stand at a count
+                    withDb(showPath, (raw) => {
+                        const columns = (
+                            raw
+                                .prepare(
+                                    "SELECT name FROM pragma_table_info('timeline_shape_recipes')",
+                                )
+                                .all() as { name: string }[]
+                        ).map((c) => c.name);
+                        expect(columns).toEqual(
+                            expect.arrayContaining(["beat", "shape_key"]),
+                        );
+                        expect(columns).not.toContain("timeline_id");
+                        expect(
+                            raw
+                                .prepare(
+                                    "SELECT count(*) AS n FROM timeline_shape_recipes",
+                                )
+                                .get(),
+                        ).toEqual({ n: 0 });
+                    });
                     expect(after.marker).toEqual(expect.any(String));
                     expect(after.pageEraTables).toEqual([]);
                     expect(after.timelines).toBeGreaterThan(0);

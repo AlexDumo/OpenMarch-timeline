@@ -14,12 +14,13 @@ import {
     type PlacedBox,
     type StoredParams,
 } from "./placedBox";
-import { readRecipeMoveEnds } from "./recipeCount";
+import { recipeCount, sameCount } from "./recipeCount";
 
 /** Marchers that left a box in an edit, and the box as it was saved without them */
 export interface BoxLeave {
     readonly recipeId: number;
-    readonly timelineId: number | null;
+    /** The count the box was saved at */
+    readonly beat: number;
     readonly left: readonly number[];
     readonly box: PlacedBox;
     /** Who is still in the box, on their spots */
@@ -36,8 +37,8 @@ export interface BoxLeave {
  * - Some members moved off their spots: they leave, and their spots stay as holes. `leaves` lists
  *   them after the edit, for the toast that offers to fill the holes.
  *
- * A box placed in an earlier move and held to this moment is saved as a copy on this edit's move;
- * the earlier one stays as it was.
+ * A box placed at an earlier count and held to this moment is saved as a copy at this edit's
+ * count, a mark of the same shape (its `shapeKey`); the earlier one stays as it was.
  *
  * @param beat the moment the edit writes at
  * @param positionOf where a marcher stands at `beat` before the edit (the resolver, which doesn't
@@ -52,10 +53,7 @@ export function boxMembershipEdit({
     beat: number;
     positionOf: (marcherId: number) => XY | undefined;
 }): {
-    afterWrite: (
-        tx: DbTransaction,
-        timelineId: number | null,
-    ) => Promise<boolean>;
+    afterWrite: (tx: DbTransaction, beat: number) => Promise<boolean>;
     readonly leaves: readonly BoxLeave[];
 } {
     const leaves: BoxLeave[] = [];
@@ -64,26 +62,24 @@ export function boxMembershipEdit({
     );
     return {
         leaves,
-        async afterWrite(tx, timelineId) {
+        async afterWrite(tx, at) {
             const recipes = await readShapeRecipesOf({
                 db: tx,
                 marcherIds: [...moved.keys()],
             });
             if (recipes.length === 0) return false;
-            const ends = await readRecipeMoveEnds(tx, recipes);
             const boxes = boxesAt({
                 recipes,
-                moveEndOf: (id) => ends.get(id),
                 beat,
                 positionOf,
             });
             let wrote = false;
             // A member dragged by hand keeps an order set by hand (pathways step 4g)
-            const into = { tx, timelineId, keepOrderMarks: true };
+            const into = { tx, beat: at, keepOrderMarks: true };
             for (const box of boxes) {
                 const change = membershipAfter(box, moved);
                 if (change.type === "none") continue;
-                const own = box.recipe.timelineId === timelineId;
+                const own = sameCount(recipeCount(box.recipe), at);
                 const save = (
                     params: StoredParams,
                     members: readonly ShapeRecipeMember[],
@@ -92,7 +88,9 @@ export function boxMembershipEdit({
                         ...into,
                         recipe: { ...box.recipe, params },
                         members,
-                        replaces: own ? box.recipe.id : undefined,
+                        ...(own
+                            ? { replaces: box.recipe.id }
+                            : { shapeKey: box.recipe.shapeKey }),
                     });
                 if (change.type === "move") {
                     const out = movedBox(box, change.delta);
@@ -103,13 +101,12 @@ export function boxMembershipEdit({
                         kept.params as StoredParams,
                         kept.members,
                     );
-                    // Who is in it as saved: the save leaves out marchers not in this move,
-                    // and deletes a recipe it left with no one
+                    // Who is in it as saved: the save deletes a recipe it left with no one
                     const saved = await readShapeRecipe(tx, recipeId);
                     if (saved && saved.members.length > 0)
                         leaves.push({
                             recipeId,
-                            timelineId,
+                            beat: at,
                             left: change.left,
                             box,
                             members: saved.members,

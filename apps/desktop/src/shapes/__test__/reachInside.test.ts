@@ -86,7 +86,8 @@ function placed(n: 4 | 15 = 4): PlacedBox<BoxParams> {
     return {
         recipe: {
             id: n === 4 ? 7 : 8,
-            timelineId: 3,
+            beat: 8,
+            shapeKey: 7,
             kind: "block",
             kindVersion: 1,
             params: { ...params, spots: 4 },

@@ -16,7 +16,9 @@
  *   it) starts later by the added length, earlier by the removed length, or at the same second
  *   when the edit is respaced.
  * - **Moves.** Every move, transition, assignment and held mark edge maps by the ripple's rules
- *   (`expectedEdge`); with `keep`, a move over the spot keeps its length.
+ *   (`expectedEdge`); with `keep`, a move over the spot keeps its length. A shape recipe's count
+ *   maps as an end does (`orderMarkPlace`), the starting spots' stay at 0, and nothing else about
+ *   it changes.
  * - **Positions.** Through the app's resolver: each marcher (and prop) is where it was at every
  *   count where its position is set (home, every move's end and start, every hold edge, every page
  *   start it isn't moving through), at the count that maps to.
@@ -665,6 +667,31 @@ export async function applyAndCheck(
         if (after.held.length !== before.held.length)
             problems.push(
                 `${where}: ${after.held.length} held marks, were ${before.held.length}`,
+            );
+    }
+    {
+        const now = byId(after.recipes);
+        for (const r of before.recipes) {
+            const a = now.get(n(r.id));
+            if (!a) {
+                problems.push(
+                    `${where}: shape recipe ${r.id} at ${r.beat} is gone`,
+                );
+                continue;
+            }
+            const want = n(r.beat) === 0 ? 0 : map.end(n(r.beat));
+            if (n(a.beat) !== want)
+                problems.push(
+                    `${where}: shape recipe ${r.id} at ${r.beat} → ${a.beat}, expected ${want}`,
+                );
+            if (!same(without(r, "beat"), without(a, "beat")))
+                problems.push(
+                    `${where}: shape recipe ${r.id} changed ${JSON.stringify(r)} → ${JSON.stringify(a)}`,
+                );
+        }
+        if (after.recipes.length !== before.recipes.length)
+            problems.push(
+                `${where}: ${after.recipes.length} shape recipes, were ${before.recipes.length}`,
             );
     }
 

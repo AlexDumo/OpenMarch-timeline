@@ -225,9 +225,9 @@ export async function splitTimelineAtBeat({
  * The split inside a caller's edit. With `allowSharedRanges` (a holds cut, `timelineMoveCuts`), a
  * half may land on a range another move already has (C-12 relaxed as for a split by marcher,
  * UI-25); a new half is then numbered, so it never takes over a page's move. `idStaysWith` picks
- * the half that keeps the move's id (`SplitIdKeeper`); the transitions after the beat, and any
- * shape recipe (#363, which describes where they arrive), stay with the half after the beat
- * whichever id it has.
+ * the half that keeps the move's id (`SplitIdKeeper`); the transitions after the beat stay with
+ * the half after the beat whichever id it has. Shape recipes stand at a count, so a split leaves
+ * them where they are.
  */
 export async function splitTimelineAtBeatInTransaction({
     tx,
@@ -581,8 +581,8 @@ async function refuseUnlessSplitAllowed(
 
 /**
  * The half after the beat as a new move (`idStaysWith` isn't `"after"`): a numbered timeline over
- * `[beat, end)` that takes the original's transitions, which already start at the beat, and its
- * shape recipes.
+ * `[beat, end)` that takes the original's transitions, which already start at the beat. Shape
+ * recipes stand at a count, not in a move, so they stay where they are.
  */
 async function moveAfterHalfOut(
     tx: DbTransaction,
@@ -599,10 +599,6 @@ async function moveAfterHalfOut(
         .update(schema.timeline_transitions)
         .set({ timeline_id: after.id })
         .where(eq(schema.timeline_transitions.timeline_id, timeline.id));
-    await tx
-        .update(schema.timeline_shape_recipes)
-        .set({ timeline_id: after.id })
-        .where(eq(schema.timeline_shape_recipes.timeline_id, timeline.id));
     return after;
 }
 

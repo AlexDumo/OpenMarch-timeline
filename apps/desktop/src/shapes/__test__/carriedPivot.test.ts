@@ -12,7 +12,8 @@ import {
 import { useBasicLocksStore } from "@/timeline/basicLocks";
 import type { PageBox } from "@/stores/TimelineSelectionStore";
 import type { CanvasEditPlan } from "@/timeline/timelineCoordinateWrites";
-import { performUndo } from "@/db-functions/history";
+import { performUndo, transactionWithHistory } from "@/db-functions/history";
+import { holdFromPreviousPage } from "@/db-functions/timelineHoldFromPrevious";
 import { createLastPage, deletePages } from "@/db-functions/page";
 import { moveMarchersInTarget } from "@/db-functions/timelineMoves";
 import {
@@ -66,19 +67,19 @@ const show = async (db: DbConnection) => {
         x: 100 + 20 * i,
         y: 50,
     }));
-    let saved: { recipeId: number; timelineId: number | null } | undefined;
+    let saved: { recipeId: number; beat: number } | undefined;
     await moveMarchersInTarget({
         db,
         target: { kind: "range", ...PAGE2 },
         moves: members.map(({ marcherId, x, y }) => ({ marcherId, x, y })),
-        afterWrite: async (tx, timelineId) => {
+        afterWrite: async (tx, beat) => {
             const recipeId = await saveShapeRecipeInTransaction({
                 tx,
-                timelineId,
+                beat,
                 recipe: BOX,
                 members,
             });
-            saved = { recipeId, timelineId };
+            saved = { recipeId, beat };
         },
     });
     await timelineResolverSettled();
@@ -94,14 +95,14 @@ const PAGE3_PLAN: CanvasEditPlan = {
 
 /** The pivot change `commitBox` writes on page 3: nobody moves, the earlier page's recipe replaced */
 const changePivot = (
-    { members, recipeId, timelineId }: Awaited<ReturnType<typeof show>>,
+    { members, recipeId, beat }: Awaited<ReturnType<typeof show>>,
     pivot: string,
 ) =>
     writePlacement(
         {
             recipe: { ...BOX, params: { ...BOX.params, pivot } },
             members,
-            replaces: { id: recipeId, timelineId },
+            replaces: { id: recipeId, beat, shapeKey: recipeId },
             setAll: true,
         },
         new QueryClient(),
@@ -135,7 +136,8 @@ const undoSteps = async (db: DbConnection) =>
 const pivots = async (db: DbConnection) =>
     (await readAllShapeRecipes(db)).map((r) => ({
         id: r.id,
-        timelineId: r.timelineId,
+        beat: r.beat,
+        shapeKey: r.shapeKey,
         pivot: (r.params as { pivot: string }).pivot,
     }));
 
@@ -156,12 +158,15 @@ describeDbTests("a pivot change on a page a box is carried onto", (it) => {
         expect(after).toHaveLength(2);
         expect(after.find((r) => r.id === placed.recipeId)).toEqual({
             id: placed.recipeId,
-            timelineId: placed.timelineId,
+            beat: placed.beat,
+            shapeKey: placed.recipeId,
             pivot: "nw",
         });
         const copy = after.find((r) => r.id !== placed.recipeId);
         expect(copy?.pivot).toBe("se");
-        expect(copy?.timelineId).not.toBe(placed.timelineId);
+        // At page 3's count, a mark of the same shape
+        expect(copy?.beat).toBe(PAGE3.end);
+        expect(copy?.shapeKey).toBe(placed.recipeId);
         expect(await undoSteps(db)).toBe(steps + 1);
     });
 
@@ -188,7 +193,8 @@ describeDbTests("a pivot change on a page a box is carried onto", (it) => {
         expect(await pivots(db)).toEqual([
             {
                 id: placed.recipeId,
-                timelineId: placed.timelineId,
+                beat: placed.beat,
+                shapeKey: placed.recipeId,
                 pivot: "se",
             },
         ]);
@@ -198,9 +204,125 @@ describeDbTests("a pivot change on a page a box is carried onto", (it) => {
         expect(await pivots(db)).toEqual([
             {
                 id: placed.recipeId,
-                timelineId: placed.timelineId,
+                beat: placed.beat,
+                shapeKey: placed.recipeId,
                 pivot: "nw",
             },
         ]);
     });
 });
+
+describeDbTests(
+    "a shape edited on a later page with only Held members",
+    (it) => {
+        /**
+         * Two marchers moved on page 1 and Held through pages 2 and 3, and a box listing them at page
+         * 2's flag (17), as 0030 stores a recipe placed there: on page 3 nobody arrives, they stand still
+         * through it from their hold
+         */
+        const heldShow = async (db: DbConnection) => {
+            const pages = [...(await readShowTiming(db)).pages].sort(
+                (x, y) => x.order - y.order,
+            );
+            await deletePages({
+                db,
+                pageIds: new Set(
+                    pages.filter((p) => p.order >= 2).map((p) => p.id),
+                ),
+            });
+            for (let i = 0; i < 3; i++)
+                await createLastPage({ db, newPageCounts: 8 });
+            await startTimelineResolver(db);
+            const [a, b] = resolver().marcherIds() as [number, number];
+            const members: ShapeRecipeMember[] = [
+                { marcherId: a, slot: 0, x: 100, y: 50 },
+                { marcherId: b, slot: 1, x: 120, y: 50 },
+            ];
+            await moveMarchersInTarget({
+                db,
+                target: { kind: "range", start: 1, end: 9 },
+                moves: members.map(({ marcherId, x, y }) => ({
+                    marcherId,
+                    x,
+                    y,
+                })),
+            });
+            await timelineResolverSettled();
+            for (const pageBox of [PAGE2, PAGE3])
+                expect(
+                    (
+                        await holdFromPreviousPage({
+                            db,
+                            pageBox,
+                            marcherIds: [a, b],
+                        })
+                    ).held,
+                ).toHaveLength(2);
+            const recipeId = await transactionWithHistory(db, "place", (tx) =>
+                saveShapeRecipeInTransaction({
+                    tx,
+                    beat: PAGE2.end,
+                    recipe: BOX,
+                    members,
+                }),
+            );
+            await timelineResolverSettled();
+            return { a, b, members, recipeId };
+        };
+
+        it("moves the shape where they're held from, positions and recipe in one undo step", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b, members, recipeId } = await heldShow(db);
+            const before = await readAllShapeRecipes(db);
+            const steps = await undoSteps(db);
+            const moved = members.map((m) => ({ ...m, y: m.y + 20 }));
+            expect(
+                await writePlacement(
+                    {
+                        recipe: BOX,
+                        members: moved,
+                        replaces: {
+                            id: recipeId,
+                            beat: PAGE2.end,
+                            shapeKey: recipeId,
+                        },
+                        setAll: true,
+                    },
+                    new QueryClient(),
+                    "Error editing the shape",
+                    PAGE3_PLAN,
+                ),
+            ).toBe(true);
+            await timelineResolverSettled();
+
+            // The whole hold moved: they stand on the new spots at the shape's count and on page 3
+            for (const beat of [PAGE2.end, PAGE3.end])
+                expect(
+                    [a, b].map((id) => resolver().positionAt(id, beat)),
+                ).toEqual([
+                    [100, 70],
+                    [120, 70],
+                ]);
+            // The shape's own recipe changed, at its own count; no copy on page 3
+            const after = await readAllShapeRecipes(db);
+            expect(after.map((r) => [r.id, r.beat])).toEqual([
+                [recipeId, PAGE2.end],
+            ]);
+            expect(after[0]!.members.map((m) => m.y)).toEqual([70, 70]);
+            expect(await undoSteps(db)).toBe(steps + 1);
+
+            // One undo puts both back
+            await performUndo(db);
+            await timelineResolverSettled();
+            expect(await readAllShapeRecipes(db)).toEqual(before);
+            expect(
+                [a, b].map((id) => resolver().positionAt(id, PAGE3.end)),
+            ).toEqual([
+                [100, 50],
+                [120, 50],
+            ]);
+        });
+    },
+);

@@ -803,7 +803,7 @@ describeDbTests("Clear this page on a converted show (holds 4, #469)", (it) => {
         await db.transaction((tx) =>
             saveShapeRecipeInTransaction({
                 tx,
-                timelineId: pageMove.id,
+                beat: pageMove.end_beat,
                 recipe: {
                     kind: "line",
                     kindVersion: 1,

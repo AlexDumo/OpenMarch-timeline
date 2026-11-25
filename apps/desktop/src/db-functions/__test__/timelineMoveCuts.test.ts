@@ -310,7 +310,7 @@ describeDbTests("cut a move in time at a count", (it) => {
 });
 
 describeDbTests("cut: which part keeps the move's id", (it) => {
-    it("the part after would take over a newer page move: the part before keeps the id and name; the transitions after and the shape recipe go with the part after", async ({
+    it("the part after would take over a newer page move: the part before keeps the id and name; the transitions after go with the part after, and the shape recipe stays at its count", async ({
         db,
         marchersAndPages: _,
     }) => {
@@ -326,7 +326,7 @@ describeDbTests("cut: which part keeps the move's id", (it) => {
         await db.transaction((tx) =>
             saveShapeRecipeInTransaction({
                 tx,
-                timelineId: long.id,
+                beat: long.end_beat,
                 recipe: {
                     kind: "line",
                     kindVersion: 1,
@@ -358,7 +358,8 @@ describeDbTests("cut: which part keeps the move's id", (it) => {
             .select()
             .from(schema.timeline_shape_recipes)
             .all();
-        expect(recipes.map((r) => r.timeline_id)).toEqual([cut.after.id]);
+        // A recipe stands at a count, so the cut leaves it at the move's end
+        expect(recipes.map((r) => r.beat)).toEqual([25]);
         expectClose(before, track(await resolverOf(db), [a!, b!, c!], 25));
     });
 
@@ -632,7 +633,7 @@ describeDbTests("remove marchers from a move for a range of counts", (it) => {
         await db.transaction((tx) =>
             saveShapeRecipeInTransaction({
                 tx,
-                timelineId: pageMove.id,
+                beat: pageMove.end_beat,
                 recipe: {
                     kind: "line",
                     kindVersion: 1,
@@ -772,7 +773,7 @@ describeDbTests(
             await db.transaction((tx) =>
                 saveShapeRecipeInTransaction({
                     tx,
-                    timelineId: pageMove.id,
+                    beat: pageMove.end_beat,
                     recipe: {
                         kind: "line",
                         kindVersion: 1,
@@ -825,7 +826,7 @@ describeDbTests(
             await db.transaction((tx) =>
                 saveShapeRecipeInTransaction({
                     tx,
-                    timelineId: pageMove.id,
+                    beat: pageMove.end_beat,
                     recipe: {
                         kind: UNGROUPED_RECIPE_KIND,
                         kindVersion: 1,
@@ -862,7 +863,7 @@ describeDbTests("the drag back (holds decision 16)", (it) => {
         await db.transaction((tx) =>
             saveShapeRecipeInTransaction({
                 tx,
-                timelineId: pageMove.id,
+                beat: pageMove.end_beat,
                 recipe: {
                     kind: "line",
                     kindVersion: 1,
@@ -957,7 +958,7 @@ describeDbTests(
             await db.transaction((tx) =>
                 saveShapeRecipeInTransaction({
                     tx,
-                    timelineId: arc.id,
+                    beat: arc.end_beat,
                     recipe: {
                         kind: "line",
                         kindVersion: 1,
