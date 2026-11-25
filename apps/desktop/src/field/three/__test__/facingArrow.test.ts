@@ -2,27 +2,28 @@
 import { describe, expect, it } from "vitest";
 import { anchorsClearOfArrows, arrowSizes } from "../facingArrow";
 
-describe("facing arrow sizes (#1316)", () => {
-    it("is about 1.5 dot diameters from just outside the dot, at the field's size when zoomed in", () => {
+describe("facing caret sizes (#1316)", () => {
+    it("is a small caret just outside the dot, at the field's size when zoomed in", () => {
         const at1 = arrowSizes(1);
         const at3 = arrowSizes(3);
-        expect(at1.length).toBe(16);
-        expect(at3.length).toBe(16);
+        expect(at1.length).toBe(3);
+        expect(at3.length).toBe(3);
+        expect(at1.headHalfWidth).toBe(3.75);
         expect(at1.start).toBeGreaterThan(5);
         expect(at1.start).toBeLessThan(7);
-        expect(at1.headHalfWidth).toBeGreaterThan(at1.shaftHalfWidth * 3);
     });
 
     it("keeps a readable size on screen when zoomed out to the whole field", () => {
         for (const zoom of [0.5, 0.3, 0.15]) {
             const sizes = arrowSizes(zoom);
             // CSS px on screen
-            expect(sizes.length * zoom).toBeGreaterThanOrEqual(13 - 1e-9);
-            expect(2 * sizes.shaftHalfWidth * zoom).toBeGreaterThanOrEqual(
-                1.75 - 1e-9,
+            expect(2 * sizes.headHalfWidth * zoom).toBeGreaterThanOrEqual(
+                7 - 1e-9,
             );
-            expect(2 * sizes.headHalfWidth * zoom).toBeGreaterThan(6);
-            expect(sizes.halo * zoom).toBeCloseTo(1.25);
+            expect(2 * sizes.shaftHalfWidth * zoom).toBeGreaterThanOrEqual(
+                1.5 - 1e-9,
+            );
+            expect(sizes.halo * zoom).toBeCloseTo(1);
         }
     });
 });

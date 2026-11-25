@@ -19,11 +19,11 @@ import type { FieldFacing } from "@/cues/useFieldFacing";
 import { arrowSizes, ICON_DOT_REACH } from "../facingArrow";
 
 /**
- * Facing arrows (fork #1316): every performer's arrow from their dot toward where they face, in
- * one instanced draw, shaded in the fragment shader so edges are smooth without MSAA (as the
- * dots). Each instance is a quad laid along its facing; the shape is a signed distance (a shaft
- * and a triangular head, `facingArrow.ts`'s sizes) in the theme's label ink, edged with a halo of
- * the field's background so it reads over yard lines, dots and paths in every field theme.
+ * Facing carets (fork #1316): a small chevron just in front of every performer's dot, pointing
+ * where they face, in one instanced draw, shaded in the fragment shader so edges are smooth
+ * without MSAA (as the dots). Each instance is a quad laid along its facing; the shape is a signed
+ * distance (two strokes meeting at a point, `facingArrow.ts`'s sizes) in the theme's label ink,
+ * edged with a halo of the field's background so it reads over yard lines and paths.
  *
  * Drawn under the dots (a neighbor's dot covers an arrow that reaches it) and over the labels,
  * which move off it.
@@ -56,7 +56,6 @@ void main() {
 
 const FRAGMENT = /* glsl */ `
 uniform float uTip;
-uniform float uHeadLength;
 uniform float uHeadHalf;
 uniform float uShaftHalf;
 uniform float uHalo;
@@ -66,29 +65,19 @@ varying vec2 vLocal;
 varying float vOpacity;
 varying float vStart;
 
-float box(vec2 p, vec2 b) {
-    vec2 d = abs(p) - b;
-    return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
-}
-
-/** An isosceles triangle, its tip at the origin opening toward +y, q = (half base, height). */
-float triangle(vec2 p, vec2 q) {
-    p.x = abs(p.x);
-    vec2 a = p - q * clamp(dot(p, q) / dot(q, q), 0.0, 1.0);
-    vec2 b = p - q * vec2(clamp(p.x / q.x, 0.0, 1.0), 1.0);
-    float s = -sign(q.y);
-    vec2 d = min(vec2(dot(a, a), s * (p.x * q.y - p.y * q.x)), vec2(dot(b, b), s * (p.y - q.y)));
-    return -sqrt(d.x) * sign(d.y);
+float segment(vec2 p, vec2 a, vec2 b) {
+    vec2 pa = p - a;
+    vec2 ba = b - a;
+    return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0));
 }
 
 void main() {
-    float tip = vStart + uTip;
-    float neck = tip - uHeadLength;
-    // The shaft runs a little into the head so the two join without a seam
-    float shaftEnd = neck + 0.5 * uHeadLength;
-    float shaft = box(vLocal - vec2(0.5 * (vStart + shaftEnd), 0.0), vec2(0.5 * (shaftEnd - vStart), uShaftHalf));
-    float head = triangle(vec2(vLocal.y, tip - vLocal.x), vec2(uHeadHalf, uHeadLength));
-    float d = min(shaft, head);
+    // A caret: two strokes from its arms, beside the dot, to its point, the way they face
+    vec2 point = vec2(vStart + uTip, 0.0);
+    float d = min(
+        segment(vLocal, vec2(vStart, uHeadHalf), point),
+        segment(vLocal, vec2(vStart, -uHeadHalf), point)
+    ) - uShaftHalf;
     float aa = 0.5 * fwidth(d);
     float ink = 1.0 - smoothstep(-aa, aa, d);
     float edge = 1.0 - smoothstep(uHalo - aa, uHalo + aa, d);
@@ -160,7 +149,6 @@ export default function FacingArrowsLayer({
                     uStart: { value: 0 },
                     uTip: { value: 0 },
                     uHalf: { value: 0 },
-                    uHeadLength: { value: 0 },
                     uHeadHalf: { value: 0 },
                     uShaftHalf: { value: 0 },
                     uHalo: { value: 0 },
@@ -200,8 +188,8 @@ export default function FacingArrowsLayer({
         const { uniforms } = mesh.material;
         uniforms.uStart.value = sizes.start;
         uniforms.uTip.value = sizes.length;
-        uniforms.uHalf.value = sizes.headHalfWidth + sizes.halo + 1 / zoom;
-        uniforms.uHeadLength.value = sizes.headLength;
+        uniforms.uHalf.value =
+            sizes.headHalfWidth + sizes.shaftHalfWidth + sizes.halo + 1 / zoom;
         uniforms.uHeadHalf.value = sizes.headHalfWidth;
         uniforms.uShaftHalf.value = sizes.shaftHalfWidth;
         uniforms.uHalo.value = sizes.halo;

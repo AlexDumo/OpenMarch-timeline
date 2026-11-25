@@ -2,56 +2,58 @@ import { DOT_RADIUS } from "@/field/editor/hitTest";
 import { dotSizes } from "./selectionRing";
 
 /**
- * The facing arrow drawn from each performer's dot toward where they face (fork #1316), sized as
- * quiver plots and pose arrows draw them: a shaft and a clear head, starting just outside the dot.
- * The facing arrows layer draws it; the labels layer keeps drill numbers off it.
+ * The facing caret drawn just in front of each performer's dot, pointing where they face (fork
+ * #1316): a small chevron (^) whose point aims the facing, as a heading caret on a map. The facing
+ * arrows layer draws it; the labels layer keeps drill numbers off it.
  *
- * In field units (a dot's radius is 5) while zoomed in. Zoomed out, the whole arrow grows to keep
- * {@link MIN_ARROW_PX} on screen, so a whole-field view still reads, and the shaft never gets
- * thinner than {@link MIN_SHAFT_PX}.
+ * In field units (a dot's radius is 5) while zoomed in. Zoomed out, the caret grows to keep
+ * {@link MIN_CARET_PX} across on screen, and its stroke never gets thinner than
+ * {@link MIN_STROKE_PX}.
  */
-/** From the dot's edge to the arrow's tail. */
-const ARROW_GAP = 1.5;
-/** Tail to tip: a little over 1.5 dot diameters. */
-const ARROW_LENGTH = 16;
-const HEAD_LENGTH = 7;
-const HEAD_HALF_WIDTH = 4.5;
-const SHAFT_HALF_WIDTH = 1.1;
-/** On screen, CSS px: the shortest arrow (tail to tip), gap and shaft width, and the halo. */
-const MIN_ARROW_PX = 13;
-const MIN_GAP_PX = 1.5;
-const MIN_SHAFT_PX = 1.75;
-const HALO_PX = 1.25;
+/** From the dot's edge to the caret's arms. */
+const CARET_GAP = 1;
+/** Arms to point, along the facing. */
+const CARET_DEPTH = 3;
+/** Half the caret's width, across the facing. */
+const CARET_HALF_WIDTH = 3.75;
+const STROKE_HALF_WIDTH = 0.8;
+/** On screen, CSS px: the narrowest caret (across), the gap and stroke, and the halo. */
+const MIN_CARET_PX = 7;
+const MIN_GAP_PX = 1;
+const MIN_STROKE_PX = 1.5;
+const HALO_PX = 1;
 
 /** An equipment icon in place of the dot reaches about this far from the spot, in dot radii. */
 export const ICON_DOT_REACH = 1.5;
 
-/** The arrow at a zoom, in field units, measured along the facing from the dot's center. */
+/** The caret at a zoom, in field units, measured along the facing from the dot's center. */
 export type ArrowSizes = {
-    /** Where the tail starts for a round dot (`start` × the marcher's reach in dot radii) */
+    /** Where the arms start for a round dot (`start` × the marcher's reach in dot radii) */
     start: number;
-    /** Tail to tip */
+    /** Arms to point */
     length: number;
+    /** The whole caret is its head: `length` */
     headLength: number;
     headHalfWidth: number;
+    /** Half the stroke's width */
     shaftHalfWidth: number;
-    /** The background-colored edge round the arrow */
+    /** The background-colored edge round the caret */
     halo: number;
 };
 
-/** The arrow's sizes at `zoom` (CSS px per field unit). */
+/** The caret's sizes at `zoom` (CSS px per field unit). */
 export function arrowSizes(zoom: number): ArrowSizes {
-    const grow = Math.max(1, MIN_ARROW_PX / (ARROW_LENGTH * zoom));
+    const grow = Math.max(1, MIN_CARET_PX / (2 * CARET_HALF_WIDTH * zoom));
     return {
         start:
             DOT_RADIUS * dotSizes(zoom).scale +
-            Math.max(ARROW_GAP, MIN_GAP_PX / zoom),
-        length: ARROW_LENGTH * grow,
-        headLength: HEAD_LENGTH * grow,
-        headHalfWidth: HEAD_HALF_WIDTH * grow,
+            Math.max(CARET_GAP, MIN_GAP_PX / zoom),
+        length: CARET_DEPTH * grow,
+        headLength: CARET_DEPTH * grow,
+        headHalfWidth: CARET_HALF_WIDTH * grow,
         shaftHalfWidth: Math.max(
-            SHAFT_HALF_WIDTH * grow,
-            MIN_SHAFT_PX / 2 / zoom,
+            STROKE_HALF_WIDTH * grow,
+            MIN_STROKE_PX / 2 / zoom,
         ),
         halo: HALO_PX / zoom,
     };
@@ -95,7 +97,7 @@ export function anchorsClearOfArrows({
     const neck = arrow.start + arrow.length - arrow.headLength;
     const tip = arrow.start + arrow.length + arrow.halo;
     const shaft = arrow.shaftHalfWidth + arrow.halo;
-    const head = arrow.headHalfWidth + arrow.halo;
+    const head = arrow.headHalfWidth + arrow.shaftHalfWidth + arrow.halo;
     const h = label.height / 2;
     for (let i = 0; i < n; i++) {
         const dx = directions[i * 2];
