@@ -12,6 +12,11 @@
  *   a press inside it: it picks just that marcher, and Shift+$mod toggles it.
  * - A marcher in no box is the canvas's as before, and leaves the box you were inside.
  *
+ * A linked figure (#1236) is one level more, as a group is in Figma: a click on any of its shapes
+ * selects the whole figure, and a click on it once it's selected goes into it, selecting the shape
+ * clicked; a double-click does the same (`doubleClickMember`). Inside the figure a click picks one
+ * shape, as a click picks one box anywhere else, and the next goes inside that shape as above.
+ *
  * @returns the marchers to select, or null to leave the press to the canvas; and the box you're
  *   inside after it
  */
@@ -22,6 +27,9 @@ export function clickOnMarcher({
     selected,
     box,
     inside,
+    figure = null,
+    inFigure = false,
+    click,
 }: {
     marcherId: number;
     shift: boolean;
@@ -30,31 +38,47 @@ export function clickOnMarcher({
     selected: ReadonlySet<number>;
     box: { readonly id: number; readonly members: readonly number[] } | null;
     inside: number | null;
-}): { select: number[] | null; inside: number | null } {
-    if (!box) return { select: null, inside: null };
+    /** The members of the linked figure the box is in (two or more shapes), null in none */
+    figure?: readonly number[] | null;
+    /** You've gone into that figure: a click picks one of its shapes */
+    inFigure?: boolean;
+    /** How the press ended: a click, the second click of a double-click, or neither (a drag) */
+    click?: "single" | "double";
+}): { select: number[] | null; inside: number | null; inFigure: boolean } {
+    if (!box) return { select: null, inside: null, inFigure: false };
+    const linked = figure !== null && figure.length > 0;
     if (reachInside || inside === box.id) {
         // The canvas's, except that Shift takes a selected marcher out, so the press ends there
         // instead of dragging the selection
         if (!shift || !selected.has(marcherId))
-            return { select: null, inside: box.id };
+            return { select: null, inside: box.id, inFigure: linked };
         return {
             select: [...selected].filter((id) => id !== marcherId),
             inside: box.id,
+            inFigure: linked,
         };
     }
-    const all = box.members.every((id) => selected.has(id));
+    // What a click picks: the whole figure from outside it, one shape inside it
+    const whole = linked && !inFigure;
+    const target = whole ? figure : box.members;
+    const out = (select: number[] | null) => ({
+        select,
+        inside: null,
+        inFigure: linked && !whole,
+    });
+    const all = target.every((id) => selected.has(id));
     if (shift) {
-        const members = new Set(box.members);
-        return {
-            select: all
+        const members = new Set(target);
+        return out(
+            all
                 ? [...selected].filter((id) => !members.has(id))
-                : [
-                      ...selected,
-                      ...box.members.filter((id) => !selected.has(id)),
-                  ],
-            inside: null,
-        };
+                : [...selected, ...target.filter((id) => !selected.has(id))],
+        );
     }
-    if (all || selected.has(marcherId)) return { select: null, inside: null };
-    return { select: [...box.members], inside: null };
+    // A click on a figure selected whole goes into it, at the shape clicked, as a second click
+    // on a group does in Slides (a drag still moves the figure)
+    if (whole && all && click === "single")
+        return { select: [...box.members], inside: null, inFigure: true };
+    if (all || selected.has(marcherId)) return out(null);
+    return out([...target]);
 }

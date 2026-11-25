@@ -27,7 +27,8 @@ import {
 
 /**
  * Select linked shapes (#1236): a linked shape's whole figure, found through the links of each
- * shape in turn, selected by a double-click, the joint's menu, the field's menu and the palette.
+ * shape in turn, selected by a click, the joint's menu, the field's menu and the palette; a
+ * double-click on it goes into it.
  */
 
 // The field's placed shapes, as the store would read them; the resolver they need isn't here
@@ -217,17 +218,20 @@ describe("doubleClickSelection", () => {
     const boxes = placed(jRecipes());
     const figure = [...LINE, ...ARC, ...TAIL];
 
-    it("selects a linked shape's whole figure", () => {
-        expect(doubleClickSelection(22, new Set(ARC), boxes, 0)).toEqual(
-            figure,
+    it("on a figure selected whole, selects the shape clicked", () => {
+        expect(doubleClickSelection(22, new Set(figure), boxes, 0)).toEqual(
+            ARC,
         );
-        expect(doubleClickSelection(11, new Set(), boxes, 0)).toEqual(figure);
+        expect(doubleClickSelection(11, new Set(figure), boxes, 0)).toEqual(
+            LINE,
+        );
     });
 
-    it("goes inside as before on a shape in no link, a marcher in none, or a figure selected already", () => {
+    it("goes inside as before on a shape in no link, a marcher in none, or a shape selected alone", () => {
         expect(doubleClickSelection(41, new Set(LONE), boxes, 0)).toBeNull();
         expect(doubleClickSelection(99, new Set(), boxes, 0)).toBeNull();
-        expect(doubleClickSelection(22, new Set(figure), boxes, 0)).toBeNull();
+        expect(doubleClickSelection(22, new Set(ARC), boxes, 0)).toBeNull();
+        expect(doubleClickSelection(22, new Set([22]), boxes, 0)).toBeNull();
     });
 });
 
@@ -245,6 +249,7 @@ describe("selecting linked shapes on the field", () => {
         useBoxSelectionStore.setState({
             enabled: false,
             inside: null,
+            figure: null,
             selected: null,
         });
     });
@@ -258,20 +263,30 @@ describe("selecting linked shapes on the field", () => {
         useBoxSelectionStore.setState({ enabled: true, inside: 3 });
     };
 
-    it("double-click: a linked shape's figure, then inside at the marcher once it's selected", () => {
+    it("double-click: on the figure selected whole, into it at the shape; then inside at the marcher", () => {
         const boxes = placed(jRecipes());
-        field(boxes, ARC);
+        field(boxes, [...LINE, ...ARC, ...TAIL]);
         doubleClickMember(22);
-        expect(select).toHaveBeenLastCalledWith([...LINE, ...ARC, ...TAIL]);
-        expect(useBoxSelectionStore.getState().inside).toBeNull();
-        selection = [...LINE, ...ARC, ...TAIL];
+        expect(select).toHaveBeenLastCalledWith(ARC);
+        expect(useBoxSelectionStore.getState()).toMatchObject({
+            inside: null,
+            figure: 2,
+        });
+        selection = ARC;
         doubleClickMember(22);
         expect(select).toHaveBeenLastCalledWith([22]);
-        expect(useBoxSelectionStore.getState().inside).toBe(2);
-        // A shape in no link goes inside, as it always did
+        expect(useBoxSelectionStore.getState()).toMatchObject({
+            inside: 2,
+            figure: 2,
+        });
+        // A shape in no link goes inside, as it always did, and out of the figure
+        selection = LONE;
         doubleClickMember(41);
         expect(select).toHaveBeenLastCalledWith([41]);
-        expect(useBoxSelectionStore.getState().inside).toBe(4);
+        expect(useBoxSelectionStore.getState()).toMatchObject({
+            inside: 4,
+            figure: null,
+        });
     });
 
     it("the joint's menu offers Select linked shapes after Detach, and it selects the figure", () => {

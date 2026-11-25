@@ -8,8 +8,12 @@ import {
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
-import { enterBox, selectOnField } from "./boxSelection";
-import { setInsideBox, useBoxSelectionStore } from "./boxSelectionStore";
+import { enterBox, figureOf, membersOf, selectOnField } from "./boxSelection";
+import {
+    setInsideBox,
+    setInsideFigure,
+    useBoxSelectionStore,
+} from "./boxSelectionStore";
 import type { PlacedBox } from "./placedBox";
 import {
     placedBoxesAt,
@@ -21,14 +25,9 @@ import { linkedFigure, linksOf, liveLinks } from "./shapeLinks";
 /**
  * **Select linked shapes** (`shapeSelectLinked`, #1236): every placed line, curve and arc linked
  * to a selected one, following the links of each in turn (`linkedFigure`), selected whole
- * together, as an undo or redo of a linked edit selects them. A double-click on a linked shape
- * does it, as do the joint's menu, the field's menu and the command palette.
+ * together, as an undo or redo of a linked edit selects them. A click on a linked shape does it
+ * (`clickOnMarcher`), as do the joint's menu, the field's menu and the command palette.
  */
-
-/** The member ids of `boxes`, in order, each once */
-const membersOf = (boxes: readonly PlacedBox[]): number[] => [
-    ...new Set(boxes.flatMap((b) => b.recipe.members.map((m) => m.marcherId))),
-];
 
 /**
  * The marchers Select linked shapes selects for the selection `selected`, among the placed shapes
@@ -57,10 +56,11 @@ export function linkedShapesSelection(
 }
 
 /**
- * What a double-click on marcher `marcherId` selects (#1236): on a member of a linked shape, its
- * whole figure, unless that's selected already. Null for what a double-click did before: go
- * inside the shape at that marcher (a shape in no link, a marcher in no shape, a figure already
- * selected, so a second double-click goes on in as a double-click on a group does).
+ * What a double-click on marcher `marcherId` selects (#1236): on a linked figure selected whole,
+ * the shape clicked, going into the figure as a double-click on a group does in Figma. Null for
+ * what a double-click does anywhere else: go inside the shape at that marcher (a shape in no
+ * link, a shape of a figure you've gone into, a marcher in no shape). A double-click from nothing
+ * selected lands on the shape: its first click selects the figure.
  */
 export function doubleClickSelection(
     marcherId: number,
@@ -72,17 +72,22 @@ export function doubleClickSelection(
         b.recipe.members.some((m) => m.marcherId === marcherId),
     );
     if (!box) return null;
-    const links = liveLinks(boxes, beat);
-    if (linksOf(box, links).length === 0) return null;
-    const ids = membersOf(linkedFigure(box, links));
-    return ids.every((id) => selected.has(id)) ? null : ids;
+    const figure = figureOf(box, boxes, beat);
+    if (figure.length === 0) return null;
+    const own = box.recipe.members.map((m) => m.marcherId);
+    const whole = membersOf(figure).every((id) => selected.has(id));
+    return whole &&
+        !(selected.size === own.length && own.every((id) => selected.has(id)))
+        ? own
+        : null;
 }
 
-/** Selects `ids` on the field, out of any shape you were inside */
+/** Selects `ids` on the field, out of any shape or figure you were inside */
 export function selectLinkedShapes(ids: readonly number[]): void {
     if (ids.length === 0) return;
     selectOnField(ids);
     setInsideBox(null);
+    setInsideFigure(null);
 }
 
 /** Select linked shapes for the figure placed shape `recipeId` is in, as the field shows it now */
@@ -96,20 +101,35 @@ export function selectFigureOf(recipeId: number): void {
 
 /**
  * A double-click on marcher `marcherId` while placed shapes can be selected (the field editor's
- * `doubleClickMarcher`, and a selected shape's own double-click): a linked shape's figure is
- * selected ({@link doubleClickSelection}), else it goes inside the shape there, as before
+ * `doubleClickMarcher`, and a selected shape's own double-click): on a linked figure selected
+ * whole, the shape clicked ({@link doubleClickSelection}), going into the figure; else inside the
+ * shape there, as before
  */
 export function doubleClickMember(marcherId: number): void {
-    if (!useBoxSelectionStore.getState().enabled) return;
+    const { enabled, figure } = useBoxSelectionStore.getState();
+    if (!enabled) return;
     const beat = displayedBeat(useTimelineSelectionStore.getState());
+    const boxes = placedBoxesAt(beat);
     const ids = doubleClickSelection(
         marcherId,
         new Set(activeFieldEditor()?.selected() ?? []),
-        placedBoxesAt(beat),
+        boxes,
         beat,
     );
-    if (ids) selectLinkedShapes(ids);
-    else enterBox(marcherId);
+    const box = boxes.find((b) =>
+        b.recipe.members.some((m) => m.marcherId === marcherId),
+    );
+    if (ids && box) {
+        selectOnField(ids);
+        setInsideBox(null);
+        setInsideFigure(box.recipe.id);
+        return;
+    }
+    enterBox(marcherId);
+    // Inside a shape of a figure is inside the figure too
+    if (box && figureOf(box, boxes, beat).length > 0)
+        setInsideFigure(box.recipe.id);
+    else if (figure !== null) setInsideFigure(null);
 }
 
 /** The action's name, as the palette, the field's menu and the joint's menu say it */

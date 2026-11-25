@@ -509,15 +509,16 @@ function ThreeFieldView() {
                             (id) => items.isLocked(id),
                         ),
                     // #204: a click on a placed box's member selects the whole box
-                    pressSelection: (hit, shift, reachInside) =>
+                    pressSelection: (hit, shift, reachInside, click) =>
                         boxPressSelection(
                             hit,
                             shift,
                             selection.current,
                             reachInside,
+                            click,
                         ),
                     reachesInside: canReachInside,
-                    // #1236: on a linked shape, its whole figure; else inside the box
+                    // #1236: on a linked figure selected whole, the shape clicked; else inside it
                     doubleClickMarcher: doubleClickMember,
                     // C2.1: items are hit anywhere inside their Outline
                     isItem: (id) => items.isItem(id),

@@ -172,12 +172,14 @@ export type FieldEditorPorts = {
      * {@link reachesInside} said it can); the app enters the box and leaves
      * the press as a press inside the box: null, so the editor's rules pick
      * the marcher, except that Shift on a selected member returns the
-     * selection without it (the press is done).
+     * selection without it (the press is done). `click`: the press ended as
+     * a click (`double`: the second of a double-click); undefined for a drag.
      */
     pressSelection?(
         hit: number,
         shift: boolean,
         reachInside: boolean,
+        click?: "single" | "double",
     ): readonly number[] | null;
     /**
      * Whether a press on marcher `hit` can reach inside ($mod): it's a member
@@ -2466,6 +2468,7 @@ export class FieldEditor {
                       press.hit,
                       shift,
                       this.reachInside(press.start, press.hit) !== null,
+                      press.double ? "double" : "single",
                   );
         // Alt on empty field keeps the selection too, as Shift does, so an
         // Alt double-click-and-drag lasso has something to subtract from

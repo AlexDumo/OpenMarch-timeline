@@ -11,7 +11,7 @@ import { nudgeEnvFor, toolEnvFor } from "../tool/toolEnv";
 import type { AnyToolKind } from "../tool/toolKind";
 import { useBoxSelectionStore } from "./boxSelectionStore";
 import { commitBox, moveShapes } from "./commitBox";
-import { leaveBox, selectOnField } from "./boxSelection";
+import { leaveBox, leaveFigure, selectOnField } from "./boxSelection";
 import { clearLiveBoxSelection } from "./liveBoxMode";
 import { ungroupShape } from "./ungroupShape";
 
@@ -52,7 +52,8 @@ export function stepPlacedBoxFiles(
  *   steps, and takes an arc's marchers off it). Several shapes selected whole (a linked figure,
  *   #1236) move together the same way, so the links between them hold.
  * - Escape with a handle selected (a Line's point, #557) clears that; inside a box it selects the
- *   whole box again, and on a box selected whole deselects it.
+ *   whole box again, on a shape of a linked figure you've gone into the whole figure (#1236), and
+ *   on a box selected whole deselects it.
  * - Ungroup (shapeUngroup) ungroups the shape selected whole; its marchers stay selected.
  */
 export function PlacedBoxKeys(): null {
@@ -91,7 +92,7 @@ export function PlacedBoxKeys(): null {
             // A selected point first (#557), then the box
             if (clearLiveBoxSelection()) return;
             if (inside) leaveBox();
-            else selectOnField([]);
+            else if (!leaveFigure()) selectOnField([]);
         },
         { enabled: inside || selected },
     );

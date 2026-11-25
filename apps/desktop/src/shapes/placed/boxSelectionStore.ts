@@ -16,12 +16,27 @@ export const useBoxSelectionStore = create<{
     readonly shapes: readonly PlacedBox[];
     /** The recipe id of the box you're inside, picking its marchers one by one */
     readonly inside: number | null;
+    /**
+     * A shape of the linked figure you've gone into (#1236): a click picks one of its shapes,
+     * not the whole figure. Null when you're in none
+     */
+    readonly figure: number | null;
     /** Whether a click on a member selects its box (`useBoxSelection`) */
     readonly enabled: boolean;
-}>(() => ({ selected: null, shapes: [], inside: null, enabled: false }));
+}>(() => ({
+    selected: null,
+    shapes: [],
+    inside: null,
+    figure: null,
+    enabled: false,
+}));
 
 export const setInsideBox = (inside: number | null): void =>
     useBoxSelectionStore.setState({ inside });
+
+/** Goes into the linked figure placed shape `figure` is in, or out of any with null */
+export const setInsideFigure = (figure: number | null): void =>
+    useBoxSelectionStore.setState({ figure });
 
 /**
  * The selected box as a number in its floating editor is being dragged, before it's saved on
