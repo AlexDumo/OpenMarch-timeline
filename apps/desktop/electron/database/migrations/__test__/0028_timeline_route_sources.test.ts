@@ -28,6 +28,7 @@ import {
 import {
     migrationAt,
     rollBackMigrationsFrom,
+    SHAPE_AT_COUNT_MIGRATION,
 } from "../../__test__/migrationRollback";
 
 const SOURCES_MIGRATION = migrationAt(28);
@@ -73,8 +74,8 @@ const timelineRows = (db: DatabaseSync) =>
 /** A new show put back to before 0028: two group lanes on one route, version 11, no table */
 async function fileBefore0028(file: string) {
     await createNewTimelineShow(file);
-    // 0029 too (it only runs once on a file), so opening runs both again
-    rollBackMigrationsFrom(file, 29);
+    // 0030 too, so opening runs every later migration again, as for a real older file
+    rollBackMigrationsFrom(file, SHAPE_AT_COUNT_MIGRATION.idx);
     withDb(file, (db) => {
         db.exec("DROP TABLE timeline_route_sources");
         db.prepare(
@@ -130,7 +131,7 @@ describe(`Migration ${SOURCES_MIGRATION.tag}`, () => {
         await open(file);
         withDb(file, (db) => {
             expect(timelineRows(db)).toEqual(before);
-            // 0028 leaves it at 11; 0029 writes every file as 19
+            // 0028 leaves it at 11; 0030 writes every file as 20
             expect(readUserVersion(db)).toBe(SHAPE_AT_COUNT_USER_VERSION);
             expect(
                 db.prepare("SELECT * FROM timeline_route_sources").all(),

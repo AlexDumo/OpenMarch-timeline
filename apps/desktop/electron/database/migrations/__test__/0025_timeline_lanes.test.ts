@@ -34,6 +34,7 @@ import {
 import {
     migrationAt,
     rollBackMigrationsFrom,
+    SHAPE_AT_COUNT_MIGRATION,
 } from "../../__test__/migrationRollback";
 
 const LANES_MIGRATION = migrationAt(25);
@@ -62,8 +63,8 @@ const ROUTE_GROUP = {
  */
 async function stepFifteenFile(file: string) {
     await createNewTimelineShow(file);
-    // 0029 too (it only runs once on a file), so opening runs both again
-    rollBackMigrationsFrom(file, 29);
+    // 0030 too, so opening runs every later migration again, as for a real older file
+    rollBackMigrationsFrom(file, SHAPE_AT_COUNT_MIGRATION.idx);
     withDb(file, (db) => {
         db.exec("PRAGMA foreign_keys = OFF");
         db.exec("DROP TABLE timeline_lanes");
@@ -160,7 +161,7 @@ describe(`Migration ${LANES_MIGRATION.tag} (QA-MIG-L1, QA-MIG-L2, QA-FV-L1)`, ()
         vi.restoreAllMocks();
     });
 
-    it("a new file has the lanes table, empty, and is written as 19 by 0029", async () => {
+    it("a new file has the lanes table, empty, and is written as 20 by 0030", async () => {
         await createNewTimelineShow(file);
         withDb(file, (db) => {
             expect(
@@ -224,7 +225,7 @@ describe(`Migration ${LANES_MIGRATION.tag} (QA-MIG-L1, QA-MIG-L2, QA-FV-L1)`, ()
                 expect(
                     db.prepare("SELECT count(*) AS n FROM history_undo").get(),
                 ).toEqual({ n: 0 });
-                // 11 for its lanes, then 19 once 0029 has run (ADR 0006 revision of 2026-11-22)
+                // 11 for its lanes, then 20 once 0030 has run (ADR 0006 revision of 2026-11-22)
                 expect(readUserVersion(db)).toBe(SHAPE_AT_COUNT_USER_VERSION);
                 // QA-FV-L1: past the newest version a step-15 build opens (10), so it refuses it
                 expect(readUserVersion(db)).toBeGreaterThan(10);

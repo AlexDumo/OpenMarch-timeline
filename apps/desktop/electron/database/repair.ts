@@ -59,7 +59,7 @@ const DEPENDENT_TABLE_COPY_ORDER = [
     // Items after the marchers that back them, Outline changes after their item (ADR 0010 D-10)
     "items",
     "item_geometry",
-    // Shape recipes, then their members (ADR 0006). A recipe from before 0029 reads its count
+    // Shape recipes, then their members (ADR 0006). A recipe from before 0030 reads its count
     // from its move (`recipeCountsFromMoves`), so it comes after the moves
     "timeline_shape_recipes",
     "timeline_shape_recipe_marchers",
@@ -173,8 +173,8 @@ const copyTablesFromAttachedOriginal = (
                 continue;
             }
 
-            // A recipe from before 0029 stood in a move: its count comes from there, when the
-            // repaired file stores counts (a page-era repair stops before 0029)
+            // A recipe from before 0030 stood in a move: its count comes from there, when the
+            // repaired file stores counts (a page-era repair stops before 0030)
             if (
                 tableName === "timeline_shape_recipes" &&
                 originalColumns.some((c) => c.name === "timeline_id") &&
@@ -206,9 +206,9 @@ const copyTablesFromAttachedOriginal = (
 };
 
 /**
- * Copies the shape recipes of a file from before migration 0029 (`attachName`), giving each the
- * count and shape key 0029 would: an order mark's own beat, else its move's end, else 0, and its
- * own id (ADR 0006 revision of 2026-11-22, §1.6). A recipe whose move is gone is left out, as 0029
+ * Copies the shape recipes of a file from before migration 0030 (`attachName`), giving each the
+ * count and shape key 0030 would: an order mark's own beat, else its move's end, else 0, and its
+ * own id (ADR 0006 revision of 2026-11-22, §1.6). A recipe whose move is gone is left out, as 0030
  * leaves it out.
  */
 const recipeCountsFromMoves = (attachName: string) =>

@@ -345,7 +345,7 @@ export class DrizzleMigrationService {
             recreateChangeLogTriggers(this.rawDb);
             // A step-15 file whose paths 0025 moved to lanes is written as 11 (ADR 0017 §9)
             markLaneModelIfLaned(this.rawDb);
-            // Every file 0029 has run on is written as 19, so builds before it refuse it
+            // Every file 0030 has run on is written as 20, so builds before it refuse it
             markShapeAtCountModel(this.rawDb);
 
             console.log("Drizzle migrations applied successfully.");

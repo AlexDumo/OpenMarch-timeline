@@ -1,11 +1,11 @@
 // @vitest-environment node
 /**
- * Migration 0029 stores a shape recipe at a count (ADR 0006 revision of 2026-11-22, §1.6-§1.8).
+ * Migration 0030 stores a shape recipe at a count (ADR 0006 revision of 2026-11-22, §1.6-§1.8).
  * A 0.2.0-beta file (an ordinary 0017 file, version 8) with recipes in moves, at the starting
  * spots and order marks keeps every recipe at the count it was read at, fills `beat` and
  * `shape_key`, gives a marcher listed twice at one count to the newer recipe, keeps every member
  * row (foreign keys off), clears the undo history only when it names the table, and is written as
- * version 19. Rolling it back and opening it again keeps every recipe at its count.
+ * version 20. Rolling it back and opening it again keeps every recipe at its count.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "fs";
@@ -16,8 +16,8 @@ import {
     withDb,
 } from "../../__test__/convertOnOpenFixtures";
 import {
-    migrationAt,
     rollBackMigrationsFrom,
+    SHAPE_AT_COUNT_MIGRATION,
 } from "../../__test__/migrationRollback";
 import { migrateFile } from "../../legacyFork/__test__/forkFileFixtures";
 import {
@@ -25,7 +25,7 @@ import {
     SHAPE_AT_COUNT_USER_VERSION,
 } from "../../fileVersion";
 
-const AT_COUNT = migrationAt(29);
+const AT_COUNT = SHAPE_AT_COUNT_MIGRATION;
 
 /**
  * A beta file: marchers 1-5, move 1 over [0, 8) (marchers 1-3) and move 2 over [8, 16) (marchers
@@ -42,7 +42,7 @@ const AT_COUNT = migrationAt(29);
  */
 async function betaFile(file: string, history: "names recipes" | "other") {
     await createNewTimelineShow(file);
-    rollBackMigrationsFrom(file, 29);
+    rollBackMigrationsFrom(file, SHAPE_AT_COUNT_MIGRATION.idx);
     withDb(file, (db) => {
         db.exec("PRAGMA foreign_keys = OFF");
         db.exec(`
@@ -76,7 +76,7 @@ async function betaFile(file: string, history: "names recipes" | "other") {
               (13, 7, 2, 0, 0, 0),
               (14, 8, 3, 0, 0, 0);
             -- The renderer's history trigger on members, as a real file keeps it across
-            -- migrations: 0029's clean-up must log nothing through it
+            -- migrations: 0030's clean-up must log nothing through it
             CREATE TRIGGER IF NOT EXISTS timeline_shape_recipe_marchers_dt BEFORE DELETE ON timeline_shape_recipe_marchers
             BEGIN
               INSERT INTO history_undo (history_group, sql) VALUES (9, 'INSERT INTO "timeline_shape_recipe_marchers" VALUES (' || OLD.id || ')');
@@ -124,7 +124,7 @@ describe(`Migration ${AT_COUNT.tag}`, () => {
     let dir: string;
     let file: string;
     beforeEach(() => {
-        dir = fs.mkdtempSync(path.join(os.tmpdir(), "om-0029-"));
+        dir = fs.mkdtempSync(path.join(os.tmpdir(), "om-0030-"));
         file = path.join(dir, "show.dots");
         vi.spyOn(console, "log").mockImplementation(() => {});
         vi.spyOn(console, "debug").mockImplementation(() => {});
@@ -135,7 +135,7 @@ describe(`Migration ${AT_COUNT.tag}`, () => {
         vi.restoreAllMocks();
     });
 
-    it("a new file stores recipes at a count, and is written as version 19", async () => {
+    it("a new file stores recipes at a count, and is written as version 20", async () => {
         await createNewTimelineShow(file);
         withDb(file, (db) => {
             const columns = (
@@ -305,7 +305,7 @@ describe(`Migration ${AT_COUNT.tag}`, () => {
         await betaFile(file, "other");
         await migrateFile(file);
         const after = recipesOf(file);
-        rollBackMigrationsFrom(file, 29);
+        rollBackMigrationsFrom(file, SHAPE_AT_COUNT_MIGRATION.idx);
         withDb(file, (db) => {
             // The rollback stores what 0017 did: shapes in a move, order marks in none with a beat
             expect(

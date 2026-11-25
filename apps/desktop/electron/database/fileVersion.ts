@@ -40,10 +40,14 @@
  *   (sub-group Adjust, 16), outlines (pathways step 10, 17) and order marks (pathways step 4g,
  *   #1083, 18). This build doesn't know them, so it refuses such a file as written by a newer
  *   build (`UNKNOWN_USER_VERSIONS`); each takes its number out of that list when it merges here.
- * - 19: shapes at a count (ADR 0006 revision of 2026-11-22, §1.8; migration
- *   `0029_shape_recipes_at_count`): a placed shape's recipe stands at a count (`beat`) instead of
- *   in a move (`timeline_id`), with a shape key (`shape_key`). A build before 0029 selects
- *   `timeline_id` and would fail on every recipe query, so every file is written as 19 once 0029
+ * - 19 is taken by exact paths (fork PR #1322, migration 0029, `exact_path` on `timeline_routes`),
+ *   open when this was written. This build doesn't know it and refuses it as too new
+ *   (`UNKNOWN_USER_VERSIONS`); take it out of that list when #1322 reaches main and main is merged
+ *   here.
+ * - 20: shapes at a count (ADR 0006 revision of 2026-11-22, §1.8; migration
+ *   `0030_shape_recipes_at_count`): a placed shape's recipe stands at a count (`beat`) instead of
+ *   in a move (`timeline_id`), with a shape key (`shape_key`). A build before 0030 selects
+ *   `timeline_id` and would fail on every recipe query, so every file is written as 20 once 0030
  *   has run on it, new files included (`markShapeAtCountModel`, after the migrations on every
  *   open). Unlike the versions above, this one isn't kept for files that use a feature: every
  *   file this build opens has the new column.
@@ -73,18 +77,20 @@ export const TRAIL_MODEL_USER_VERSION = 13;
 export const ARC_MODEL_USER_VERSION = 14;
 
 /**
- * Version of every file migration 0029 has run on: shape recipes stand at a count (ADR 0006
+ * Version of every file migration 0030 has run on: shape recipes stand at a count (ADR 0006
  * revision of 2026-11-22, §1.8)
  */
-export const SHAPE_AT_COUNT_USER_VERSION = 19;
+export const SHAPE_AT_COUNT_USER_VERSION = 20;
 
 /** Oldest version this build opens. Older files must go through 0.0.10 first. */
 export const MIN_SUPPORTED_USER_VERSION = PAGE_MODEL_USER_VERSION;
 /**
- * Versions below the newest that this build doesn't know (15 to 18, taken by pull requests not
+ * Versions below the newest that this build doesn't know (15 to 19, taken by pull requests not
  * merged here): refused as too new, never played wrong. A step takes its number out when it merges.
+ * 19 is fork PR #1322's exact paths: drop it when #1322 reaches main and main is merged into
+ * `shape-count/host`.
  */
-export const UNKNOWN_USER_VERSIONS: readonly number[] = [15, 16, 17, 18];
+export const UNKNOWN_USER_VERSIONS: readonly number[] = [15, 16, 17, 18, 19];
 
 /** Newest version this build opens. Anything higher was written by a newer release. */
 export const MAX_SUPPORTED_USER_VERSION = SHAPE_AT_COUNT_USER_VERSION;
@@ -220,10 +226,10 @@ export function markLaneModelIfLaned(db: DatabaseSync): void {
 }
 
 /**
- * Writes the shape-at-a-count version (19) once migration 0029 has run on the file: its shape
+ * Writes the shape-at-a-count version (20) once migration 0030 has run on the file: its shape
  * recipes have a `beat`. Run after the migrations, on every open (a new file and a converted one
- * included). A page-model file waiting to convert stays at 7 (it hasn't taken 0029, and its
- * conversion writes it as a timeline file first); a file already at 19 is left as it is (ADR 0006 revision of 2026-11-22, §1.8).
+ * included). A page-model file waiting to convert stays at 7 (it hasn't taken 0030, and its
+ * conversion writes it as a timeline file first); a file already at 20 is left as it is (ADR 0006 revision of 2026-11-22, §1.8).
  */
 export function markShapeAtCountModel(db: DatabaseSync): void {
     const hasBeat = db
@@ -233,7 +239,7 @@ export function markShapeAtCountModel(db: DatabaseSync): void {
         .get();
     if (!hasBeat) return;
     const version = readUserVersion(db);
-    // A page-model file is written as a timeline file by its conversion, then as 19 when it opens
+    // A page-model file is written as a timeline file by its conversion, then as 20 when it opens
     if (version === PAGE_MODEL_USER_VERSION) return;
     if (version < SHAPE_AT_COUNT_USER_VERSION)
         db.prepare(

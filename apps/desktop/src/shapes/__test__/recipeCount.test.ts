@@ -9,8 +9,8 @@ import {
 
 /**
  * The read seam for a recipe's count and shape (ADR 0006 revision of 2026-11-22). Since migration
- * 0029 both are stored: how older files' counts were worked out is 0029's test
- * (`0029_shape_recipes_at_count.test.ts`).
+ * 0030 both are stored: how older files' counts were worked out is 0030's test
+ * (`0030_shape_recipes_at_count.test.ts`).
  */
 const recipe = (id: number, beat: number, shapeKey = id) => ({
     id,

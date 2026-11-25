@@ -3,7 +3,7 @@
  *
  * The order is stored as an **order mark**, a shape recipe of kind `order` (or `orderClear` for
  * Clear) at the beat it was set at (its `beat`, as every recipe stands at a count since migration
- * 0029), and `rememberedOrder` reads it there, as a form made at that beat. A line standing still
+ * 0030), and `rememberedOrder` reads it there, as a form made at that beat. A line standing still
  * on page 3 has its positions in page 2's move, but the mark belongs to no move: deleting page 2's
  * move never takes it, and an edit on page 2 never changes page 3's order. The page ripple moves
  * its beat with the page it was set on. It goes when its

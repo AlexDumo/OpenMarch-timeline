@@ -15,7 +15,10 @@ import {
 } from "../repair";
 import { getOrm } from "../db";
 import { SHAPE_AT_COUNT_USER_VERSION } from "../fileVersion";
-import { rollBackMigrationsFrom } from "./migrationRollback";
+import {
+    rollBackMigrationsFrom,
+    SHAPE_AT_COUNT_MIGRATION,
+} from "./migrationRollback";
 import { DrizzleMigrationService } from "../services/DrizzleMigrationService";
 import { app } from "electron";
 import { runInSqliteTransaction } from "@/test/sqliteTransaction";
@@ -91,7 +94,7 @@ describe("DatabaseSync Repair", () => {
     };
 
     describe("initializeAndMigrateDatabase", () => {
-        it("should successfully initialize database as a new file, written as 19 once 0029 has run", async () => {
+        it("should successfully initialize database as a new file, written as 20 once 0030 has run", async () => {
             const dbPath = path.join(tempDir, "test.db");
             const db = new DatabaseSync(dbPath);
 
@@ -969,7 +972,7 @@ describe("DatabaseSync Repair", () => {
             fs.unlinkSync(originalDbPath);
         });
 
-        it("repairs a timeline-model file (user_version 8) as a new file is, at 19", async () => {
+        it("repairs a timeline-model file (user_version 8) as a new file is, at 20", async () => {
             const originalDbPath = path.join(tempDir, "timeline.dots");
             const originalDb =
                 await createNewDatabaseWithMigrations(originalDbPath);
@@ -1053,10 +1056,13 @@ describe("DatabaseSync Repair", () => {
             }
         });
 
-        it("gives the shape recipes of a file from before 0029 the counts 0029 would", async () => {
-            const originalDbPath = path.join(tempDir, "before-0029.dots");
+        it("gives the shape recipes of a file from before 0030 the counts 0030 would", async () => {
+            const originalDbPath = path.join(tempDir, "before-0030.dots");
             (await createNewDatabaseWithMigrations(originalDbPath)).close();
-            rollBackMigrationsFrom(originalDbPath, 29);
+            rollBackMigrationsFrom(
+                originalDbPath,
+                SHAPE_AT_COUNT_MIGRATION.idx,
+            );
             const originalDb = new DatabaseSync(originalDbPath);
             originalDb.exec(`
                 PRAGMA foreign_keys = OFF;
@@ -1210,7 +1216,7 @@ describe("DatabaseSync Repair", () => {
             },
         );
 
-        it("repairs a timeline file (19, a new one) as a timeline file without page-era tables", async () => {
+        it("repairs a timeline file (20, a new one) as a timeline file without page-era tables", async () => {
             const originalDbPath = path.join(tempDir, "timeline-8.dots");
             const originalDb =
                 await createNewDatabaseWithMigrations(originalDbPath);

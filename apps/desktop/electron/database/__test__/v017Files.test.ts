@@ -311,10 +311,10 @@ describe.each(["in-thread", "worker"] as const)(
                     ).toEqual(contentsOf(file));
 
                     // This build's schema: a timeline file with every migration applied, written
-                    // as 19 once 0029 has run (ADR 0006 revision of 2026-11-22, §1.8-§1.9)
+                    // as 20 once 0030 has run (ADR 0006 revision of 2026-11-22, §1.8-§1.9)
                     const after = stateOf(showPath);
                     expect(after.userVersion).toBe(SHAPE_AT_COUNT_USER_VERSION);
-                    // 0029 ran inside the conversion with no recipes: shapes stand at a count
+                    // 0030 ran inside the conversion with no recipes: shapes stand at a count
                     withDb(showPath, (raw) => {
                         const columns = (
                             raw

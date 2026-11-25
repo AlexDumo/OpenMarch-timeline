@@ -30,6 +30,7 @@ import {
 import {
     migrationAt,
     rollBackMigrationsFrom,
+    SHAPE_AT_COUNT_MIGRATION,
 } from "../../__test__/migrationRollback";
 
 const ADJUST_MIGRATION = migrationAt(26);
@@ -56,8 +57,8 @@ const ROUTE = JSON.stringify({
 /** A new show put back to before 0026: a group lane, version 11, the column gone */
 async function fileBefore0026(file: string) {
     await createNewTimelineShow(file);
-    // 0029 too (it only runs once on a file), so opening runs both again
-    rollBackMigrationsFrom(file, 29);
+    // 0030 too, so opening runs every later migration again, as for a real older file
+    rollBackMigrationsFrom(file, SHAPE_AT_COUNT_MIGRATION.idx);
     withDb(file, (db) => {
         db.exec(`
             DROP VIEW IF EXISTS timeline_route_violations;
@@ -108,7 +109,7 @@ describe(`Migration ${ADJUST_MIGRATION.tag}`, () => {
         expect(sql).toHaveLength(1);
     });
 
-    it("a new file has the column, is written as 19 by 0029, and its view reads it", async () => {
+    it("a new file has the column, is written as 20 by 0030, and its view reads it", async () => {
         await createNewTimelineShow(file);
         withDb(file, (db) => {
             expect(readUserVersion(db)).toBe(SHAPE_AT_COUNT_USER_VERSION);
@@ -118,7 +119,7 @@ describe(`Migration ${ADJUST_MIGRATION.tag}`, () => {
         });
     });
 
-    it("a file with lanes keeps every lane, adjust NULL, and is written as 19 only by 0029", async () => {
+    it("a file with lanes keeps every lane, adjust NULL, and is written as 20 only by 0030", async () => {
         await fileBefore0026(file);
         await open(file);
         withDb(file, (db) => {
@@ -139,7 +140,7 @@ describe(`Migration ${ADJUST_MIGRATION.tag}`, () => {
                     adjust: null,
                 },
             ]);
-            // 0026 leaves it at 11; 0029 writes every file as 19
+            // 0026 leaves it at 11; 0030 writes every file as 20
             expect(readUserVersion(db)).toBe(SHAPE_AT_COUNT_USER_VERSION);
             // The change-log trigger was rebuilt with the column (J.1)
             db.exec(

@@ -436,7 +436,7 @@ describe.each(["in-thread", "worker"] as const)("convert on open (%s)", (m) => {
         const converted = path.join(tempDir, "converted.dots");
         await createBlankShow(converted);
         await openLikeSetActiveDb(converted);
-        // Then the migrations, as `setActiveDb` runs them after a conversion: they write it as 19
+        // Then the migrations, as `setActiveDb` runs them after a conversion: they write it as 20
         await migrateFile(converted);
 
         const fresh = path.join(tempDir, "fresh.dots");

@@ -1,3 +1,5 @@
+-- Numbered 0030: 0029 is held by fork PR #1322 (exact paths). When #1322 reaches main and main is
+-- merged into shape-count/host, its 0029 goes before this one in the drizzle journal.
 -- A shape is a formation at a count (ADR 0006 revision of 2026-11-22, §1): a placed recipe stands
 -- at a count (`beat`) instead of hanging off a move (`timeline_id`), and every mark of one shape
 -- carries one key (`shape_key`). SQLite can't drop a column that has a foreign key, so
@@ -23,7 +25,7 @@
 -- deletes no member row (a converting v0.1.7 file runs this inside its transaction, with foreign
 -- keys deferred, on an empty table). The members' history triggers are dropped first so the
 -- clean-up below logs no undo step; the renderer recreates every history trigger on open
--- (`createAllUndoTriggers`), the old table's go with it. The app writes file version 19 once this
+-- (`createAllUndoTriggers`), the old table's go with it. The app writes file version 20 once this
 -- has run (`markShapeAtCountModel`, `fileVersion.ts`).
 PRAGMA foreign_keys=OFF;--> statement-breakpoint
 ALTER TABLE `timeline_shape_recipes` ADD COLUMN `timeline_id` integer;--> statement-breakpoint

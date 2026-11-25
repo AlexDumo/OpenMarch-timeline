@@ -15,12 +15,12 @@ import {
 } from "../fileVersion";
 
 describe("file-format version", () => {
-    it("supports the page model (7), the timeline model (8), the step-15 route model (10), the lane model (11), Adjust (12), trails (13), arc legs (14) and shapes at a count (19)", () => {
+    it("supports the page model (7), the timeline model (8), the step-15 route model (10), the lane model (11), Adjust (12), trails (13), arc legs (14) and shapes at a count (20)", () => {
         expect(MIN_SUPPORTED_USER_VERSION).toBe(7);
-        expect(MAX_SUPPORTED_USER_VERSION).toBe(19);
-        expect(SHAPE_AT_COUNT_USER_VERSION).toBe(19);
-        // 15 to 18 are taken by pull requests not merged here
-        expect(UNKNOWN_USER_VERSIONS).toEqual([15, 16, 17, 18]);
+        expect(MAX_SUPPORTED_USER_VERSION).toBe(20);
+        expect(SHAPE_AT_COUNT_USER_VERSION).toBe(20);
+        // 15 to 19 are taken by pull requests not merged here (19: #1322's exact paths)
+        expect(UNKNOWN_USER_VERSIONS).toEqual([15, 16, 17, 18, 19]);
         expect(NEW_FILE_USER_VERSION).toBe(8);
     });
 
@@ -32,7 +32,7 @@ describe("file-format version", () => {
             });
         });
 
-        it.each([7, 8, 10, 11, 12, 13, 14, 19])(
+        it.each([7, 8, 10, 11, 12, 13, 14, 20])(
             "accepts an existing file at %i",
             (version) => {
                 expect(decideFileVersion(version, false)).toEqual({
@@ -42,7 +42,7 @@ describe("file-format version", () => {
             },
         );
 
-        it.each([7, 8, 10, 11, 12, 13, 14, 19])(
+        it.each([7, 8, 10, 11, 12, 13, 14, 20])(
             "accepts a 'new' file already at %i without rewriting it",
             (version) => {
                 expect(decideFileVersion(version, true)).toEqual({
@@ -62,7 +62,7 @@ describe("file-format version", () => {
             },
         );
 
-        it.each([15, 16, 17, 18, 20, 42, 2 ** 31 - 1])(
+        it.each([15, 16, 17, 18, 19, 21, 42, 2 ** 31 - 1])(
             "refuses a file at %i as too new, new or not",
             (version) => {
                 for (const isNewFile of [false, true]) {
@@ -90,9 +90,9 @@ describe("file-format version", () => {
         });
     });
 
-    it("isSupportedUserVersion covers exactly 7, 8, 10, 11, 12, 13, 14 and 19", () => {
+    it("isSupportedUserVersion covers exactly 7, 8, 10, 11, 12, 13, 14 and 20", () => {
         expect(
-            [0, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20].map(
+            [0, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21].map(
                 isSupportedUserVersion,
             ),
         ).toEqual([
@@ -106,6 +106,7 @@ describe("file-format version", () => {
             true,
             true,
             true,
+            false,
             false,
             false,
             false,
@@ -178,7 +179,7 @@ describe("markShapeAtCountModel", () => {
     };
 
     it.each([8, 11, 14])(
-        "writes a timeline file at %i that took 0029 as 19",
+        "writes a timeline file at %i that took 0030 as 20",
         (v) => {
             const db = fileWith(v, "beat");
             markShapeAtCountModel(db);
@@ -189,9 +190,9 @@ describe("markShapeAtCountModel", () => {
 
     it.each([
         ["a page-model file waiting to convert", 7, "beat"],
-        ["a file before 0029", 8, "timeline_id"],
+        ["a file before 0030", 8, "timeline_id"],
         ["a file without recipes", 8, null],
-        ["a file already at 19", 19, "beat"],
+        ["a file already at 20", 20, "beat"],
     ] as const)("leaves %s alone", (_, v, recipes) => {
         const db = fileWith(v, recipes);
         markShapeAtCountModel(db);

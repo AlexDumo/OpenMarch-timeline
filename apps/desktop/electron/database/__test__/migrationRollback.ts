@@ -21,6 +21,17 @@ export const journal: Journal = JSON.parse(
 );
 export const migrationAt = (idx: number) =>
     journal.entries.find((e) => e.idx === idx)!;
+/** The journal entry of migration `tag` */
+export const migrationTagged = (tag: string) =>
+    journal.entries.find((e) => e.tag === tag)!;
+
+/**
+ * Shapes at a count (ADR 0006 revision of 2026-11-22). Numbered 0030 because fork PR #1322 holds
+ * 0029; found by its tag, so its journal position can change when #1322's 0029 is merged before it.
+ */
+export const SHAPE_AT_COUNT_MIGRATION = migrationTagged(
+    "0030_shape_recipes_at_count",
+);
 
 /** The tables and indexes of a file at upstream's 0016, by name. */
 function upstream0016Schema(): Map<
@@ -261,16 +272,16 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
     27: () => {},
     // Route sources, pathways step 3c: a new table only
     28: (db) => dropTables(db, ["timeline_route_sources"]),
-    // Shapes at a count (ADR 0006 revision of 2026-11-22, §1.7): `timeline_shape_recipes` as 0017
-    // made it
-    29: rollBackShapeRecipesAtCount,
 };
+// Shapes at a count (ADR 0006 revision of 2026-11-22, §1.7): `timeline_shape_recipes` as 0017
+// made it. Registered by tag, so it follows the migration wherever the journal puts it
+ROLLBACKS[SHAPE_AT_COUNT_MIGRATION.idx] = rollBackShapeRecipesAtCount;
 
 /**
  * Rebuilds `timeline_shape_recipes` as 0017 made it, keeping its ids and so its members. A shape
  * points at the move where most of its members have a row ending at its count (the lowest id on
  * a tie; `NULL` for none, or for the starting spots). An order mark goes in no move with its count
- * in `params.beat`, as this build's marks were saved. Opening the file runs 0029 again, which
+ * in `params.beat`, as this build's marks were saved. Opening the file runs 0030 again, which
  * reads each recipe back at the same count.
  */
 function rollBackShapeRecipesAtCount(db: DatabaseSync) {

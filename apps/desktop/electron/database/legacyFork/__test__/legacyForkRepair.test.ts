@@ -109,7 +109,7 @@ async function convertOnOpen(
 
 /**
  * `after` has every row of `before` (by rowid), each with the values it had; new columns aside, and
- * a recipe's move, which 0029 turns into its count (checked on its own)
+ * a recipe's move, which 0030 turns into its count (checked on its own)
  */
 function expectRowsKept(
     after: Record<string, unknown>[] | null,
@@ -186,14 +186,17 @@ describe("the frozen fork migrations", () => {
             "0017_timeline_model",
             "0018_drop_page_era",
         ]);
-        // later fork migrations follow them in order (0019_silk_artwork, ...)
-        folderMigrations
-            .slice(19)
-            .forEach((m, i) =>
-                expect(m.tag.startsWith(String(19 + i).padStart(4, "0"))).toBe(
-                    true,
-                ),
+        // later fork migrations follow them in order (0019_silk_artwork, ...), skipping numbers
+        // held by open pull requests: 0029 is fork PR #1322's (exact paths) until it merges here
+        const reserved = new Set([29]);
+        let next = 19;
+        for (const m of folderMigrations.slice(19)) {
+            while (reserved.has(next)) next++;
+            expect(m.tag.startsWith(String(next).padStart(4, "0")), m.tag).toBe(
+                true,
             );
+            next++;
+        }
         expect(folderMigrations[16]!.folderMillis).toBe(
             UPSTREAM_LAST_MIGRATION_MS,
         );
@@ -235,7 +238,7 @@ describe.each([20, 24, 28, 32])(
                     );
             expect(after.rows.timelines).toHaveLength(1);
             expect(after.rows.timeline_assignments).toHaveLength(2);
-            // Repaired to 0017, then 0029: the shape placed in move 1 stands where it ends
+            // Repaired to 0017, then 0030: the shape placed in move 1 stands where it ends
             if (level >= 27) {
                 expect(
                     after.rows.timeline_shape_recipes!.map((r) => ({

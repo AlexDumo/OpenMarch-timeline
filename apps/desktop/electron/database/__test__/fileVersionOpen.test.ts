@@ -1,9 +1,9 @@
 /**
  * Opens real `.dots` files at versions 7 to 10 through the same steps as the
  * main process's `setActiveDb` (setDbPath, version decision, migrations), and
- * checks that 7 opens and keeps its version, 8 opens and is written as 19 once
- * migration 0029 has run (ADR 0006 revision of 2026-11-22, §1.8), a parked
- * fork-only floor file (9) opens as a timeline file and is written as 19 too, and
+ * checks that 7 opens and keeps its version, 8 opens and is written as 20 once
+ * migration 0030 has run (ADR 0006 revision of 2026-11-22, §1.8), a parked
+ * fork-only floor file (9) opens as a timeline file and is written as 20 too, and
  * a newer file is refused without a single byte of the file changing (ADR 0012 §6).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -114,7 +114,7 @@ describe("opening files by format version", () => {
         expect(userVersionOf(filePath)).toBe(written);
     });
 
-    it("opens a parked floor-model file (9) as a timeline file, written as 19 once 0029 has run", async () => {
+    it("opens a parked floor-model file (9) as a timeline file, written as 20 once 0030 has run", async () => {
         const filePath = path.join(tempDir, "show-9.dots");
         await createShowFile(filePath, 9);
 
@@ -146,7 +146,7 @@ describe("opening files by format version", () => {
         expect(sha256(filePath)).toBe(hashBefore);
     });
 
-    it("creates a new file at 19", async () => {
+    it("creates a new file at 20", async () => {
         const filePath = path.join(tempDir, "new.dots");
 
         expect(await openLikeSetActiveDb(filePath, true)).toBe(200);
@@ -155,7 +155,7 @@ describe("opening files by format version", () => {
 
     describe("migration service", () => {
         it.each([7, 8])(
-            "runs migrations on a file at %i, writing a timeline file as 19 once 0029 has run",
+            "runs migrations on a file at %i, writing a timeline file as 20 once 0030 has run",
             async (v) => {
                 const db = new DatabaseSync(path.join(tempDir, `m-${v}.dots`));
                 try {

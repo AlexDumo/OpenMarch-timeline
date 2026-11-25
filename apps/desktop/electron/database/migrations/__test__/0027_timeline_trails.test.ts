@@ -31,6 +31,7 @@ import {
 import {
     migrationAt,
     rollBackMigrationsFrom,
+    SHAPE_AT_COUNT_MIGRATION,
 } from "../../__test__/migrationRollback";
 
 const TRAIL_MIGRATION = migrationAt(27);
@@ -87,8 +88,8 @@ const TABLES = [
  */
 async function fileBefore0027(file: string) {
     await createNewTimelineShow(file);
-    // 0029 too (it only runs once on a file), so opening runs both again
-    rollBackMigrationsFrom(file, 29);
+    // 0030 too, so opening runs every later migration again, as for a real older file
+    rollBackMigrationsFrom(file, SHAPE_AT_COUNT_MIGRATION.idx);
     withDb(file, (db) => {
         const triggers = db
             .prepare("SELECT name FROM sqlite_schema WHERE type = 'trigger'")
@@ -184,7 +185,7 @@ describe(`Migration ${TRAIL_MIGRATION.tag}`, () => {
             expect(TABLES.map((t) => rowsOf(db, t))).toEqual(before);
             expect(before[0]).toHaveLength(2);
             expect(before[1]).toHaveLength(2);
-            // 0027 leaves it at 12; 0029 writes every file as 19
+            // 0027 leaves it at 12; 0030 writes every file as 20
             expect(readUserVersion(db)).toBe(SHAPE_AT_COUNT_USER_VERSION);
             expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
             expect(
