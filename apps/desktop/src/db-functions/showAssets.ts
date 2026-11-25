@@ -97,8 +97,10 @@ function checkNewAsset(asset: NewShowAsset) {
  * refused. Not undoable on its own: inside `transactionWithHistory`, only the edit's other
  * changes are undone.
  *
- * The parts are hashed inside `tx`. For large files, an import should run this in a short
- * transaction of its own rather than inside a long edit.
+ * The parts are hashed here unless `hashes` comes in: for large files, work them out with
+ * {@link hashShowAsset} before taking a lock, so the transaction stays short. Hashes passed in
+ * must be this asset's: they must name exactly its part roles, and their Version hash must follow
+ * from them and its sidecar, or it throws (the bytes themselves aren't hashed again).
  */
 export async function addShowAssetInTransaction({
     tx,
@@ -113,6 +115,7 @@ export async function addShowAssetInTransaction({
     checkNewAsset(asset);
     const { partHashes, versionHash } = hashes ?? (await hashShowAsset(asset));
     const sidecar = canonicalJson(asset.sidecar ?? {});
+    if (hashes) await checkHashesFit(asset, hashes, sidecar);
 
     // Each part's bytes, stored once. On a re-import this also puts back bytes a damaged file
     // lost, or replaces stored bytes that no longer match their hash
@@ -184,6 +187,27 @@ export async function addShowAssetInTransaction({
 export interface ShowAssetHashes {
     partHashes: Record<string, string>;
     versionHash: string;
+}
+
+/**
+ * Throws unless `hashes` could be `asset`'s: one hash for each of its part roles and no other,
+ * and the Version hash those and its sidecar give. Cheap: the parts aren't hashed again.
+ */
+async function checkHashesFit(
+    asset: NewShowAsset,
+    hashes: ShowAssetHashes,
+    sidecar: string,
+): Promise<void> {
+    const roles = Object.keys(asset.parts).sort();
+    const hashed = Object.keys(hashes.partHashes).sort();
+    if (roles.join("\n") !== hashed.join("\n"))
+        throw new Error(
+            `The hashes for ${asset.name} name parts ${hashed.join(", ")}, not ${roles.join(", ")}`,
+        );
+    if (
+        (await versionHashOf(hashes.partHashes, sidecar)) !== hashes.versionHash
+    )
+        throw new Error(`The hashes for ${asset.name} aren't its Version's`);
 }
 
 /** The hashes {@link addShowAssetInTransaction} works out, for a caller to work out early */
