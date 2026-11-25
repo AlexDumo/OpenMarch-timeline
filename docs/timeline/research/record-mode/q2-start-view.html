@@ -1,0 +1,189 @@
+<!-- cspell:disable -->
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <style>
+            body {
+                font-family: var(--font-sans, system-ui, sans-serif);
+                color: var(--foreground, #ececf1);
+                margin: 0;
+            }
+            .mut {
+                color: var(--muted-foreground, #9a9aa5);
+            }
+            h2 {
+                font-size: 15px;
+                margin: 0 0 4px;
+            }
+            p {
+                margin: 0 0 10px;
+                font-size: 13px;
+                line-height: 1.45;
+            }
+            svg {
+                width: 100%;
+                height: auto;
+                display: block;
+                margin: 4px 0 12px;
+            }
+            .opts {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 10px;
+            }
+            @media (max-width: 600px) {
+                .opts {
+                    grid-template-columns: 1fr;
+                }
+            }
+            .box {
+                border: 1px solid var(--border, #2e2e35);
+                border-radius: var(--radius, 10px);
+                padding: 12px;
+                background: var(--card, #141417);
+                font-size: 12.5px;
+                line-height: 1.45;
+            }
+            .box h3 {
+                font-size: 13px;
+                margin: 0 0 6px;
+            }
+            .verdict {
+                margin-top: 8px;
+                font-weight: 600;
+            }
+            .no {
+                color: var(--destructive, #f05252);
+            }
+            .ok {
+                color: var(--success, #34d399);
+            }
+            .rec {
+                border: 1px solid var(--success, #34d399);
+                border-radius: var(--radius, 10px);
+                padding: 10px 12px;
+                margin-top: 12px;
+                font-size: 13px;
+                line-height: 1.45;
+            }
+        </style>
+    </head>
+    <body>
+        <h2>2 · A general "see the start" view?</h2>
+        <p class="mut">
+            The catch: the field at Page 2's start <i>is</i> Page 1's set. Any
+            edit there changes Page 1.
+        </p>
+
+        <svg
+            viewBox="0 0 600 70"
+            aria-label="Page 1 box ending at its flag, which is also where Page 2 starts"
+        >
+            <rect
+                x="20"
+                y="20"
+                width="250"
+                height="26"
+                rx="4"
+                fill="var(--secondary, #26262b)"
+                stroke="var(--border, #2e2e35)"
+            />
+            <rect
+                x="270"
+                y="20"
+                width="250"
+                height="26"
+                rx="4"
+                fill="var(--secondary, #26262b)"
+                stroke="var(--primary, #7aa2ff)"
+            />
+            <text
+                x="145"
+                y="38"
+                text-anchor="middle"
+                font-size="12"
+                fill="var(--foreground, #ececf1)"
+            >
+                Page 1
+            </text>
+            <text
+                x="395"
+                y="38"
+                text-anchor="middle"
+                font-size="12"
+                fill="var(--foreground, #ececf1)"
+            >
+                Page 2 (selected)
+            </text>
+            <line
+                x1="270"
+                y1="10"
+                x2="270"
+                y2="56"
+                stroke="var(--warning, #f5a524)"
+                stroke-width="2"
+            />
+            <line
+                x1="520"
+                y1="10"
+                x2="520"
+                y2="56"
+                stroke="var(--primary, #7aa2ff)"
+                stroke-width="2"
+            />
+            <text
+                x="270"
+                y="68"
+                text-anchor="middle"
+                font-size="11"
+                fill="var(--warning, #f5a524)"
+            >
+                start = Page 1's set
+            </text>
+            <text
+                x="520"
+                y="68"
+                text-anchor="middle"
+                font-size="11"
+                fill="var(--primary, #7aa2ff)"
+            >
+                playhead = what you edit
+            </text>
+        </svg>
+
+        <div class="opts">
+            <div class="box">
+                <h3>A · Allow edits at the start</h3>
+                A drag changes Page 1 while Page 2 is selected. The editing line
+                would have to say "Editing Page 1's set". The edit happens
+                somewhere other than where you are.
+                <div class="verdict no">
+                    No. Keynote and Figma never do this.
+                </div>
+            </div>
+            <div class="box">
+                <h3>B · Redirect to the previous page</h3>
+                Turning on "start" takes you to Page 1's set. That's Previous
+                page (Q), which already exists.
+                <div class="verdict no">Nothing new.</div>
+            </div>
+            <div class="box">
+                <h3>C · Read-only peek</h3>
+                See the start, edit nothing. That already exists as the start
+                flag's own peek and start flag positions (hold N for everyone's
+                dots and paths).
+                <div class="verdict ok">Keep as a peek, not a place.</div>
+            </div>
+        </div>
+
+        <div class="rec">
+            <b>Recommendation:</b> no start-view toggle. Record mode owns the
+            start view, because there the start is the input, not something you
+            edit. If you miss it elsewhere, the next small step is a
+            hold-to-peek key (read-only; Basic shows the page's start).
+            Precedent: Premiere and Final Cut show both sides of a cut only
+            while you drag it.
+        </div>
+    </body>
+</html>

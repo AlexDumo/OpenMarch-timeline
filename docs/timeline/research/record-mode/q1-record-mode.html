@@ -1,0 +1,279 @@
+<!-- cspell:disable -->
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <style>
+            body {
+                font-family: var(--font-sans, system-ui, sans-serif);
+                color: var(--foreground, #ececf1);
+                margin: 0;
+            }
+            .fg {
+                color: var(--foreground, #ececf1);
+            }
+            .mut {
+                color: var(--muted-foreground, #9a9aa5);
+            }
+            h2 {
+                font-size: 15px;
+                margin: 0 0 4px;
+            }
+            p {
+                margin: 0 0 10px;
+                font-size: 13px;
+                line-height: 1.45;
+            }
+            .row {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+            }
+            @media (max-width: 560px) {
+                .row {
+                    grid-template-columns: 1fr;
+                }
+            }
+            .box {
+                border: 1px solid var(--border, #2e2e35);
+                border-radius: var(--radius, 10px);
+                padding: 12px;
+                background: var(--card, #141417);
+            }
+            .tag {
+                display: inline-block;
+                font-size: 11px;
+                padding: 1px 8px;
+                border-radius: 999px;
+                border: 1px solid var(--border, #2e2e35);
+                margin-bottom: 6px;
+            }
+            .tag.now {
+                color: var(--muted-foreground, #9a9aa5);
+            }
+            .tag.new {
+                color: var(--destructive, #f05252);
+                border-color: var(--destructive, #f05252);
+            }
+            svg {
+                width: 100%;
+                height: auto;
+                display: block;
+            }
+            .flow {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                align-items: center;
+                margin-top: 14px;
+                font-size: 12px;
+            }
+            .step {
+                border: 1px solid var(--border, #2e2e35);
+                border-radius: 999px;
+                padding: 4px 10px;
+                background: var(--secondary, #26262b);
+            }
+            .step.rec {
+                border-color: var(--destructive, #f05252);
+            }
+            .arrow {
+                color: var(--muted-foreground, #9a9aa5);
+            }
+            ul {
+                margin: 6px 0 0;
+                padding-left: 18px;
+                font-size: 12.5px;
+                line-height: 1.5;
+            }
+        </style>
+    </head>
+    <body>
+        <h2>1 · Record mode: arm first, then record</h2>
+        <p class="mut">
+            Placing edits the end, so the field shows the end. Recording
+            performs from the start, so while armed the field shows the start.
+        </p>
+
+        <div class="row">
+            <div class="box">
+                <span class="tag now">Today (prototype)</span>
+                <svg
+                    viewBox="0 0 300 170"
+                    aria-label="Field at Page 2's set, Record pressed, count-in starts at once"
+                >
+                    <rect
+                        x="1"
+                        y="1"
+                        width="298"
+                        height="168"
+                        rx="6"
+                        fill="none"
+                        stroke="var(--border, #2e2e35)"
+                    />
+                    <g stroke="var(--border, #2e2e35)">
+                        <line x1="60" y1="1" x2="60" y2="169" />
+                        <line x1="120" y1="1" x2="120" y2="169" />
+                        <line x1="180" y1="1" x2="180" y2="169" />
+                        <line x1="240" y1="1" x2="240" y2="169" />
+                    </g>
+                    <text
+                        x="150"
+                        y="20"
+                        text-anchor="middle"
+                        font-size="11"
+                        fill="var(--muted-foreground, #9a9aa5)"
+                    >
+                        Editing Page 2's move (the end)
+                    </text>
+                    <g fill="var(--foreground, #ececf1)">
+                        <circle cx="200" cy="70" r="5" />
+                        <circle cx="215" cy="90" r="5" />
+                        <circle cx="230" cy="110" r="5" />
+                        <circle cx="90" cy="130" r="5" />
+                        <circle cx="110" cy="130" r="5" />
+                        <circle cx="130" cy="130" r="5" />
+                    </g>
+                    <text
+                        x="150"
+                        y="160"
+                        text-anchor="middle"
+                        font-size="11"
+                        fill="var(--muted-foreground, #9a9aa5)"
+                    >
+                        Record → jumps to start → 4 3 2 1 → go
+                    </text>
+                </svg>
+                <p class="mut" style="margin-top: 8px">
+                    No moment to look at the starting form or check who's
+                    selected.
+                </p>
+            </div>
+            <div class="box">
+                <span class="tag new">Record mode (armed)</span>
+                <svg
+                    viewBox="0 0 300 170"
+                    aria-label="Field at Page 2's start, armed marchers ringed red, dashed current paths to hollow end dots"
+                >
+                    <rect
+                        x="1"
+                        y="1"
+                        width="298"
+                        height="168"
+                        rx="6"
+                        fill="none"
+                        stroke="var(--border, #2e2e35)"
+                    />
+                    <g stroke="var(--border, #2e2e35)">
+                        <line x1="60" y1="1" x2="60" y2="169" />
+                        <line x1="120" y1="1" x2="120" y2="169" />
+                        <line x1="180" y1="1" x2="180" y2="169" />
+                        <line x1="240" y1="1" x2="240" y2="169" />
+                    </g>
+                    <rect
+                        x="14"
+                        y="8"
+                        width="272"
+                        height="20"
+                        rx="10"
+                        fill="var(--secondary, #26262b)"
+                        stroke="var(--destructive, #f05252)"
+                    />
+                    <circle
+                        cx="28"
+                        cy="18"
+                        r="4"
+                        fill="var(--destructive, #f05252)"
+                    />
+                    <text
+                        x="36"
+                        y="22"
+                        font-size="10.5"
+                        fill="var(--foreground, #ececf1)"
+                    >
+                        Record · Page 2 · 3 marchers · Space · Done
+                    </text>
+                    <g
+                        stroke="var(--muted-foreground, #9a9aa5)"
+                        stroke-dasharray="4 3"
+                        fill="none"
+                    >
+                        <line x1="80" y1="60" x2="200" y2="70" />
+                        <line x1="80" y1="85" x2="215" y2="90" />
+                        <line x1="80" y1="110" x2="230" y2="110" />
+                    </g>
+                    <g fill="none" stroke="var(--muted-foreground, #9a9aa5)">
+                        <circle cx="200" cy="70" r="5" />
+                        <circle cx="215" cy="90" r="5" />
+                        <circle cx="230" cy="110" r="5" />
+                    </g>
+                    <g fill="var(--foreground, #ececf1)">
+                        <circle cx="80" cy="60" r="5" />
+                        <circle cx="80" cy="85" r="5" />
+                        <circle cx="80" cy="110" r="5" />
+                        <circle cx="110" cy="140" r="5" />
+                        <circle cx="130" cy="140" r="5" />
+                        <circle cx="150" cy="140" r="5" />
+                    </g>
+                    <g
+                        fill="none"
+                        stroke="var(--destructive, #f05252)"
+                        stroke-width="2"
+                    >
+                        <circle cx="80" cy="60" r="9" />
+                        <circle cx="80" cy="85" r="9" />
+                        <circle cx="80" cy="110" r="9" />
+                    </g>
+                    <text
+                        x="150"
+                        y="163"
+                        text-anchor="middle"
+                        font-size="11"
+                        fill="var(--muted-foreground, #9a9aa5)"
+                    >
+                        Starting form solid · dashed = what a take replaces
+                    </text>
+                </svg>
+                <p class="mut" style="margin-top: 8px">
+                    Stays here until you press Space. Clicking marchers changes
+                    who's armed.
+                </p>
+            </div>
+        </div>
+
+        <div class="flow">
+            <span class="step">Select · Record</span
+            ><span class="arrow">→</span>
+            <span class="step rec">Armed: field at the start</span
+            ><span class="arrow">→</span>
+            <span class="step rec">Space: 4 clicks, move plays, drag</span
+            ><span class="arrow">→</span>
+            <span class="step rec">Back to the start, still armed</span
+            ><span class="arrow">→</span>
+            <span class="step"
+                >Space again = retake · Done = field at the end</span
+            >
+        </div>
+
+        <ul>
+            <li>
+                <b>Only what you drag changes</b> (Logic's Touch). A take with
+                no drag is just a playback.
+            </li>
+            <li>
+                <b>Others play during the take</b>, so layering one performer at
+                a time comes free (record-arm).
+            </li>
+            <li>
+                <b>Later, same mode:</b> punch in/out (Expert's start flag to
+                playhead), take history, then Leader and Rotation as what you
+                arm.
+            </li>
+            <li class="mut">
+                Precedents: Logic/Ableton record-arm and count-in; After Effects
+                Motion Sketch keeps the start frame on screen while you sketch;
+                Blender's red auto-key button.
+            </li>
+        </ul>
+    </body>
+</html>
