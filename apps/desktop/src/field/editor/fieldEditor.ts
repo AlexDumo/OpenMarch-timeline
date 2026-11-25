@@ -471,13 +471,14 @@ export type FieldModeDrawing = {
     /**
      * Rings round marchers' starts (pathways step 15): `group` on each member of the group path
      * shown ("Follows the group path"), `own` on a selected marcher in the move that isn't on it
-     * ("Own path" when it walks one); `label` is the ring's tooltip
+     * ("Own path" when it walks one), `record` in red on each marcher armed to record (Record
+     * mode); `label` is the ring's tooltip
      */
     memberRings?: readonly {
         at: FieldPoint;
         /** The marcher it rings, whose shape it takes */
         marcherId: number;
-        kind: "group" | "own";
+        kind: "group" | "own" | "record";
         label: string;
         /** Pulses, asking to be pressed: the Follow tool's ends (pathways step 4b) */
         pulse?: boolean;

@@ -11,6 +11,11 @@
  * - A marcher never dragged in the take keeps its path.
  * - Timing comes from the playback clock in counts, so recording at a slower playback speed plays
  *   back at full speed.
+ *
+ * Record mode (owner, 2026-11-25; docs/timeline/research/record-mode): Record first arms. The
+ * field shows the move's start (the starting form, as the playback cursor, so the playhead and
+ * the start flag stay put), the selected marchers are the armed ones, and Space records a take.
+ * After a take the field goes back to the start, still armed, for a retake. Done or Escape leaves.
  */
 import { create } from "zustand";
 import { toast } from "sonner";
@@ -39,6 +44,8 @@ import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { moveMarchersInTarget } from "@/db-functions/timelineMoves";
 import { setExactPathInTransaction } from "@/db-functions/timelineExactPaths";
 import { currentShapeField } from "@/shapes/field/shapeField";
+import { moveNameOf } from "@/db-functions/timelineRoutes";
+import { translateTimelineText } from "@/timeline/translateTimelineText";
 import { groupMoveAt } from "./pathTarget";
 import { exactPathFromSamples, type RecordedSample } from "./recordedPath";
 
@@ -47,7 +54,7 @@ const COUNT_IN = 4;
 
 type XYPoint = { x: number; y: number };
 
-export type RecordPhase = "idle" | "countIn" | "recording" | "saving";
+export type RecordPhase = "idle" | "armed" | "countIn" | "recording" | "saving";
 
 interface RecordPathState {
     phase: RecordPhase;
@@ -59,6 +66,8 @@ interface RecordPathState {
     counts: number;
     /** Bumped every frame something drawn changes */
     frame: number;
+    /** While in Record mode, the armed move's name ("Page 2") */
+    moveLabel: string;
 }
 
 export const useRecordPathStore = create<RecordPathState>(() => ({
@@ -67,7 +76,28 @@ export const useRecordPathStore = create<RecordPathState>(() => ({
     count: 0,
     counts: 0,
     frame: 0,
+    moveLabel: "",
 }));
+
+type TakeArgs = {
+    countGrid: CountClock;
+    setIsPlaying: (playing: boolean) => void;
+};
+
+type MoveRange = { timelineId: number; start: number; end: number };
+
+/** Record mode: the move armed, shown at its start, and where the timeline's lines were */
+interface Armed extends MoveRange, TakeArgs {
+    /** The playhead when armed: the move is the one it is in or arrives at */
+    playhead: number;
+    startFlag: number;
+    unsubscribe: () => void;
+}
+
+let armed: Armed | null = null;
+
+/** The move armed in Record mode, or null outside it */
+export const armedMove = (): Readonly<MoveRange> | null => armed;
 
 /** One take: everything that isn't drawn state */
 interface Take {
@@ -109,34 +139,45 @@ export const isRecordingPath = (): boolean => {
     return phase === "countIn" || phase === "recording";
 };
 
-/** Record (Alt+Shift+R), and the transport's record button: starts a take, or ends one and keeps it */
-export async function toggleRecordPath(args: {
-    countGrid: CountClock;
-    setIsPlaying: (playing: boolean) => void;
-}): Promise<void> {
+/**
+ * Record (Alt+Shift+R), and the transport's record button: arms Record mode, records a take
+ * while armed, or ends a take and keeps it
+ */
+export async function toggleRecordPath(args: TakeArgs): Promise<void> {
     const { phase } = useRecordPathStore.getState();
     if (phase === "countIn" || phase === "recording") {
         await finishTake(true);
         return;
     }
+    if (phase === "armed") {
+        await recordTake();
+        return;
+    }
     if (phase !== "idle") return;
-    await startTake(args);
+    await arm(args);
 }
 
-/** Escape while recording: the take is thrown away, nothing is written */
+/** Escape while recording: the take is thrown away, nothing is written, still armed */
 export function discardRecordPath(): void {
     if (isRecordingPath()) void finishTake(false);
 }
 
-// eslint-disable-next-line max-lines-per-function
-async function startTake({
-    countGrid,
-    setIsPlaying,
-}: {
-    countGrid: CountClock;
-    setIsPlaying: (playing: boolean) => void;
-}): Promise<void> {
-    const ids = [...(activeFieldEditor()?.selected() ?? [])];
+/** Done, or Escape while armed: leaves Record mode, and the field shows the playhead again */
+export function leaveRecordMode(): void {
+    const current = armed;
+    if (!current) return;
+    armed = null;
+    current.unsubscribe();
+    if (useRecordPathStore.getState().phase === "armed")
+        useRecordPathStore.setState({ phase: "idle", moveLabel: "" });
+    useTimelineSelectionStore.getState().clearCursor();
+}
+
+/** The move the selected marchers `ids` are in or arrive at at `beat`, or null (with a toast why) */
+async function moveFor(
+    ids: readonly number[],
+    beat: number,
+): Promise<MoveRange | null> {
     if (ids.length === 0) {
         toast.info(
             t(
@@ -144,12 +185,8 @@ async function startTake({
                 "Select the marchers to record first",
             ),
         );
-        return;
+        return null;
     }
-    const selection = useTimelineSelectionStore.getState();
-    if (selection.playback) stopTimelinePlayback(setIsPlaying);
-    await timelinePositionsSettled();
-    const beat = selection.playheadBeat;
     // The move the playhead is inside or arrives at (a page's own flag, as everywhere), else
     // the one starting there (the playhead at the show's start)
     let move = await groupMoveAt(db, ids, beat);
@@ -161,7 +198,7 @@ async function startTake({
                 "The selected marchers are in different moves here. Record them one move at a time.",
             ),
         );
-        return;
+        return null;
     }
     if (move.kind === "noMove") {
         toast.info(
@@ -170,8 +207,95 @@ async function startTake({
                 "There's no move at the playhead to record. Put the playhead inside a page.",
             ),
         );
-        return;
+        return null;
     }
+    return { timelineId: move.timelineId, start: move.start, end: move.end };
+}
+
+const selectedIds = (): number[] => [
+    ...(activeFieldEditor()?.selected() ?? []),
+];
+
+/** Arms Record mode on the move at the playhead: the field shows its start */
+async function arm(args: TakeArgs): Promise<void> {
+    const selection = useTimelineSelectionStore.getState();
+    if (selection.playback) stopTimelinePlayback(args.setIsPlaying);
+    await timelinePositionsSettled();
+    const { playheadBeat, startBeat } = useTimelineSelectionStore.getState();
+    const move = await moveFor(selectedIds(), playheadBeat);
+    if (!move || armed || useRecordPathStore.getState().phase !== "idle")
+        return;
+    armed = {
+        ...move,
+        ...args,
+        playhead: playheadBeat,
+        startFlag: startBeat,
+        unsubscribe: () => {},
+    };
+    useRecordPathStore.setState({
+        phase: "armed",
+        counts: Math.round(move.end - move.start),
+        moveLabel: "",
+    });
+    void labelArmedMove(move.timelineId);
+    useTimelineSelectionStore.getState().cue(move.start);
+    const current = armed;
+    current.unsubscribe = useTimelineSelectionStore.subscribe((s) => {
+        if (armed !== current) return;
+        if (useRecordPathStore.getState().phase !== "armed") return;
+        // Going somewhere else on the timeline leaves Record mode
+        if (
+            s.playheadBeat !== current.playhead ||
+            s.startBeat !== current.startFlag
+        ) {
+            leaveRecordMode();
+            return;
+        }
+        // Saving a take (or anything else) put the cursor back on the playhead: show the start
+        if (s.playback === null && s.cursorBeat !== current.start)
+            s.cue(current.start);
+    });
+}
+
+async function labelArmedMove(timelineId: number): Promise<void> {
+    try {
+        const name = translateTimelineText(
+            await moveNameOf(db as never, timelineId),
+        );
+        if (armed?.timelineId === timelineId)
+            useRecordPathStore.setState({ moveLabel: name });
+    } catch {
+        // The bar goes without the move's name
+    }
+}
+
+/** Space or Record while armed: a take of the armed marchers (the selection) */
+async function recordTake(): Promise<void> {
+    const current = armed;
+    if (!current) return;
+    const ids = selectedIds();
+    const move = await moveFor(ids, current.playhead);
+    if (!move || armed !== current) return;
+    if (useRecordPathStore.getState().phase !== "armed") return;
+    // Another selection can be in another move (Expert): the take is that one's
+    if (
+        move.timelineId !== current.timelineId ||
+        move.start !== current.start
+    ) {
+        Object.assign(current, move);
+        useRecordPathStore.setState({
+            counts: Math.round(move.end - move.start),
+        });
+        void labelArmedMove(move.timelineId);
+    }
+    startTake(ids, move, current);
+}
+
+function startTake(
+    ids: readonly number[],
+    move: MoveRange,
+    { countGrid, setIsPlaying }: TakeArgs,
+): void {
     const resolver = useTimelineResolverStore.getState().resolver;
     if (!resolver) return;
     const at = new Map<number, XYPoint>();
@@ -400,15 +524,11 @@ async function finishTake(keep: boolean): Promise<void> {
     void current.audio?.close();
     if (useTimelineSelectionStore.getState().playback)
         stopTimelinePlayback(current.setIsPlaying);
+    // Back to Record mode, at the start (the selection store's watcher shows it once stopped)
+    const after: RecordPhase = armed ? "armed" : "idle";
     if (!keep || current.samples.size === 0) {
-        useRecordPathStore.setState({ phase: "idle", countIn: 0, count: 0 });
-        if (keep)
-            toast.info(
-                t(
-                    "pathways.record.nothing",
-                    "Nothing recorded: once the counts start, press on the field and drag.",
-                ),
-            );
+        // Nobody dragged: it was a playback (only what you drag changes)
+        useRecordPathStore.setState({ phase: after, countIn: 0, count: 0 });
         return;
     }
     useRecordPathStore.setState({ phase: "saving" });
@@ -420,7 +540,13 @@ async function finishTake(keep: boolean): Promise<void> {
             t("pathways.record.saveFailed", "Couldn't save the recorded path"),
         );
     } finally {
-        useRecordPathStore.setState({ phase: "idle", countIn: 0, count: 0 });
+        useRecordPathStore.setState({
+            phase: armed ? "armed" : "idle",
+            countIn: 0,
+            count: 0,
+        });
+        const state = useTimelineSelectionStore.getState();
+        if (armed && state.playback === null) state.cue(armed.start);
     }
 }
 

@@ -687,6 +687,8 @@ const PATH_HALO_ALPHA = 0.3;
  */
 const GROUP_RING = "rgb(59, 130, 246)";
 const OWN_RING = "rgb(249, 115, 22)";
+/** Record mode's armed marchers: the record button's red */
+const RECORD_RING = "rgb(220, 38, 38)";
 const MEMBER_RING_SCALE = 1.9;
 const MEMBER_RING_WIDTH = 2;
 /** A detached member's ring: dashed, off the group path (interaction system, rule 5) */
@@ -1361,7 +1363,13 @@ const ShapeBody = memo(function ShapeBody({
                     y={ring.at.y}
                     r={DOT_RADIUS * scale * MEMBER_RING_SCALE}
                     fill="none"
-                    stroke={ring.kind === "group" ? GROUP_RING : OWN_RING}
+                    stroke={
+                        ring.kind === "group"
+                            ? GROUP_RING
+                            : ring.kind === "record"
+                              ? RECORD_RING
+                              : OWN_RING
+                    }
                     strokeWidth={MEMBER_RING_WIDTH}
                     strokeDasharray={ring.dashed ? MEMBER_RING_DASH : undefined}
                     vectorEffect="non-scaling-stroke"

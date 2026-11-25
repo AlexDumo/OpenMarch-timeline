@@ -8,8 +8,8 @@ import {
 } from "../app.mjs";
 import { seedShowSql, type SeedPosition } from "../seed.mjs";
 
-// Record path (prototype, 2026-11-25): with T1 selected, Alt+Shift+R counts in four clicks,
-// then plays the move at the playhead while a drag on the field moves T1 with the pointer. The
+// Record path (prototype, 2026-11-25): with T1 selected, Alt+Shift+R arms Record mode (the field
+// shows the move's start), and Space counts in four clicks, then plays the move at the playhead while a drag on the field moves T1 with the pointer. The
 // take is saved as T1's exact path, with its end spot where it ended, in one undo step.
 
 const HOME: SeedPosition[] = [
@@ -52,6 +52,8 @@ test.fixme("change: Record path saves the drag as T1's exact path and moves its 
     );
 
     await page.keyboard.press("Alt+Shift+R");
+    await expect(page.getByTestId("record-mode-bar")).toBeVisible();
+    await page.keyboard.press("Space");
     const counter = page.getByTestId("record-path-counter");
     await expect(counter).toBeVisible();
     await expect(counter).toContainText("Recording", { timeout: 10_000 });

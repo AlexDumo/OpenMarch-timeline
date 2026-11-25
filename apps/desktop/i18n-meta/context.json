@@ -4302,13 +4302,19 @@
     "pathways.record.countIn": "Small label over a big countdown number (4, 3, 2, 1) shown on the field before recording starts, like a count-in in music apps.",
     "pathways.record.countOf": "Shown on the field while recording: which count of the page is playing. {count} and {counts} are numbers, e.g. 'count 5 of 16'. A count is one beat of the music.",
     "pathways.record.evened": "Message after the 'Make speed even' command: how many marchers' (performers') recorded paths now have a steady speed. {count} is a number.",
-    "pathways.record.hint": "Hint shown on the field while recording a path: the user presses anywhere on the field and drags to move the selected marchers; pressing the Esc key cancels the recording.",
+    "pathways.record.hint": "Hint shown on the field while recording a path: the user presses anywhere on the field and drags to move the selected marchers; Space stops and keeps the recording; Esc cancels it.",
     "pathways.record.noMove": "Message shown when the user starts recording but the playhead isn't inside a page (a stretch of the show where marchers move), so there's nothing to record into.",
     "pathways.record.notRecorded": "Message when 'Make speed even' finds no recorded path for the selected marchers (performers) at the playhead.",
-    "pathways.record.nothing": "Message shown after a recording in which the user never dragged on the field, so nothing was saved.",
     "pathways.record.recording": "Small red label shown on the field while a path is being recorded.",
     "pathways.record.saveFailed": "Error message shown when a recorded path couldn't be saved.",
     "pathways.record.selectFirst": "Short message shown when the user starts recording a path with no marchers (performers) selected.",
     "pathways.record.stop": "Tooltip of the record button while recording: stops the recording and keeps it.",
-    "pathways.record.twoMoves": "Message shown when the selected marchers (performers) are in different moves (stretches of motion between two positions) at the playhead, so one recording can't cover them all."
+    "pathways.record.twoMoves": "Message shown when the selected marchers (performers) are in different moves (stretches of motion between two positions) at the playhead, so one recording can't cover them all.",
+    "pathways.record.ready": "Title of the bar over the field in Record mode: the app is waiting for the user to start recording a path (like a record-armed track in a music app).",
+    "pathways.record.readyLine": "In the Record mode bar: which page or move will be recorded ({move}, e.g. 'Page 2'), how many counts (beats) it has, and how many marchers (performers) are armed to record.",
+    "pathways.record.readyHint": "Hint in the Record mode bar: clicking marchers (performers) on the field chooses which ones the next recording moves.",
+    "pathways.record.take": "Tooltip of the record button while in Record mode: starts recording a take (one recording pass).",
+    "pathways.record.takeKeys": "Button in the Record mode bar that starts recording a take (one recording pass). <keys></keys> shows the Space key.",
+    "pathways.record.done": "Button in the Record mode bar that leaves Record mode. <keys></keys> shows the Escape key.",
+    "pathways.record.armedRing": "Tooltip of the red ring around a marcher (performer) who will be moved by the next recording."
 }
