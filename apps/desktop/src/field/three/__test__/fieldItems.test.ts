@@ -315,6 +315,40 @@ describe("FieldItems for imported models", () => {
         expect(items.itemAt(corner, () => true, 3)).toBeNull();
     });
 
+    it("gives a press on one item to it, not to a neighbor whose silhouette is near", () => {
+        // Item 2 at (100, 50) and item 3 just right of it, both 2 × 1 m models
+        const m = PIXELS_PER_METER;
+        const marchers = new FieldMarchers({
+            marcherIds: () => [2, 3],
+            positionsAt(_beat, out) {
+                out.set([100, 50, 100 + 2 * m + 2, 50]);
+                return true;
+            },
+        });
+        const items = new FieldItems(marchers);
+        items.set({
+            itemIds: new Set([2, 3]),
+            changes: new Map([
+                [2, [change(0)]],
+                [3, [change(0)]],
+            ]),
+            hidden: new Set(),
+            models: new Map([
+                [2, "library:a@b"],
+                [3, "library:a@b"],
+            ]),
+            library,
+        });
+        marchers.fill(1);
+        // On item 2, 1 unit from its right edge and 3 from item 3's left edge
+        const onTwo = { x: 100 + m - 1, y: 50 };
+        expect(items.itemAt(onTwo, () => true, 5)).toBe(2);
+        // Between them, nearer item 3: in reach of both, the topmost takes it
+        expect(items.itemAt({ x: 100 + m + 1.5, y: 50 }, () => true, 5)).toBe(
+            3,
+        );
+    });
+
     it("draws the Outline for a model the show doesn't have", () => {
         expect(drawn(2, 1, "library:gone@b").plan).toBeNull();
     });

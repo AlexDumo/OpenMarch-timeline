@@ -225,8 +225,9 @@ export class FieldItems implements FieldItemSource {
 
     /**
      * The topmost item drawn under `point`, or null. An item drawn as a model is hit on the
-     * model's silhouette, or within `reach` of it (so thin parts stay easy to press), not on the
-     * rest of its footprint; any other item anywhere inside its Outline.
+     * model's silhouette, not on the rest of its footprint; any other item anywhere inside its
+     * Outline. With a `reach`, an item none holds whose silhouette is that near: so thin parts
+     * stay easy to press, without taking a press that lands on another item.
      */
     itemAt(
         point: Pt,
@@ -234,6 +235,10 @@ export class FieldItems implements FieldItemSource {
         reach = 0,
     ): number | null {
         const outlines = this.outlines();
+        for (let i = outlines.length - 1; i >= 0; i--)
+            if (accept(outlines[i].id) && hits(outlines[i], point, 0))
+                return outlines[i].id;
+        if (reach <= 0) return null;
         for (let i = outlines.length - 1; i >= 0; i--)
             if (accept(outlines[i].id) && hits(outlines[i], point, reach))
                 return outlines[i].id;

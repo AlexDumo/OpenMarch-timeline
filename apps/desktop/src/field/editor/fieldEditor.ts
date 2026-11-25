@@ -36,6 +36,7 @@ import {
     itemSelectionFrame,
     type ItemFrame,
     type ItemSize,
+    insideItemFrame,
 } from "./itemTransform";
 import { PropTool, type PropToolShape, type PropToolStamp } from "./propTool";
 import type { OutlineType } from "@/db-functions/items";
@@ -2565,11 +2566,13 @@ export class FieldEditor {
         const isLocked = this.ports.isLocked;
         if (!isLocked) return null;
         const item =
+            this.ports.itemAt?.(field, isLocked) ??
             this.ports.itemAt?.(
                 field,
                 isLocked,
-                hitRadius(this.ports.zoom(), kind),
-            ) ?? null;
+                itemReach(this.ports.zoom(), kind),
+            ) ??
+            null;
         return item !== null && this.ports.canSelect(item) ? item : null;
     }
 
@@ -2619,17 +2622,27 @@ export class FieldEditor {
     private marcherAt({ field: point, kind }: FieldPointer) {
         const isItem = this.ports.isItem ?? (() => false);
         const hidden = this.ports.marcherHidden ?? (() => false);
-        const reach = hitRadius(this.ports.zoom(), kind);
         const performer = marcherAt(
             this.ports.marchers(),
             point,
-            reach,
+            hitRadius(this.ports.zoom(), kind),
             (id) => !isItem(id) && !hidden(id) && this.ports.canSelect(id),
         );
         if (performer !== null) return performer;
         const isLocked = this.ports.isLocked ?? (() => false);
+        const unlocked = (id: number) => !isLocked(id);
+        // On an item's silhouette, else inside the frame of the one whose handles are shown,
+        // else near a silhouette
+        const shown = this.selectedItem();
         const item =
-            this.ports.itemAt?.(point, (id) => !isLocked(id), reach) ?? null;
+            this.ports.itemAt?.(point, unlocked) ??
+            (shown && insideItemFrame(shown.frame, point) ? shown.id : null) ??
+            this.ports.itemAt?.(
+                point,
+                unlocked,
+                itemReach(this.ports.zoom(), kind),
+            ) ??
+            null;
         return item !== null && this.ports.canSelect(item) ? item : null;
     }
 
@@ -2736,3 +2749,12 @@ const sameIds = (a: readonly number[], b: readonly number[]) => {
     const set = new Set(b);
     return a.every((id) => set.has(id));
 };
+
+/**
+ * How far outside a model's silhouette a press by `kind` still lands on its item, in field
+ * units: the pointer's reach on screen, with no dot-sized floor, so the empty corners of the
+ * footprint stay empty when zoomed in.
+ */
+function itemReach(zoom: number, kind: PointerKind): number {
+    return thresholdsFor(kind).hitRadius / zoom;
+}
