@@ -4,11 +4,16 @@ import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates
 import { planField, type FieldRole } from "@/view3d/core/field";
 import { DEFAULT_VENUE_PARAMS } from "@/view3d/core/venueSettings";
 import {
+    FULL_SIZE_FLOOR,
+    indoorFloorTemplate,
+} from "@/global/classes/fieldTemplates/indoorFloors";
+import {
     VENUE_LOOKS,
     planBaseColor,
     styleBaseColor,
     venueAround,
     venueLook,
+    venuePaintedMarkings,
     venuePasses,
     washedColor,
     withLightLines,
@@ -66,21 +71,9 @@ describe("venuePasses", () => {
             expect(kept.has(role)).toBe(true);
     });
 
-    it("keeps the turf's lines in Full color, but leaves the yard numbers and arrows to the 2D grid", () => {
+    it("keeps everything in Full color", () => {
         const [pass] = venuePasses(turf, VENUE_LOOKS.full);
-        const kept = roles(pass.items);
-        expect(roles(turf.items).has("yardNumber")).toBe(true);
-        expect(roles(turf.items).has("arrow")).toBe(true);
-        expect(kept.has("yardNumber")).toBe(false);
-        expect(kept.has("arrow")).toBe(false);
-        for (const role of [
-            "yardLine",
-            "hash",
-            "stripe",
-            "endZoneText",
-            "centerLogo",
-        ] as FieldRole[])
-            expect(kept.has(role)).toBe(true);
+        expect(pass.items).toHaveLength(turf.items.length);
     });
 
     it("paints only end zones, lightly, then the lettering and logo for Markings only", () => {
@@ -92,6 +85,34 @@ describe("venuePasses", () => {
         expect(marks.alpha).toBe(1);
         expect(roles(marks.items)).toEqual(
             new Set(["endZoneText", "centerLogo"]),
+        );
+    });
+});
+
+describe("venuePaintedMarkings", () => {
+    it("hands the turf's lines, hashes, numbers and border to the venue in Full color", () => {
+        expect(venuePaintedMarkings(turf, VENUE_LOOKS.full)).toEqual(
+            new Set(["yardLine", "hash", "yardNumber", "border"]),
+        );
+    });
+
+    it("leaves the grid whole in the other looks", () => {
+        for (const look of [
+            VENUE_LOOKS.faint,
+            VENUE_LOOKS.soft,
+            VENUE_LOOKS.markings,
+        ])
+            expect(venuePaintedMarkings(turf, look).size).toBe(0);
+    });
+
+    it("keeps the grid's lines and numbers on a tarp, which paints only its edge, marks and dots", () => {
+        const tarp = planField({
+            fieldProperties: indoorFloorTemplate(FULL_SIZE_FLOOR, 22.5),
+            style: "tarp",
+            params: DEFAULT_VENUE_PARAMS,
+        });
+        expect(venuePaintedMarkings(tarp, VENUE_LOOKS.full)).toEqual(
+            new Set(["border"]),
         );
     });
 });

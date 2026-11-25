@@ -82,7 +82,10 @@ export type FieldPlan2d = {
     texts: FieldPlanText[];
     /** Filled shapes (the yard numbers), over the lines with the texts. */
     shapes: FieldPlanShape[];
-    /** A rectangle stroked over everything, the stroke centered on its edge. */
+    /**
+     * A rectangle stroked over everything, the stroke centered on its edge; null when the venue
+     * paints the field's border (`painted`).
+     */
     border: {
         x: number;
         y: number;
@@ -90,8 +93,20 @@ export type FieldPlan2d = {
         height: number;
         strokeWidth: number;
         color: RgbaColor;
-    };
+    } | null;
 };
+
+/**
+ * Markings a field surface under the grid can paint for it: the venue's turf in Full color
+ * (`venuePaintedMarkings`). The grid leaves these out so they don't show twice; the step grid,
+ * half lines and the labels outside the field stay, since no field paints those.
+ */
+export type PaintedMarking =
+    | "yardLine"
+    | "hash"
+    | "yLine"
+    | "yardNumber"
+    | "border";
 
 export type FieldPlanOptions = {
     /** The user's grid lines setting (every step). */
@@ -105,7 +120,11 @@ export type FieldPlanOptions = {
     image?: { width: number; height: number } | null;
     /** The side the field is seen from; the audience's by default (`fieldViewFrom.ts`). */
     viewFrom?: FieldViewFrom;
+    /** Markings the surface under the grid already paints, left out here. */
+    painted?: ReadonlySet<PaintedMarking>;
 };
+
+const NOTHING_PAINTED: ReadonlySet<PaintedMarking> = new Set();
 
 const GRID_STROKE = FieldProperties.GRID_STROKE_WIDTH;
 /** The text box is 1.13 font sizes tall, with the baseline 0.778 of the way down */
@@ -309,7 +328,7 @@ export function turnFieldPlan(plan: FieldPlan2d): FieldPlan2d {
             ...s,
             path: turnPathData(s.path, size),
         })),
-        border: {
+        border: border && {
             ...border,
             x: size.width - border.x - border.width,
             y: size.height - border.y - border.height,
@@ -321,7 +340,13 @@ export function turnFieldPlan(plan: FieldPlan2d): FieldPlan2d {
 // eslint-disable-next-line max-lines-per-function
 export function planField2d(
     fieldProperties: FieldProperties,
-    { gridLines, halfLines, image, viewFrom = "audience" }: FieldPlanOptions,
+    {
+        gridLines,
+        halfLines,
+        image,
+        viewFrom = "audience",
+        painted = NOTHING_PAINTED,
+    }: FieldPlanOptions,
 ): FieldPlan2d {
     const fp = fieldProperties;
     const { width, height, pixelsPerStep, centerFrontPoint, theme } = fp;
@@ -334,7 +359,10 @@ export function planField2d(
         y2: number,
         color: RgbaColor,
         lineWidth: number,
-    ) => lines.push({ role, x1, y1, x2, y2, color, width: lineWidth });
+    ) => {
+        if (role !== "grid" && role !== "halfLine" && painted.has(role)) return;
+        lines.push({ role, x1, y1, x2, y2, color, width: lineWidth });
+    };
 
     const startY = gridStartY(fp);
     if (gridLines) {
@@ -414,7 +442,9 @@ export function planField2d(
     // Border: three grid lines wide, just outside the field's edge
     const borderWidth = GRID_STROKE * 3;
     const inset = (borderWidth - GRID_STROKE) / 2;
-    const numbers = yardNumbers(fp);
+    const numbers = painted.has("yardNumber")
+        ? { shapes: [], texts: [] }
+        : yardNumbers(fp);
 
     const plan: FieldPlan2d = {
         width,
@@ -424,14 +454,16 @@ export function planField2d(
         lines,
         texts: [...checkpointLabels(fp), ...numbers.texts],
         shapes: numbers.shapes,
-        border: {
-            x: -inset,
-            y: -inset,
-            width: width + 2 * inset,
-            height: height + 2 * inset,
-            strokeWidth: borderWidth,
-            color: theme.primaryStroke,
-        },
+        border: painted.has("border")
+            ? null
+            : {
+                  x: -inset,
+                  y: -inset,
+                  width: width + 2 * inset,
+                  height: height + 2 * inset,
+                  strokeWidth: borderWidth,
+                  color: theme.primaryStroke,
+              },
     };
     return viewFrom === "performer" ? turnFieldPlan(plan) : plan;
 }

@@ -98,7 +98,7 @@ import {
 import { PIXELS_PER_METER } from "@/items/itemOutlines";
 import { PIT_MANIFEST, pitModelName } from "@/view3d/core/pit/pitModels";
 import { isMacPlatform } from "@/shortcuts/platform";
-import { planFieldImage } from "@/field/fieldPlan";
+import { planFieldImage, type PaintedMarking } from "@/field/fieldPlan";
 import { dropMarchersOnTimeline } from "@/field/fieldDrop";
 import {
     fieldViewSize,
@@ -196,6 +196,8 @@ const FOCUS_ORDER = 1.4;
 const ITEMS_ORDER = 1.3;
 const PATHS_ORDER = 1.5;
 const COLLISIONS_ORDER = 4;
+/** No venue markings: the grid draws all of its own. */
+const NOTHING_PAINTED: ReadonlySet<PaintedMarking> = new Set();
 
 /**
  * The three.js field, or an explanation in its place when its canvas can't get
@@ -283,6 +285,10 @@ function ThreeFieldView() {
         : KIT_FIELD_STYLE[venueKit];
     const venue3d = venueLook(fieldVenue, venueStyle);
     useFieldVenueAction(venueStyle);
+    // What the venue paints in Full color (its yard lines, hashes and numbers on turf): the grid
+    // leaves those out, so the field's own markings show once
+    const [venuePainted, setVenuePainted] =
+        useState<ReadonlySet<PaintedMarking>>(NOTHING_PAINTED);
     // Full color draws the grid in light ink over the dark turf
     const lineFieldProperties = useMemo(
         () =>
@@ -850,6 +856,7 @@ function ThreeFieldView() {
                             fieldProperties={fieldProperties}
                             look={venue3d}
                             around={venueAround(fieldVenueAround, venueStyle)}
+                            onPainted={setVenuePainted}
                         />
                         <CameraMarkerLayer fieldProperties={fieldProperties} />
                         <FieldLayer
@@ -858,6 +865,7 @@ function ThreeFieldView() {
                                 lineFieldProperties ?? fieldProperties
                             }
                             strips={strips}
+                            painted={venuePainted}
                             numberAtlas={atlases.number}
                             labelAtlas={atlases.checkpoint}
                         />

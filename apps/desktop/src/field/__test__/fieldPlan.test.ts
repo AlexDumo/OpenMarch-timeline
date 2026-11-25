@@ -101,6 +101,26 @@ describe("planField2d", () => {
         );
         expect(roles(false, false)).toEqual(new Set(["yardLine", "hash"]));
     });
+
+    it("leaves out what the venue paints, and keeps the step grid, half lines and labels", () => {
+        const plan = planField2d(base, {
+            gridLines: true,
+            halfLines: true,
+            painted: new Set([
+                "yardLine",
+                "hash",
+                "yardNumber",
+                "border",
+            ] as const),
+        });
+        expect(new Set(plan.lines.map((l) => l.role))).toEqual(
+            new Set(["grid", "halfLine"]),
+        );
+        expect(plan.shapes).toEqual([]);
+        expect(plan.texts.filter((t) => t.role === "yardNumber")).toEqual([]);
+        expect(plan.texts.some((t) => t.role === "checkpointLabel")).toBe(true);
+        expect(plan.border).toBeNull();
+    });
 });
 
 describe("planField2d yard numbers", () => {
