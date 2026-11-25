@@ -346,6 +346,20 @@ describe("Add selected to this cue, for Facing (#1318)", () => {
         ]);
     });
 
+    it("takes each one out of only their nearest cue when the slot is the whole show", () => {
+        // The trumpets' only Facing cue: its slot runs from the start of the show to the end
+        const rest = cue(8, "side2", TRUMPETS.slice(3));
+        const theirs = cue(10, "side2", [1, 2, 3], { transition: 2 });
+        const early = cue(2, "side1", [1, 2, 3]);
+        const late = cue(40, "back", [1, 2, 3]);
+        const cues = [early, rest, theirs, late];
+        const plan = add(cues, rest, [1, 2, 3]);
+        expect(plan.deletedCueIds).toEqual([theirs.id]);
+        const after = written(cues, plan);
+        expect(facing(after, 1, 4)).toBe(facing(cues, 1, 4));
+        expect(facing(after, 1, 41)).toBe(180);
+    });
+
     it("leaves Equipment's other counts alone, taking them out of its own count's other cue", () => {
         const eq = (count: number, value: string, ids: number[]) =>
             cue(count, value, ids, {
