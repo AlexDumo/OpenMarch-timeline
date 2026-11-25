@@ -16,7 +16,7 @@ import {
     type RouteGeometry,
     type XY,
 } from "@openmarch/core";
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { schema } from "@/global/database/db";
 import { readTimelineTables } from "@/timeline/timelineRows";
 import type { DbConnection, DbTransaction } from "./types";
@@ -251,8 +251,20 @@ export async function redrawPathInTransaction({
     const fresh = points.map(({ at, tension }) =>
         tension === undefined ? { at } : { at, tension },
     );
-    if (!(await isGroupRoute(tx, routeId)))
+    if (!(await isGroupRoute(tx, routeId))) {
+        // Drawing an exact path again replaces it with a drawn one (ADR 0018 §5); its stored
+        // geometry is only its ends, from which the new points are drawn
+        await tx
+            .update(schema.timeline_routes)
+            .set({ exact_path: null })
+            .where(
+                and(
+                    eq(schema.timeline_routes.id, routeId),
+                    isNotNull(schema.timeline_routes.exact_path),
+                ),
+            );
         return await editOwnRoutePointsInTransaction(tx, routeId, fresh);
+    }
     const resolver = createResolver((await readTimelineTables(tx)).snapshot);
     const seenLanes = new Set<number>();
     const founders: { w: Walker; A: XY; B: XY }[] = [];

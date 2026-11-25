@@ -11,6 +11,7 @@
  * Temporary copy (DE-6): the `schema` package will own these types from step 5, and this file
  * will import them from there.
  */
+import { EPS_GEOM } from "./geom";
 import type { XY } from "./types";
 
 /** Ticks per beat (DE-2): 480, the MIDI PPQ DAWs use; it divides by 2, 3, 4, 5, 6, 8, 10, 12, 16. */
@@ -86,6 +87,8 @@ export interface ExactPiece {
     length: number;
     /** The point at share `f` (0 to 1) of the piece's length */
     pointAt(f: number): XY;
+    /** An arc piece's circle (EP-3); absent on lines and cubics */
+    circle?: ArcCircle;
 }
 
 const sub = (a: XY, b: XY): XY => [a[0] - b[0], a[1] - b[1]];
@@ -151,6 +154,7 @@ function arcPiece(from: XY, to: XY, bend: number): ExactPiece | null {
         kind: "arc",
         from,
         to,
+        circle,
         length: radius * Math.abs(sweep),
         pointAt: (f) => {
             if (f <= 0) return from;
@@ -541,6 +545,87 @@ export function followExactEnds(
         }
     }
     return { v: 1, from, shapes, keys: path.keys.map((k) => ({ ...k })) };
+}
+
+/**
+ * A stored exact path walked by a move (ADR 0018 step 3, the resolver's seam): `at(A, B, p)` is
+ * where a marcher who starts the move at `A` and ends it at `B` is at progress `p` (0 to 1). The
+ * ends follow the spots first (EP-F, only when one is off by more than `EPS_GEOM`), then the path
+ * plays at tick `p` × its last key's tick (EP-R). When the move's length matches the path's, that
+ * is the move's own tick; when they differ, the path plays stretched or squeezed to fit, as a
+ * retime (EP-T) would, without rounding.
+ *
+ * A path whose followed ends break a rule (an arc whose ends now meet, or a path that now goes
+ * nowhere) can't play: the marcher walks straight from `A` to `B`, as a move with no path does.
+ */
+export interface ExactWalker {
+    path: ExactPath;
+    /** The path with its ends on `A` and `B` (EP-F), ready to play; null when it can't play */
+    playerFor(A: XY, B: XY): ExactPlayer | null;
+    at(A: XY, B: XY, p: number): XY;
+}
+
+/** A walker for `path`, keeping the player for the last pair of ends it was asked for. */
+export function exactWalker(path: ExactPath): ExactWalker {
+    const lastTick = path.keys[path.keys.length - 1]!.tick;
+    let cached: { A: XY; B: XY; player: ExactPlayer | null } | null = null;
+    const playerFor = (A: XY, B: XY): ExactPlayer | null => {
+        if (
+            cached &&
+            cached.A[0] === A[0] &&
+            cached.A[1] === A[1] &&
+            cached.B[0] === B[0] &&
+            cached.B[1] === B[1]
+        )
+            return cached.player;
+        const followed = exactPathOnSpots(path, A, B);
+        const player =
+            checkExactPath(followed).length === 0
+                ? exactPlayer(followed)
+                : null;
+        cached = { A, B, player };
+        return player;
+    };
+    return {
+        path,
+        playerFor,
+        at(A, B, p) {
+            const player = playerFor(A, B);
+            if (!player)
+                return p <= 0
+                    ? A
+                    : p >= 1
+                      ? B
+                      : [A[0] + (B[0] - A[0]) * p, A[1] + (B[1] - A[1]) * p];
+            if (p <= 0) return A;
+            if (p >= 1) return B;
+            return player.pointAt(p * lastTick);
+        },
+    };
+}
+
+/**
+ * EP-F for a move from `A` to `B`: the path with its first point on `A` and its last on `B`, each
+ * moved only when it is off by more than `EPS_GEOM` (`path` itself when neither is). The result
+ * may break a rule; the caller checks it.
+ */
+export function exactPathOnSpots(path: ExactPath, A: XY, B: XY): ExactPath {
+    const moveFrom = hyp(A, path.from) > EPS_GEOM;
+    const moveTo = hyp(B, exactEnd(path)) > EPS_GEOM;
+    if (!moveFrom && !moveTo) return path;
+    return followExactEnds(path, {
+        ...(moveFrom ? { from: A } : {}),
+        ...(moveTo ? { to: B } : {}),
+    });
+}
+
+/** Where the path ends: its last shape's end. */
+export function exactEnd(path: ExactPath): XY {
+    const last = path.shapes[path.shapes.length - 1];
+    if (!last) return path.from;
+    return last.kind === "points"
+        ? (last.points[last.points.length - 1] ?? path.from)
+        : last.to;
 }
 
 function copyShape(s: ExactShape): ExactShape {

@@ -15,16 +15,25 @@
  *   and write nothing.
  * - **AP-R7** the cut at a count lives in `timelineSplitAtBeat` (`planRouteCut` here).
  *
- * Range edits (AP-R4) and end and start changes (AP-R5) leave routes alone: R-14 always walks from
- * the marcher's real start to its real destination.
+ * Range edits (AP-R4) and end and start changes (AP-R5) leave drawn routes alone: R-14 always walks
+ * from the marcher's real start to its real destination. An exact path (ADR 0018 step 3,
+ * `timelineExactPaths`) is retimed by a range edit and cut by EP-T here.
  */
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import {
+    checkExactPath,
     createResolver,
     EPS_GEOM,
+    exactEnd,
+    exactPathOnSpots,
+    exactPointAt,
+    retimeExactPath,
     routePath,
     routePoint,
+    splitExactPath,
+    TICKS_PER_BEAT,
     validateRouteGeometry,
+    type ExactPath,
     type RoutePath,
     type AdjustProfile,
     type RouteGeometry,
@@ -463,9 +472,13 @@ export async function drawRouteInTransaction({
               .where(eq(schema.timeline_routes.id, lane.route_id))
               .get()
         : undefined;
-    const currentGeometry = current
-        ? (JSON.parse(current.geometry) as RouteGeometry)
-        : null;
+    // An exact path (ADR 0018 step 3) is replaced whole by the drawn one: none of its ends or
+    // points carry over
+    const replacesExact = current !== undefined && current.exact_path !== null;
+    const currentGeometry =
+        current && !replacesExact
+            ? (JSON.parse(current.geometry) as RouteGeometry)
+            : null;
     const currentIds = new Set(currentGeometry?.points.map((p) => p.id) ?? []);
     const taken = new Set(currentIds);
     for (const p of points)
@@ -504,6 +517,14 @@ export async function drawRouteInTransaction({
     });
 
     return await mapDbErrors(async () => {
+        if (current && replacesExact) {
+            await tx
+                .update(schema.timeline_routes)
+                .set({ geometry: json, exact_path: null })
+                .where(eq(schema.timeline_routes.id, current.id));
+            await markArcsInTransaction(tx, geometry);
+            return result(current.id);
+        }
         if (current)
             return result(
                 current.id,
@@ -686,6 +707,11 @@ export interface RouteCut {
     before: RouteGeometry;
     /** Where the marcher is on the route at the count */
     C: XY;
+    /**
+     * An exact path's two halves (EP-T split, ADR 0018 step 3), with `before` and `after` their
+     * plain geometry; a null half only stands still and gets no path. Absent for a drawn path.
+     */
+    exact?: { before: ExactPath | null; after: ExactPath | null };
 }
 
 /**
@@ -739,9 +765,22 @@ export async function planRouteCut(
         .where(eq(schema.timeline_routes.id, lane.route_id))
         .get();
     if (!route) refuse(`route ${lane.route_id} does not exist`);
-    const geometry = JSON.parse(route.geometry) as RouteGeometry;
     const A = resolver.explain(m, t.start_beat).origin;
     const B = await destinationOf(tx, t, row.slot_index);
+    if (route.exact_path !== null)
+        return {
+            transitionId: t.id,
+            slot: lane.slot_index,
+            routeId: route.id,
+            ...cutExactPath(
+                JSON.parse(route.exact_path) as ExactPath,
+                A,
+                B,
+                (beat - t.start_beat) * TICKS_PER_BEAT,
+                (t.end_beat - beat) * TICKS_PER_BEAT,
+            ),
+        };
+    const geometry = JSON.parse(route.geometry) as RouteGeometry;
     // R-14 with the route's tensions and the ends it was drawn against (step 2)
     const path = routePath(A, geometry.points, B, geometry);
     const pB = (beat - t.start_beat) / (t.end_beat - t.start_beat);
@@ -766,6 +805,74 @@ export async function planRouteCut(
         ),
     };
 }
+
+/**
+ * AP-R7 on an exact path (EP-T split, ADR 0018 §5): the path, its ends on the move's spots `A` and
+ * `B` as it plays (EP-F), cut at the count `beforeTicks` into a move `beforeTicks + afterTicks`
+ * long. Each half keeps its keys (`splitExactPath`), and is retimed to its move's length if the
+ * path's wasn't the move's. `C` is where it plays at the count. A half that only stands still is
+ * null, and so are both when the path can't play (then the marcher walks straight, as it would).
+ */
+export function cutExactPath(
+    stored: ExactPath,
+    A: XY,
+    B: XY,
+    beforeTicks: number,
+    afterTicks: number,
+): Pick<RouteCut, "before" | "after" | "C" | "exact"> {
+    const plain = (from: XY, to: XY): RouteGeometry => ({
+        v: 1,
+        from: [from[0], from[1]],
+        to: [to[0], to[1]],
+        points: [],
+    });
+    const whole = beforeTicks + afterTicks;
+    const path = exactPathOnSpots(stored, A, B);
+    const pathTicks = path.keys[path.keys.length - 1]!.tick;
+    const tick = Math.round((beforeTicks / whole) * pathTicks);
+    if (checkExactPath(path).length > 0) {
+        const f = beforeTicks / whole;
+        const C: XY = [A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f];
+        return {
+            C,
+            before: plain(A, C),
+            after: plain(C, B),
+            exact: { before: null, after: null },
+        };
+    }
+    const C = exactPointAt(path, tick);
+    const halves =
+        tick <= 0
+            ? { before: null, after: path }
+            : tick >= pathTicks
+              ? { before: path, after: null }
+              : splitExactPath(path, tick);
+    const fit = (half: ExactPath | null, ticks: number) =>
+        half === null ||
+        half.keys[half.keys.length - 1]!.tick === ticks ||
+        !(ticks >= 1)
+            ? half
+            : retimeExactPath(half, ticks);
+    const before = fit(halves.before, beforeTicks);
+    const after = fit(halves.after, afterTicks);
+    return {
+        C,
+        before: before ? exactRouteGeometry(before) : plain(A, C),
+        after: after ? exactRouteGeometry(after) : plain(C, B),
+        exact: { before, after },
+    };
+}
+
+/** The plain route geometry beside an exact path: its ends and no points. */
+export const exactRouteGeometry = (path: ExactPath): RouteGeometry => {
+    const end = exactEnd(path);
+    return {
+        v: 1,
+        from: [path.from[0], path.from[1]],
+        to: [end[0], end[1]],
+        points: [],
+    };
+};
 
 /**
  * AP-R7's two halves of `geometry` cut at distance `d` (at `C`) along its walked `path`: the
@@ -886,12 +993,6 @@ export async function writeRouteCutBeforeInTransaction(
     },
 ): Promise<void> {
     assertValid(validateRouteGeometry(cut.before), "route");
-    const route = (await tx
-        .insert(schema.timeline_routes)
-        .values({ geometry: JSON.stringify(cut.before) })
-        .returning()
-        .get())!;
-    await markArcsInTransaction(tx, cut.before);
     const [created] = await createTimelineTransitionsInTransaction({
         tx,
         newTransitions: [
@@ -916,6 +1017,17 @@ export async function writeRouteCutBeforeInTransaction(
             },
         ],
     });
+    // An exact path's half that only stands still gets no path: it stays where it is
+    if (cut.exact && cut.exact.before === null) return;
+    const route = (await tx
+        .insert(schema.timeline_routes)
+        .values({
+            geometry: JSON.stringify(cut.before),
+            exact_path: cut.exact ? JSON.stringify(cut.exact.before) : null,
+        })
+        .returning()
+        .get())!;
+    await markArcsInTransaction(tx, cut.before);
     await tx.insert(schema.timeline_lanes).values({
         transition_id: created!.id,
         slot_index: 0,
@@ -925,10 +1037,33 @@ export async function writeRouteCutBeforeInTransaction(
     });
 }
 
-/** Updates the route from the count in place, keeping its id (AP-R7). */
+/**
+ * Updates the route from the count in place, keeping its id (AP-R7). An exact path's half that
+ * only stands still has no path: the lane and the route go.
+ */
 export async function writeRouteCutAfterInTransaction(
     tx: DbTransaction,
     cut: RouteCut,
 ): Promise<void> {
-    await writeRouteGeometryInTransaction(tx, cut.routeId, cut.after);
+    if (!cut.exact) {
+        await writeRouteGeometryInTransaction(tx, cut.routeId, cut.after);
+        return;
+    }
+    if (cut.exact.after === null) {
+        const L = schema.timeline_lanes;
+        await tx.delete(L).where(eq(L.route_id, cut.routeId));
+        await deleteRouteSourcesInTransaction(tx, [cut.routeId]);
+        await tx
+            .delete(schema.timeline_routes)
+            .where(eq(schema.timeline_routes.id, cut.routeId));
+        return;
+    }
+    assertValid(validateRouteGeometry(cut.after), "route");
+    await tx
+        .update(schema.timeline_routes)
+        .set({
+            geometry: JSON.stringify(cut.after),
+            exact_path: JSON.stringify(cut.exact.after),
+        })
+        .where(eq(schema.timeline_routes.id, cut.routeId));
 }

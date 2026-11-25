@@ -3874,8 +3874,8 @@ to confirm before any code):** an **exact path** stores one marcher's walk durin
 fixed shapes plus timing keys. It's authored data, not a cache. You change it by redrawing it.
 This appendix gives the format's rules (EP), what a reader does with it (EP-R) and the converter
 that turns resolved motion into exact paths (EP-C, step 2). M.7 gives how exact paths sit in a
-`.om` file (step 5, `@openmarch/schema` 0.5.0). Storage and the editor are steps 3 and 4 and are
-not here.
+`.om` file (step 5, `@openmarch/schema` 0.5.0). M.8 gives how OpenMarch stores and plays exact
+paths (step 3). The editor is step 4 and is not here.
 
 ### M.1 Decisions (owner, 2026-11-22)
 
@@ -4038,3 +4038,20 @@ Validation applies EP-1 to EP-6 to each path and EP-P1 to EP-P3 to the list. Eve
 names its id. The package's tests cover these rules and EP-R2, and check that its copy of EP-R
 matches `packages/core`'s on shared paths. Not checked: whether a path's ends match the marcher's
 spots, and whether `marcherId` names a performer. The export keeps both right.
+
+### M.8 In a `.dots` file (step 3)
+
+An exact path is a route with an `exact_path` (`timeline_routes.exact_path`, migration 0029): the
+path as M.2's JSON, in field units with y down like every resolver coordinate. It is walked through
+its marcher's own lane (I-LN4: no offset, no Adjust), never as a trail. The route's `geometry`
+holds only the path's ends and no points, so a reader that doesn't know exact paths sees a plain own
+path. A file is written as version 19 with its first exact path, so builds before it refuse the
+file as written by a newer version; a file without one keeps its version and opens in them as
+before. 15 to 18 are taken by unmerged pathways steps, and this build refuses them.
+
+| ID | Rule |
+| --- | --- |
+| EP-S1 | **Play.** A founding span on a slot whose lane's route has an exact path plays it from the span's start `A` to its spot `B` at progress `p`: the path with its ends on `A` and `B` (EP-F, each moved only when off by more than `ε_geom`), at tick `p × lastKey.tick` (EP-R). When the move is the path's length, that is the move's own tick. A path whose followed ends break a rule walks straight. A join or resume walks straight, as on any lane. R-20 draws its lines and arcs exactly and its cubics as points within its tolerance. |
+| EP-S2 | **Write.** `setExactPath` stores a path for one marcher's move on its own lane: a new route, the own lane's route in place (keeping its id), or a group path's lane re-pointed at a new route. It is refused as drawing a path is (not in the move, following the leader, taken over at the start, a shared spot), and when the path breaks EP-1 to EP-6 or its last key isn't the move's length (EP-5). One undo step. |
+| EP-S3 | **Ends.** The stored path never changes when a spot moves: EP-F applies at play time, so its keys stay as written (QA-EP-5). |
+| EP-S4 | **Edits.** A rewrite of the route's drawn geometry (point drag, Corner/Smooth, Re-fit) is refused: "Exact paths are fixed. Redraw the path to change it." Drawing the marcher's path again replaces it with a drawn one. Remove path and deleting the move remove it. Split at the playhead cuts it by EP-T; each half is retimed to its move if the path's length wasn't the move's, and a half that only stands still gets no path. A range edit (resize, the page ripple) retimes it by EP-T; shifting a move in time changes no key. |

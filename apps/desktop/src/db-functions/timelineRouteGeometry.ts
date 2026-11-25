@@ -2,7 +2,8 @@
  * The one place a route's geometry is rewritten (pathways step 3b, spec v0.10 AP-H1): every path
  * edit, redraw, cut and Re-fit goes through `writeRouteGeometryInTransaction`, so a key anchored on
  * a point that went is re-homed in the same edit and never dropped silently. A new route has
- * nothing anchored on it, so inserting one doesn't come here.
+ * nothing anchored on it, so inserting one doesn't come here. An exact path (ADR 0018 step 3) is
+ * refused here: it changes only by being drawn again, set again, cut or retimed.
  *
  * What AP-H1 also names and doesn't exist yet plugs in here beside the lanes' profiles: handoff
  * ramps (step 25), pins and holds (step 5) and linked Adjusts (step 26). AP-R21's merge and join
@@ -30,6 +31,12 @@ export const arcRefusal = {
     tooRound: () => text.t("timeline.refusals.route.arcTooRound"),
     /** A smooth point at an end of an arc leg */
     smoothBesideArc: () => text.t("timeline.refusals.route.smoothBesideArc"),
+};
+
+/** ADR 0018 §5's refusal for an exact path, with the reason the app shows */
+export const exactPathRefusal = {
+    /** A point drag, Corner/Smooth, Re-fit, Adjust or any other edit of its drawn geometry */
+    fixed: () => text.t("timeline.refusals.route.exactPathFixed"),
 };
 
 /**
@@ -117,6 +124,8 @@ export async function writeRouteGeometryInTransaction(
     const L = schema.timeline_lanes;
     const row = await tx.select().from(R).where(eq(R.id, routeId)).get();
     if (!row) refuse(`route ${routeId} does not exist`);
+    // An exact path is fixed (ADR 0018 §5): only drawing it again replaces it, which clears it first
+    if (row.exact_path !== null) refuse(exactPathRefusal.fixed());
     refuseArcRules(next);
     const old = JSON.parse(row.geometry) as RouteGeometry;
     const adjusted = (await lanesOfRoute(tx, routeId)).flatMap((lane) => {

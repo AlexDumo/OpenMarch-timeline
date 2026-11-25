@@ -6,6 +6,7 @@ import type {
     PathParams,
     PathStyle,
     RouteGeometry,
+    ExactPath,
     RouteRow,
     RowImage,
     ShapeKind,
@@ -96,6 +97,11 @@ export const transitionFromRow = (row: TransitionDbRow): TransitionRow => ({
 /** A route (spec v0.9 §5.2): its geometry, parsed. */
 export const routeFromRow = (row: RouteDbRow): RouteRow => ({
     geometry: JSON.parse(row.geometry) as RouteGeometry,
+    // An exact path (ADR 0018 step 3), walked in place of `geometry`
+    exact:
+        row.exact_path === null
+            ? null
+            : (JSON.parse(row.exact_path) as ExactPath),
 });
 
 /** A lane (spec v0.10 J.1): its slot, route and start offset (null for an own lane). */
@@ -192,7 +198,7 @@ export const transitionFromImage = (image: RowImage): TransitionRow => {
     };
 };
 
-/** A route from its change-log image `{id, geometry}` (spec v0.9 §10.2). */
+/** A route from its change-log image `{id, geometry, exact}` (spec v0.9 §10.2, ADR 0018 step 3). */
 export const routeFromImage = (image: RowImage): RouteRow => ({
     geometry: field<RouteGeometry>(
         image,
@@ -200,6 +206,8 @@ export const routeFromImage = (image: RowImage): RouteRow => ({
         "routes",
         (v) => typeof v === "object" && v !== null,
     ),
+    // absent in an image from a file without the column (before migration 0029)
+    exact: (image.exact ?? null) as ExactPath | null,
 });
 
 /** A lane from its change-log image `{id, transition, slot, route, offset, adjust}` (spec v0.10). */

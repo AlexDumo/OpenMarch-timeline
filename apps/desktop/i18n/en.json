@@ -3387,7 +3387,8 @@
                 "refitNotNeeded": "The path already fits where its marchers stand",
                 "refitNoFounder": "Nobody starts on this path, so it has no ends to re-fit to",
                 "arcTooRound": "An arc can bend at most into a half circle",
-                "smoothBesideArc": "A point at an end of an arc must be a corner"
+                "smoothBesideArc": "A point at an end of an arc must be a corner",
+                "exactPathFixed": "Exact paths are fixed. Redraw the path to change it."
             },
             "trail": {
                 "tooFew": "Follow is for two or more marchers",

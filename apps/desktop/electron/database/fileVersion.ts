@@ -36,6 +36,16 @@
  *   them would walk the leg straight, or refuse the route, so a file is written as 14 when a route
  *   first gets a bulge. A file without one stays at the version it had, and the number is not
  *   lowered when the last arc goes.
+ * - 15 to 18 are taken by pathways steps on branches not merged here: 5 (pins), 26 (sub-group
+ *   Adjust), 10 (outlines) and 4g (order marks, #1099). Lab builds wrote them, so they are never
+ *   reused. This build doesn't know them and refuses such a file as written by a newer build
+ *   (`UNKNOWN_USER_VERSIONS`); each step takes its number out of that list when it merges.
+ * - 19: exact paths (ADR 0018 step 3, spec Appendix M): a route holds one marcher's walk as fixed
+ *   shapes plus timing keys (`timeline_routes.exact_path`, migration 0029), walked through its own
+ *   lane. A build that doesn't know it would walk that marcher on the route's plain `geometry`, a
+ *   straight line between the ends, and edit it as a drawn path, so a file is written as 19 with its
+ *   first exact path. A file without one stays at the version it had, and the number is not
+ *   lowered when the last one goes.
  */
 import type { DatabaseSync } from "node:sqlite";
 import { recoverParkedFloorInTransaction } from "./parkedFloor";
@@ -61,10 +71,23 @@ export const TRAIL_MODEL_USER_VERSION = 13;
 /** Version of a file with an arc leg on a route (pathways step 10a, spec Appendix L). */
 export const ARC_MODEL_USER_VERSION = 14;
 
+/** Version of a file with an exact path (ADR 0018 step 3, spec Appendix M). */
+export const EXACT_PATH_USER_VERSION = 19;
+
 /** Oldest version this build opens. Older files must go through 0.0.10 first. */
 export const MIN_SUPPORTED_USER_VERSION = PAGE_MODEL_USER_VERSION;
+/**
+ * Versions below the newest that this build doesn't know (pathways steps 5, 26, 10 and 4g, not
+ * merged here): refused as too new, never played wrong. A step takes its number out when it merges.
+ */
+export const UNKNOWN_USER_VERSIONS: readonly number[] = [15, 16, 17, 18];
 /** Newest version this build opens. Anything higher was written by a newer release. */
-export const MAX_SUPPORTED_USER_VERSION = ARC_MODEL_USER_VERSION;
+export const MAX_SUPPORTED_USER_VERSION = EXACT_PATH_USER_VERSION;
+
+/** Whether a newer build wrote `userVersion`: above the newest, or a number this build skips */
+export const isTooNewUserVersion = (userVersion: number): boolean =>
+    userVersion > MAX_SUPPORTED_USER_VERSION ||
+    UNKNOWN_USER_VERSIONS.includes(userVersion);
 /** Version written into a brand-new file: a new show is a timeline show. */
 export const NEW_FILE_USER_VERSION = TIMELINE_MODEL_USER_VERSION;
 
@@ -107,7 +130,7 @@ export function decideFileVersion(
     if (userVersion === PARKED_FLOOR_USER_VERSION) {
         return { action: "downgrade", version: TIMELINE_MODEL_USER_VERSION };
     }
-    if (userVersion > MAX_SUPPORTED_USER_VERSION) {
+    if (isTooNewUserVersion(userVersion)) {
         return { action: "refuse-too-new", version: userVersion };
     }
     if (isNewFile && userVersion === 0) {
@@ -127,7 +150,8 @@ export function isSupportedUserVersion(userVersion: number): boolean {
     return (
         userVersion >= MIN_SUPPORTED_USER_VERSION &&
         userVersion <= MAX_SUPPORTED_USER_VERSION &&
-        userVersion !== PARKED_FLOOR_USER_VERSION
+        userVersion !== PARKED_FLOOR_USER_VERSION &&
+        !UNKNOWN_USER_VERSIONS.includes(userVersion)
     );
 }
 

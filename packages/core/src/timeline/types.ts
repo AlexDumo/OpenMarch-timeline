@@ -6,6 +6,8 @@
  * All resolver arithmetic uses Float64 (spec section 10.1).
  */
 
+import type { ExactPath } from "./exactPath";
+
 export type Beat = number;
 export type XY = readonly [number, number];
 
@@ -239,6 +241,13 @@ export interface RouteGeometry {
 /** A row of the routes table (spec 5.1, D-19). */
 export interface RouteRow {
     geometry: RouteGeometry;
+    /**
+     * An exact path (ADR 0018 step 3, spec Appendix M): one marcher's walk as fixed shapes plus
+     * timing keys, walked through its own lane in place of `geometry` (EP-R, ends following their
+     * spots by EP-F). `geometry` then has no points and holds the path's ends, so a reader that
+     * doesn't know exact paths sees a plain own path. Absent or null for a drawn path.
+     */
+    exact?: ExactPath | null;
 }
 
 export interface TransitionRow {

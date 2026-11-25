@@ -29,6 +29,7 @@ import {
     walkedPoint,
     type LaneWalk,
 } from "./geom";
+import { exactWalker } from "./exactPath";
 import type {
     AssignmentRow,
     Beat,
@@ -169,6 +170,13 @@ export function createOracle(db: TimelineSnapshot): Oracle {
             if (l.transition !== tid || l.slot !== slot) continue;
             const r = db.routes?.[l.route];
             if (!r) throw new Error(`lane on ${tid}:${slot} has no route`);
+            // an exact path (ADR 0018 step 3), walked afresh on every read
+            if (r.exact)
+                return {
+                    route: r.geometry,
+                    offset: null,
+                    exact: exactWalker(r.exact),
+                };
             return {
                 route: r.geometry,
                 offset: l.offset,
