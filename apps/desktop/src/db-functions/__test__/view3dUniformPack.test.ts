@@ -796,6 +796,36 @@ describeDbTests("view3dUniformPack", (it) => {
             );
         });
 
+        it("matches inside SQLite: one query answers with the named values only, however many are asked", async ({
+            db,
+        }) => {
+            const worn = `library:worn@${HASH}`;
+            await wearThenDrop(db, worn);
+            const asked = [
+                ...Array.from(
+                    { length: 200 },
+                    (_, n) => `library:other-${n}@${HASH}`,
+                ),
+                worn,
+            ];
+            const all = db.all.bind(db);
+            const answers: unknown[][] = [];
+            const spy = Object.assign(Object.create(db) as typeof db, {
+                all: async (query: Parameters<typeof db.all>[0]) => {
+                    const rows = (await all(query)) as unknown[];
+                    answers.push(rows);
+                    return rows;
+                },
+            });
+            expect(
+                await valuesNamedInHistory({ db: spy, values: asked }),
+            ).toEqual(new Set([worn]));
+            // no history statement comes back: just the one value it names
+            expect(answers).toHaveLength(1);
+            expect(JSON.stringify(answers[0])).not.toContain("view3d_venue");
+            expect(answers[0]).toHaveLength(1);
+        });
+
         it("encodes a value as the history's stored SQL holds it", () => {
             expect(historyEncoding(`library:a'b@x`)).toBe(`library:a''b@x`);
             expect(historyEncoding(`library:a"b@x`)).toBe(`library:a\\"b@x`);
