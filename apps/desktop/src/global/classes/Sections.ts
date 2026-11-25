@@ -10,23 +10,31 @@ class Section {
     readonly prefix: string;
     /** The translation key for the section name */
     readonly tName: string;
+    /**
+     * Where the section faces before its first Facing cue, as a Facing value (e.g.
+     * `builtin:facing.side2`). Omitted, front.
+     */
+    readonly defaultFacing?: string;
 
     constructor({
         name,
         family,
         prefix,
         tName,
+        defaultFacing,
     }: {
         name: string;
         family: SectionFamily;
         prefix: string;
         tName: string;
+        defaultFacing?: string;
     }) {
         this.name = name;
         this.family = family;
         this.scoreOrder = Section.currentScoreOrder++;
         this.prefix = prefix;
         this.tName = tName;
+        this.defaultFacing = defaultFacing;
     }
 
     /**
@@ -217,6 +225,8 @@ export const SECTIONS: { [key: string]: Section } = {
         name: "Bass Drum",
         tName: "section.instrument.bassDrum",
         prefix: "D",
+        // Right side to the front: bass drums are played turned to side 2
+        defaultFacing: "builtin:facing.side2",
     }),
     Cymbals: new Section({
         family: FAMILIES.Battery,
@@ -229,6 +239,7 @@ export const SECTIONS: { [key: string]: Section } = {
         name: "Flub Drum",
         tName: "section.instrument.flubDrum",
         prefix: "L",
+        defaultFacing: "builtin:facing.side2",
     }),
     ColorGuard: new Section({
         family: FAMILIES.Guard,

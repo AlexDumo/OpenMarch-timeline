@@ -123,7 +123,7 @@ Each type is a lane on the timeline (D-6).
 | Equipment | Position  | How it is held           | Horn up, down, trail; sticks playing, in, down; set, port, present; tosses | Up, playing or set     |
 | Equipment | Silk      | A held flag's design     | Plain color; artwork later                                                 | The section's color    |
 | Looks     | Look      | Which uniform look       | A look from #972                                                           | The band or guard look |
-| Facing    | Facing    | Where the performer faces | Front, back, side 1, side 2, direction of travel, an angle, toward a point | Front                  |
+| Facing    | Facing    | Where the performer faces | Front, back, side 1, side 2, direction of travel, an angle, toward a point | Front (bass drums: side 2) |
 | Body      | Posture   | The body's posture       | Neutral, kneel; body visuals later                                         | Neutral                |
 
 - **Lights** is its own on/off type under Looks, added later. Lights are not
@@ -361,7 +361,11 @@ Facing row.
     left), Turn left 45° and Turn right 45° from it, and an angle exactly.
   - Facing cues are lasting only, and a snap unless given a transition (the
     2-count default above no longer holds for Facing).
-  - Before a performer's first Facing cue they face front (0°).
+  - Before a performer's first Facing cue they face their section's default:
+    front (0°) unless the section gives another. Bass drum and flub drum
+    sections give side 2 (90°, the right side toward the front), set on the
+    section (`Section.defaultFacing`), not stored as a cue (2026-11-26). Parade
+    sections can give their own the same way.
   - Direction of travel and toward a point stay in the library, not yet
     offered.
 - **The feet follow the path for any facing.** A facing that differs from

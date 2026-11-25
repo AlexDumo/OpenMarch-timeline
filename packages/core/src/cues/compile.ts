@@ -176,9 +176,10 @@ function lastingTimeline(
 
 /**
  * Adds each performer's angle to their Facing segments (fork #993), which come from the same
- * lasting timeline as every type's (`lastingTimeline`): front, 0°, until their first cue; a cue's
- * turn leads into its count (`transitionSegment`) at an even speed, from the angle they held
- * before to where the value takes them from there (`facingTargetDegrees`).
+ * lasting timeline as every type's (`lastingTimeline`). The default segment sets the angle until
+ * their first cue: front, 0°, unless the section gives another default (bass drums, side 2, 90°).
+ * A cue's turn leads into its count (`transitionSegment`) at an even speed, from the angle they
+ * held before to where the value takes them from there (`facingTargetDegrees`).
  */
 function withFacingDegrees(segments: readonly CueSegment[]): CueSegment[] {
     let current = 0;
@@ -188,6 +189,8 @@ function withFacingDegrees(segments: readonly CueSegment[]): CueSegment[] {
             current = facingTargetDegrees(seg.value, seg.settings, from);
             return { ...seg, fromDegrees: from, degrees: current };
         }
+        if (seg.kind === "default")
+            current = facingTargetDegrees(seg.value, seg.settings, current);
         return { ...seg, fromDegrees: current, degrees: current };
     });
 }
@@ -380,6 +383,8 @@ interface PerformerDefaults {
     equipment: CueTraceDefault & { holds: PerformerCarry };
     silk: CueTraceDefault;
     look: CueTraceDefault;
+    /** Where they face before their first Facing cue: the section's, else front. */
+    facing: CueTraceDefault;
     /** What Equipment gives from each count where its value changes, from count 0. */
     holds: readonly { at: number; holds: PerformerCarry }[];
 }
@@ -428,6 +433,8 @@ function defaultTrace(
             return defaults.silk;
         case "look":
             return defaults.look;
+        case "facing":
+            return defaults.facing;
         case "position": {
             const holds = holdsAt(defaults, count);
             return {
@@ -646,6 +653,16 @@ function performerDefaults(
     const show = input.showDefaults ?? {};
     return {
         equipment,
+        facing: section?.facing
+            ? {
+                  source: "section_facing",
+                  value: section.facing,
+                  section: marcher.section,
+              }
+            : {
+                  source: "library",
+                  value: defaultCueValue("facing", marcher.carries),
+              },
         silk: {
             source: "section_color",
             value: defaultCueValue("silk", marcher.carries),
@@ -702,6 +719,8 @@ function defaultSpans(
             ];
         case "look":
             return [{ at: 0, value: defaults.look.value }];
+        case "facing":
+            return [{ at: 0, value: defaults.facing.value }];
         case "position":
             return defaults.holds.map(({ at, holds }) => ({
                 at,
