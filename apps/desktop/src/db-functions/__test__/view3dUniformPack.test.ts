@@ -1,5 +1,5 @@
 import { describe, expect } from "vitest";
-import { describeDbTests } from "@/test/base";
+import { describeDbTests, schema } from "@/test/base";
 import FootballTemplates from "@/global/classes/fieldTemplates/Football";
 import {
     amendLatestUndoEntry,
@@ -440,6 +440,91 @@ describeDbTests("view3dUniformPack", (it) => {
                     Promise.resolve(1),
                 ),
             ).toEqual({ amended: false });
+        });
+
+        it("rolls back a failing amend and lets an undo queued behind it run", async ({
+            db,
+        }) => {
+            const origin = await store(db, packFile("Home uniform", 1));
+            const first = await saveUniformItemsPack({
+                db,
+                pack: crestPack(4),
+                manifest: readUniformPack(crestPack(4)).manifest,
+                field,
+                versionOf: parseShowAssetRef(origin)!.id,
+                expect: origin,
+            });
+            let release: () => void = () => undefined;
+            const gate = new Promise<void>((r) => (release = r));
+            const venue = (await getStoredVenueSettings({ db }))!;
+            const amending = amendLatestUndoEntry(
+                db,
+                first.token!,
+                ["view3d_venue"],
+                async (tx) => {
+                    await updateVenueSettingsInTransaction({
+                        tx,
+                        settings: { ...venue, crowd: !venue.crowd },
+                    });
+                    await gate;
+                    throw new Error("the save failed");
+                },
+            );
+            const undo = performUndo(db);
+            await new Promise((r) => setTimeout(r, 30));
+            release();
+            await expect(amending).rejects.toThrow("the save failed");
+            // the amend's write is gone, and the undo still undoes the burst's first save
+            expect((await undo).success).toBe(true);
+            const back = (await getStoredVenueSettings({ db }))!;
+            expect(back.uniformArtwork).toBe(origin);
+            expect(back.crowd).toBe(venue.crowd);
+        });
+
+        it("throws and rolls back an amend that writes a table it doesn't name", async ({
+            db,
+        }) => {
+            const origin = await store(db, packFile("Home uniform", 1));
+            const first = await saveUniformItemsPack({
+                db,
+                pack: crestPack(4),
+                manifest: readUniformPack(crestPack(4)).manifest,
+                field,
+                versionOf: parseShowAssetRef(origin)!.id,
+                expect: origin,
+            });
+            const venue = (await getStoredVenueSettings({ db }))!;
+            const utility = await db.query.utility.findFirst();
+            await expect(
+                amendLatestUndoEntry(
+                    db,
+                    first.token!,
+                    ["view3d_venue"],
+                    async (tx) => {
+                        await updateVenueSettingsInTransaction({
+                            tx,
+                            settings: { ...venue, crowd: !venue.crowd },
+                        });
+                        // a write to a table with history the amend doesn't name: it would
+                        // have no undo once the amend's rows are deleted
+                        await tx
+                            .update(schema.utility)
+                            .set({
+                                last_page_counts:
+                                    (utility?.last_page_counts ?? 0) + 1,
+                            })
+                            .run();
+                    },
+                ),
+            ).rejects.toThrow(/outside view3d_venue/);
+            expect((await getStoredVenueSettings({ db }))?.crowd).toBe(
+                venue.crowd,
+            );
+            expect((await db.query.utility.findFirst())?.last_page_counts).toBe(
+                utility?.last_page_counts,
+            );
+            // nothing changed the history: the burst's token still amends
+            expect(await getLatestUndoEntryToken(db)).toBe(first.token);
         });
 
         it("never leaves a value the 3D View can still name unresolvable during a burst (#1258)", async ({
