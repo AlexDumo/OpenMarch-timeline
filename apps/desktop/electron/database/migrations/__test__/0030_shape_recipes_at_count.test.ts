@@ -13,6 +13,7 @@ import * as os from "os";
 import * as path from "path";
 import {
     createNewTimelineShow,
+    migrationsFolder,
     withDb,
 } from "../../__test__/convertOnOpenFixtures";
 import {
@@ -40,7 +41,10 @@ const AT_COUNT = SHAPE_AT_COUNT_MIGRATION;
  * 7. an order mark at 12.5 (2), newer than 3: 3 loses marcher 2
  * 8. a shape in a move that's gone (only with foreign keys off): dropped, as the cascade would
  */
-async function betaFile(file: string, history: "names recipes" | "other") {
+async function betaFile(
+    file: string,
+    history: "names recipes" | "names members" | "other",
+) {
     await createNewTimelineShow(file);
     rollBackMigrationsFrom(file, SHAPE_AT_COUNT_MIGRATION.idx);
     withDb(file, (db) => {
@@ -88,6 +92,12 @@ async function betaFile(file: string, history: "names recipes" | "other") {
             db.exec(`
                 INSERT INTO history_undo (history_group, sql) VALUES (1, 'DELETE FROM "timeline_shape_recipes" WHERE rowid=6');
                 INSERT INTO history_undo (history_group, sql) VALUES (2, 'UPDATE "marchers" SET "name"=NULL WHERE rowid=1');
+                INSERT INTO history_redo (history_group, sql) VALUES (1, 'UPDATE "marchers" SET "name"=''A'' WHERE rowid=1');
+            `);
+        else if (history === "names members")
+            // Only member rows: a step that would put back member 7, which 0030 deletes without logging
+            db.exec(`
+                INSERT INTO history_undo (history_group, sql) VALUES (1, 'INSERT INTO "timeline_shape_recipe_marchers" ("id","recipe_id","marcher_id","slot","x","y") VALUES (7,3,2,1,0,0)');
                 INSERT INTO history_redo (history_group, sql) VALUES (1, 'UPDATE "marchers" SET "name"=''A'' WHERE rowid=1');
             `);
         else
@@ -242,21 +252,28 @@ describe(`Migration ${AT_COUNT.tag}`, () => {
         );
     });
 
-    it("clears undo and redo in a file whose history names the recipes table, and logs no step of its own", async () => {
-        await betaFile(file, "names recipes");
-        await migrateFile(file);
-        withDb(file, (db) => {
-            expect(db.prepare("SELECT * FROM history_undo").all()).toEqual([]);
-            expect(db.prepare("SELECT * FROM history_redo").all()).toEqual([]);
-            expect(
-                db
-                    .prepare(
-                        "SELECT cur_undo_group, cur_redo_group FROM history_stats",
-                    )
-                    .get(),
-            ).toEqual({ cur_undo_group: 1, cur_redo_group: 1 });
-        });
-    });
+    it.each(["names recipes", "names members"] as const)(
+        "clears undo and redo in a file whose history %s, and logs no step of its own",
+        async (history) => {
+            await betaFile(file, history);
+            await migrateFile(file);
+            withDb(file, (db) => {
+                expect(db.prepare("SELECT * FROM history_undo").all()).toEqual(
+                    [],
+                );
+                expect(db.prepare("SELECT * FROM history_redo").all()).toEqual(
+                    [],
+                );
+                expect(
+                    db
+                        .prepare(
+                            "SELECT cur_undo_group, cur_redo_group FROM history_stats",
+                        )
+                        .get(),
+                ).toEqual({ cur_undo_group: 1, cur_redo_group: 1 });
+            });
+        },
+    );
 
     it("keeps the history of a file whose history doesn't name the table", async () => {
         await betaFile(file, "other");
@@ -327,5 +344,70 @@ describe(`Migration ${AT_COUNT.tag}`, () => {
         });
         await migrateFile(file);
         expect(recipesOf(file)).toEqual(after);
+    });
+
+    /**
+     * Fork PR #1322 holds 0029 (`0029_timeline_exact_paths`), dated before 0030. The runner applies
+     * only migrations dated after the newest one a file records, so when #1322 is merged in, its
+     * migration must be dated after 0030; its `ADD COLUMN` is guarded, so a file that took it under
+     * the old date runs it again safely. A folder of this build's migrations plus #1322's, at `when`.
+     */
+    const withExactPaths = (when: number) => {
+        const folder = fs.mkdtempSync(path.join(dir, "migrations-"));
+        fs.mkdirSync(path.join(folder, "meta"));
+        for (const f of fs.readdirSync(migrationsFolder))
+            if (f.endsWith(".sql"))
+                fs.copyFileSync(
+                    path.join(migrationsFolder, f),
+                    path.join(folder, f),
+                );
+        const tag = "0029_timeline_exact_paths";
+        fs.writeFileSync(
+            path.join(folder, `${tag}.sql`),
+            'ALTER TABLE `timeline_routes` ADD COLUMN `exact_path` text CONSTRAINT "timeline_routes_exact_path_check" CHECK(exact_path IS NULL OR json_valid(exact_path));',
+        );
+        const journal = JSON.parse(
+            fs.readFileSync(
+                path.join(migrationsFolder, "meta/_journal.json"),
+                "utf-8",
+            ),
+        ) as { entries: { when: number; tag: string }[] };
+        journal.entries.push({
+            idx: journal.entries.length,
+            version: "6",
+            when,
+            tag,
+            breakpoints: true,
+        } as never);
+        journal.entries.sort((x, y) => x.when - y.when);
+        fs.writeFileSync(
+            path.join(folder, "meta/_journal.json"),
+            JSON.stringify(journal),
+        );
+        return folder;
+    };
+    const hasExactPath = () =>
+        withDb(file, (db) =>
+            (
+                db
+                    .prepare(
+                        "SELECT name FROM pragma_table_info('timeline_routes')",
+                    )
+                    .all() as { name: string }[]
+            ).some((c) => c.name === "exact_path"),
+        );
+
+    it("#1322's 0029 reaches a file already at 0030 only when dated after 0030, and runs again safely", async () => {
+        await createNewTimelineShow(file);
+        // Dated as #1322 has it today, before 0030: a file at 0030 never takes it
+        expect(1795625304589).toBeLessThan(AT_COUNT.when);
+        await migrateFile(file, withExactPaths(1795625304589));
+        expect(hasExactPath()).toBe(false);
+        // Dated after 0030, as the merge must date it: it runs
+        await migrateFile(file, withExactPaths(AT_COUNT.when + 1000));
+        expect(hasExactPath()).toBe(true);
+        // A file that took it under an earlier date takes it again without error
+        await migrateFile(file, withExactPaths(AT_COUNT.when + 2000));
+        expect(hasExactPath()).toBe(true);
     });
 });

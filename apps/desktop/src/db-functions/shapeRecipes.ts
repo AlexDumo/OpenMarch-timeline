@@ -56,9 +56,9 @@ const noMembers = () =>
 export const sameBeat = (a: number, b: number): boolean =>
     Math.abs(a - b) < 1e-9;
 
-/** Where-clause for the recipes standing at count `beat` */
+/** Where-clause for the recipes standing at count `beat`: a range, so the `beat` index serves it */
 export const recipesAtBeat = (beat: number) =>
-    sql`abs(${recipes.beat} - ${beat}) < 1e-9`;
+    sql`${recipes.beat} BETWEEN ${beat - 1e-9} AND ${beat + 1e-9}`;
 
 /**
  * Saves a recipe for `members` at count `beat`, replacing `replaces` when given (an edited recipe

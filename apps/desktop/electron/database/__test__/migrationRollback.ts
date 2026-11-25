@@ -27,7 +27,8 @@ export const migrationTagged = (tag: string) =>
 
 /**
  * Shapes at a count (ADR 0006 revision of 2026-11-22). Numbered 0030 because fork PR #1322 holds
- * 0029; found by its tag, so its journal position can change when #1322's 0029 is merged before it.
+ * 0029; found by its tag, so nothing here changes however #1322's migration is merged (it must be
+ * dated after this one, see `0030_shape_recipes_at_count.sql`).
  */
 export const SHAPE_AT_COUNT_MIGRATION = migrationTagged(
     "0030_shape_recipes_at_count",

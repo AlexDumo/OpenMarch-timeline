@@ -906,7 +906,7 @@ describeDbTests(
             expect((await atFlags(db, a))[3]).toEqual(FAR);
         });
 
-        it("with only Held marchers dragged, the after-write step gets the arrival's move, and keepUnchanged writes a stay", async ({
+        it("with only Held marchers dragged, the after-write step gets the count the edit writes at, and keepUnchanged writes a stay", async ({
             db,
             marchersAndPages: _,
         }) => {
@@ -940,7 +940,8 @@ describeDbTests(
                     seen.push(beat);
                 },
             });
-            // The count the edit writes at, where the arrival's move ends
+            // The count the edit writes at: the end of the window (page 3), not the end of the
+            // arrival's move (page 2's flag), which is where the Held marchers' rows end
             expect(seen).toEqual([PAGE3.end]);
             expect(result.slots.map((s) => s.marcherId).sort()).toEqual(
                 [a, b].sort(),

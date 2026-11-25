@@ -1056,7 +1056,7 @@ describe("DatabaseSync Repair", () => {
             }
         });
 
-        it("gives the shape recipes of a file from before 0030 the counts 0030 would", async () => {
+        it("gives the shape recipes of a file from before 0030 the counts and clean-up 0030 would", async () => {
             const originalDbPath = path.join(tempDir, "before-0030.dots");
             (await createNewDatabaseWithMigrations(originalDbPath)).close();
             rollBackMigrationsFrom(
@@ -1072,9 +1072,11 @@ describe("DatabaseSync Repair", () => {
                 INSERT INTO timeline_shape_recipes (id, timeline_id, kind, kind_version, params, order_mode) VALUES
                     (1, 1, 'line', 1, '{}', 'nearest'),
                     (2, NULL, 'line', 1, '{}', 'nearest'),
-                    (3, NULL, 'order', 1, '{"beat":6.5}', 'keep');
+                    (3, NULL, 'order', 1, '{"beat":6.5}', 'keep'),
+                    (4, 1, 'arc', 1, '{}', 'nearest'),
+                    (5, 99, 'line', 1, '{}', 'nearest');
                 INSERT INTO timeline_shape_recipe_marchers (recipe_id, marcher_id, slot, x, y) VALUES
-                    (1, 1, 0, 0, 0), (2, 1, 0, 0, 0), (3, 1, 0, 0, 0);
+                    (1, 1, 0, 0, 0), (2, 1, 0, 0, 0), (3, 1, 0, 0, 0), (4, 1, 0, 0, 0), (5, 1, 0, 0, 0);
             `);
             originalDb.close();
 
@@ -1090,17 +1092,23 @@ describe("DatabaseSync Repair", () => {
                         .all()
                         .map((row) => ({ ...row })),
                 ).toEqual([
-                    { id: 1, beat: 16, shape_key: 1, params: "{}" },
+                    // 1 lost marcher 1 to the newer 4 at the same count and went; 5's move is gone
                     { id: 2, beat: 0, shape_key: 2, params: "{}" },
                     { id: 3, beat: 6.5, shape_key: 3, params: "{}" },
+                    { id: 4, beat: 16, shape_key: 4, params: "{}" },
                 ]);
                 expect(
                     fixedDb
                         .prepare(
-                            "SELECT count(*) AS n FROM timeline_shape_recipe_marchers",
+                            "SELECT recipe_id FROM timeline_shape_recipe_marchers ORDER BY recipe_id",
                         )
-                        .get(),
-                ).toEqual({ n: 3 });
+                        .all()
+                        .map((row) => ({ ...row })),
+                ).toEqual([
+                    { recipe_id: 2 },
+                    { recipe_id: 3 },
+                    { recipe_id: 4 },
+                ]);
             } finally {
                 fixedDb.close();
             }

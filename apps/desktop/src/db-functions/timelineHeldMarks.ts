@@ -220,11 +220,15 @@ export async function marcherRecipeTimelines(
     const l = schema.timelines;
     const a = schema.timeline_assignments;
     const t = schema.timeline_transitions;
+    // From the moves asked about to the recipes at their ends, through the `beat` index
     const rows = await tx
         .selectDistinct({ timelineId: l.id, marcherId: m.marcher_id })
-        .from(m)
-        .innerJoin(r, eq(r.id, m.recipe_id))
-        .innerJoin(l, sql`abs(${l.end_beat} - ${r.beat}) < 1e-9`)
+        .from(l)
+        .innerJoin(
+            r,
+            sql`${r.beat} BETWEEN ${l.end_beat} - 1e-9 AND ${l.end_beat} + 1e-9`,
+        )
+        .innerJoin(m, eq(m.recipe_id, r.id))
         .where(
             and(
                 inArray(l.id, [...new Set(timelineIds)]),

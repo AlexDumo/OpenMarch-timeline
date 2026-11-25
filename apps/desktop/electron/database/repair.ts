@@ -135,6 +135,8 @@ const copyTablesFromAttachedOriginal = (
     const attachName = "original_db";
     newDb.prepare(`ATTACH DATABASE ? AS ${attachName}`).run(originalDbPath);
 
+    // Whether pre-0030 recipes were copied with counts, so 0030's clean-up runs after the copy
+    let recipesFromMoves = false;
     try {
         for (const tableName of singleRowTables) {
             copyFieldPropertiesFromOriginalDatabase(
@@ -182,6 +184,7 @@ const copyTablesFromAttachedOriginal = (
                 newColumns.some((c) => c.name === "beat")
             ) {
                 newDb.prepare(recipeCountsFromMoves(attachName)).run();
+                recipesFromMoves = true;
                 console.log(`Copied data from table: ${tableName}`);
                 continue;
             }
@@ -199,6 +202,8 @@ const copyTablesFromAttachedOriginal = (
             newDb.prepare(insertSql).run();
             console.log(`Copied data from table: ${tableName}`);
         }
+        if (recipesFromMoves)
+            for (const statement of RECIPE_CLEAN_UP) newDb.exec(statement);
     } finally {
         // Detach the original database
         newDb.prepare(`DETACH DATABASE ${attachName}`).run();
@@ -216,6 +221,18 @@ const recipeCountsFromMoves = (attachName: string) =>
     `SELECT r."id", CASE WHEN r."kind" IN ('order', 'orderClear') AND json_type(r."params", '$.beat') IN ('integer', 'real') THEN max(0.0, json_extract(r."params", '$.beat')) WHEN r."timeline_id" IS NULL THEN 0.0 ELSE CAST(t."end_beat" AS REAL) END, r."id", r."kind", r."kind_version", ` +
     `CASE WHEN r."kind" IN ('order', 'orderClear') AND json_type(r."params", '$.beat') IS NOT NULL THEN json_remove(r."params", '$.beat') ELSE r."params" END, r."order_mode", r."reverse", r."created_at" ` +
     `FROM ${attachName}."timeline_shape_recipes" r LEFT JOIN ${attachName}."timelines" t ON t."id" = r."timeline_id" WHERE r."timeline_id" IS NULL OR t."id" IS NOT NULL`;
+
+/**
+ * 0030's clean-up after its copy, for recipes copied by `recipeCountsFromMoves`, so a repaired file
+ * matches a migrated one: no member of a recipe left out, a marcher listed twice at one count stays
+ * in the newer recipe (shapes and ungroup marks one class, order marks the other), and recipes
+ * left with no member go
+ */
+const RECIPE_CLEAN_UP = [
+    `DELETE FROM "timeline_shape_recipe_marchers" WHERE "recipe_id" NOT IN (SELECT "id" FROM "timeline_shape_recipes")`,
+    `DELETE FROM "timeline_shape_recipe_marchers" WHERE "id" IN (SELECT m."id" FROM "timeline_shape_recipe_marchers" m JOIN "timeline_shape_recipes" r ON r."id" = m."recipe_id" WHERE EXISTS (SELECT 1 FROM "timeline_shape_recipe_marchers" m2 JOIN "timeline_shape_recipes" r2 ON r2."id" = m2."recipe_id" WHERE m2."marcher_id" = m."marcher_id" AND r2."id" > r."id" AND abs(r2."beat" - r."beat") < 1e-9 AND (r2."kind" IN ('order', 'orderClear')) = (r."kind" IN ('order', 'orderClear'))))`,
+    `DELETE FROM "timeline_shape_recipes" WHERE NOT EXISTS (SELECT 1 FROM "timeline_shape_recipe_marchers" m WHERE m."recipe_id" = "timeline_shape_recipes"."id")`,
+];
 
 export const copyFieldPropertiesFromOriginalDatabase = (
     originalDb: DatabaseSync,

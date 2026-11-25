@@ -1,5 +1,8 @@
--- Numbered 0030: 0029 is held by fork PR #1322 (exact paths). When #1322 reaches main and main is
--- merged into shape-count/host, its 0029 goes before this one in the drizzle journal.
+-- Numbered 0030: 0029 is held by fork PR #1322 (`0029_timeline_exact_paths`). The runner applies
+-- only migrations dated after the newest one a file records, so when #1322 is merged in, its
+-- migration must be dated after this one (`when` in the journal), or files that took 0030 never
+-- get it. Its `ADD COLUMN` is guarded, so a file that took it under its old date runs it again
+-- safely (`0030_shape_recipes_at_count.test.ts`).
 -- A shape is a formation at a count (ADR 0006 revision of 2026-11-22, §1): a placed recipe stands
 -- at a count (`beat`) instead of hanging off a move (`timeline_id`), and every mark of one shape
 -- carries one key (`shape_key`). SQLite can't drop a column that has a foreign key, so
@@ -13,8 +16,11 @@
 -- - A marcher listed twice at one count (data from before rule 2, or a bug) stays in the newer
 --   recipe (higher id); shapes and ungroup marks are one class, order marks another. Recipes left
 --   with no member are deleted.
--- - Undo and redo are both cleared in a file whose history names `timeline_shape_recipes`: an old
---   step would write `timeline_id`. Other files keep their history (as the kept-spots drop did).
+-- - Undo and redo are both cleared in a file whose history names `timeline_shape_recipes` or
+--   `timeline_shape_recipe_marchers` (the prefix `timeline_shape_recipe` matches both): an old step
+--   would write `timeline_id`, and the clean-up below deletes member rows without logging, so an
+--   old step on them could put back a duplicate or a member of a dropped recipe. Other files keep
+--   their history (as the kept-spots drop did).
 --
 -- Safe to run twice (`addColumnGuard.ts` skips an `ADD COLUMN` the table has): the three
 -- `ADD COLUMN`s give the old table whichever of `timeline_id`, `beat` and `shape_key` it lacks, so
@@ -34,10 +40,10 @@ ALTER TABLE `timeline_shape_recipes` ADD COLUMN `shape_key` integer;--> statemen
 DROP TRIGGER IF EXISTS `timeline_shape_recipe_marchers_it`;--> statement-breakpoint
 DROP TRIGGER IF EXISTS `timeline_shape_recipe_marchers_ut`;--> statement-breakpoint
 DROP TRIGGER IF EXISTS `timeline_shape_recipe_marchers_dt`;--> statement-breakpoint
-UPDATE `history_stats` SET `cur_undo_group` = 1, `cur_redo_group` = 1 WHERE EXISTS (SELECT 1 FROM `history_undo` WHERE instr(`sql`, 'timeline_shape_recipes') > 0) OR EXISTS (SELECT 1 FROM `history_redo` WHERE instr(`sql`, 'timeline_shape_recipes') > 0);--> statement-breakpoint
-DELETE FROM `history_redo` WHERE EXISTS (SELECT 1 FROM `history_undo` WHERE instr(`sql`, 'timeline_shape_recipes') > 0);--> statement-breakpoint
-DELETE FROM `history_undo` WHERE EXISTS (SELECT 1 FROM `history_undo` WHERE instr(`sql`, 'timeline_shape_recipes') > 0) OR EXISTS (SELECT 1 FROM `history_redo` WHERE instr(`sql`, 'timeline_shape_recipes') > 0);--> statement-breakpoint
-DELETE FROM `history_redo` WHERE EXISTS (SELECT 1 FROM `history_redo` WHERE instr(`sql`, 'timeline_shape_recipes') > 0);--> statement-breakpoint
+UPDATE `history_stats` SET `cur_undo_group` = 1, `cur_redo_group` = 1 WHERE EXISTS (SELECT 1 FROM `history_undo` WHERE instr(`sql`, 'timeline_shape_recipe') > 0) OR EXISTS (SELECT 1 FROM `history_redo` WHERE instr(`sql`, 'timeline_shape_recipe') > 0);--> statement-breakpoint
+DELETE FROM `history_redo` WHERE EXISTS (SELECT 1 FROM `history_undo` WHERE instr(`sql`, 'timeline_shape_recipe') > 0);--> statement-breakpoint
+DELETE FROM `history_undo` WHERE EXISTS (SELECT 1 FROM `history_undo` WHERE instr(`sql`, 'timeline_shape_recipe') > 0) OR EXISTS (SELECT 1 FROM `history_redo` WHERE instr(`sql`, 'timeline_shape_recipe') > 0);--> statement-breakpoint
+DELETE FROM `history_redo` WHERE EXISTS (SELECT 1 FROM `history_redo` WHERE instr(`sql`, 'timeline_shape_recipe') > 0);--> statement-breakpoint
 CREATE TABLE `__new_timeline_shape_recipes` (
 	`id` integer PRIMARY KEY NOT NULL,
 	`beat` real NOT NULL,

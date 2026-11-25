@@ -179,20 +179,22 @@ export async function writePlacement(
             setUnmoved: true,
             setAll: placement.setAll,
             afterWrite: async (tx, beat) => {
-                const own =
-                    replaces !== undefined && sameCount(replaces.beat, beat);
-                // A shape changed at a later count its members only stand still through, with
-                // nobody set there: saved below, at its own count, instead of copied here (#485)
-                if (
-                    replaces &&
-                    !own &&
-                    !(await anyArrivesAt(tx, beat, marcherIds))
-                )
-                    return false;
                 saved = true;
+                // A shape changed at a later count its members only stand still through, with
+                // nobody set there (#485; Held members, whose edit moved their arrival and the
+                // whole hold): the change is the shape's own, at its own count, in this same edit.
+                // Otherwise it's saved here: in place at its own count, or as a copy at a later one
+                const there =
+                    replaces !== undefined &&
+                    !sameCount(replaces.beat, beat) &&
+                    !(await anyArrivesAt(tx, beat, marcherIds))
+                        ? replaces.beat
+                        : beat;
+                const own =
+                    replaces !== undefined && sameCount(replaces.beat, there);
                 await saveShapeRecipeInTransaction({
                     tx,
-                    beat,
+                    beat: there,
                     recipe: placement.recipe,
                     members,
                     ...(own
@@ -203,8 +205,8 @@ export async function writePlacement(
                 });
             },
         });
-        // Nobody moved and nobody arrives here (a change without `setAll`): the change goes to the
-        // recipe shown, at its own count
+        // The edit wrote nothing, not even the recipe (Basic locked every member): the change
+        // goes to the recipe shown, at its own count
         if (!saved && replaces) {
             await transactionWithHistory(db, "editShapeRecipe", (tx) =>
                 saveShapeRecipeInTransaction({
