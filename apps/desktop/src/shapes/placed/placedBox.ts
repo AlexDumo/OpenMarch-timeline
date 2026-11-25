@@ -20,7 +20,18 @@ import { SHAPE_TOOLS } from "../tool/shapeTools";
 import type { ShapeContext, XY } from "../types";
 import { frameToField, pivotPoint } from "../frame/frame";
 import { pivotOf } from "../frame/pivot";
+import {
+    applySimilarity,
+    fitSimilarity,
+    isTranslation,
+    similarFrame,
+    similarityScale,
+    type Similarity,
+} from "../frame/similarity";
 import { closedOf } from "../distribute/modes";
+import type { LineParams } from "../line/lineGeometry";
+import { scaleLine } from "../line/lineLinks";
+import { linksKind } from "./shapeLinks";
 
 /**
  * Placed shapes (docs/timeline/research/shapes/07-placed-boxes.md): a shape's recipe, read back.
@@ -190,6 +201,15 @@ export type MembershipChange =
     | { readonly type: "none" }
     /** Every member moved the same way: the box moves with them */
     | { readonly type: "move"; readonly delta: XY }
+    /**
+     * Every member went through one turn, even scale or mirror (`sim`, #1236): the shape goes with
+     * them ({@link transformedBox}), or, where its kind can't take it there, `left` leave it
+     */
+    | {
+          readonly type: "transform";
+          readonly sim: Similarity;
+          readonly left: readonly number[];
+      }
     /** These members moved off their spots and leave the box */
     | { readonly type: "leave"; readonly left: readonly number[] };
 
@@ -213,7 +233,27 @@ export function membershipAfter(
         });
         if (together) return { type: "move", delta };
     }
-    return { type: "leave", left: off.map((m) => m.marcherId) };
+    const left = off.map((m) => m.marcherId);
+    // Turned or scaled evenly about a member, that one stays where it is
+    const sim = similarityOf(
+        box.recipe.members.map((m) => ({
+            from: m,
+            to: moved.get(m.marcherId) ?? m,
+        })),
+    );
+    if (sim) return { type: "transform", sim, left };
+    return { type: "leave", left };
+}
+
+/**
+ * The turn, even scale or mirror taking each `from` to its `to` (#1236), within what a marcher on
+ * its spot may be off by; null when there's none, or it only moves them
+ */
+export function similarityOf(
+    pairs: readonly { readonly from: XY; readonly to: XY }[],
+): Similarity | null {
+    const sim = fitSimilarity(pairs, ON_SPOT);
+    return sim && !isTranslation(sim) ? sim : null;
 }
 
 /** What a shape's recipe saves */
@@ -237,6 +277,56 @@ export function movedBox(box: PlacedBox, delta: XY): BoxRecipe {
             ...m,
             x: m.x + delta.x,
             y: m.y + delta.y,
+        })),
+    };
+}
+
+/**
+ * `box`'s params taken through `sim` (#1236): moved, turned and mirrored through its kind's frame
+ * (`withFrame`), and scaled through its kind, so it keeps its kind, count and links. Only a Line,
+ * Curve or Arc scales: its points and intervals (`scaleLine`). Null where the kind can't follow
+ * `sim` exactly (another kind scaled, a line measured side to side that turned): its spots, laid
+ * out again, must land where `sim` takes its members.
+ */
+export function transformedParams(
+    box: PlacedBox,
+    sim: Similarity,
+    ctx: ShapeContext,
+): unknown {
+    const { kind, spots } = box;
+    const frame = similarFrame(kind.frameOf(box.params, spots), sim);
+    let params = kind.withFrame(box.params, spots, frame);
+    const scale = similarityScale(sim);
+    if (Math.abs(scale - 1) > 1e-9) {
+        if (!linksKind(kind)) return null;
+        params = scaleLine(params as LineParams, scale, frame.center);
+    }
+    const slots = kind.shape.generate(params, spots, ctx);
+    const lands = box.recipe.members.every((m) => {
+        const slot = slots[m.slot];
+        const to = applySimilarity(sim, m);
+        return slot !== undefined && same(slot, to);
+    });
+    return lands ? params : null;
+}
+
+/**
+ * `box` taken through `sim`, members and all (#1236): {@link transformedParams}, its members on
+ * the spots `sim` takes them to. Null where its kind can't follow `sim`.
+ */
+export function transformedBox(
+    box: PlacedBox,
+    sim: Similarity,
+    ctx: ShapeContext,
+): BoxRecipe | null {
+    const params = transformedParams(box, sim, ctx);
+    if (params === null) return null;
+    return {
+        params: { ...(params as object), spots: box.spots },
+        spots: box.spots,
+        members: box.recipe.members.map((m) => ({
+            ...m,
+            ...applySimilarity(sim, m),
         })),
     };
 }

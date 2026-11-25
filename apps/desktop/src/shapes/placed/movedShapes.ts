@@ -1,5 +1,11 @@
-import type { XY } from "../types";
-import { movedBox, type PlacedBox } from "./placedBox";
+import type { Similarity } from "../frame/similarity";
+import type { ShapeContext, XY } from "../types";
+import {
+    movedBox,
+    similarityOf,
+    transformedParams,
+    type PlacedBox,
+} from "./placedBox";
 import { followersOf, type ShapeLink } from "./shapeLinks";
 
 /**
@@ -62,14 +68,76 @@ export function shapesMoved(
         box,
         params: movedBox(box, by).params as unknown,
     }));
-    const taken = new Set(boxes.map((b) => b.recipe.id));
+    return [
+        ...moved,
+        ...followersAll([{ box: first, params }, ...moved], links),
+    ];
+}
+
+/**
+ * The shapes linked to `edits` and not among them, each following as an edit of one shape makes
+ * it (`followersOf`), once
+ */
+function followersAll(
+    edits: readonly { box: PlacedBox; params: unknown }[],
+    links: readonly ShapeLink[],
+): { box: PlacedBox; params: unknown }[] {
+    const taken = new Set(edits.map((e) => e.box.recipe.id));
     const followers: { box: PlacedBox; params: unknown }[] = [];
-    for (const { box, params: p } of [{ box: first, params }, ...moved]) {
-        for (const follower of followersOf(box, p, links)) {
+    for (const { box, params } of edits) {
+        for (const follower of followersOf(box, params, links)) {
             if (taken.has(follower.box.recipe.id)) continue;
             taken.add(follower.box.recipe.id);
             followers.push(follower);
         }
     }
-    return [...moved, ...followers];
+    return followers;
+}
+
+/**
+ * The turn, even scale or mirror the placed shapes `boxes` went through when their members were
+ * dropped at `positions` (#1236: a selection's handles, or a rotation typed in the inspector):
+ * every member of every shape dropped, nobody else, and all of them through one. Null otherwise,
+ * or when they only moved.
+ */
+export function similarityOfDrop(
+    boxes: readonly PlacedBox[],
+    positions: readonly {
+        readonly id: number;
+        readonly x: number;
+        readonly y: number;
+    }[],
+): Similarity | null {
+    const at = new Map(positions.map((p) => [p.id, p] as const));
+    const members = boxes.flatMap((b) => b.recipe.members);
+    if (members.length !== at.size) return null;
+    const pairs: { from: XY; to: XY }[] = [];
+    for (const m of members) {
+        const to = at.get(m.marcherId);
+        if (!to) return null;
+        pairs.push({ from: m, to });
+    }
+    return similarityOf(pairs);
+}
+
+/**
+ * The shapes `boxes`, selected whole, taken through `sim` together (#1236): each through its kind
+ * (`transformedParams`), so each keeps its kind, count and form and every link between them holds.
+ * Shapes linked to them that aren't taken follow as for a move, their end at the joint stretched.
+ * Each shape's params, in the order `boxes` gives them, then the followers'; null when any of
+ * `boxes` can't follow `sim`. `links` are those live where the shapes are shown.
+ */
+export function shapesTransformed(
+    boxes: readonly PlacedBox[],
+    sim: Similarity,
+    links: readonly ShapeLink[],
+    ctx: ShapeContext,
+): { box: PlacedBox; params: unknown }[] | null {
+    const edits: { box: PlacedBox; params: unknown }[] = [];
+    for (const box of boxes) {
+        const params = transformedParams(box, sim, ctx);
+        if (params === null) return null;
+        edits.push({ box, params });
+    }
+    return [...edits, ...followersAll(edits, links)];
 }

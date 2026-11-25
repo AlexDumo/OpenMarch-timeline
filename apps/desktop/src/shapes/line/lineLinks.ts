@@ -148,6 +148,31 @@ export function shiftLine(p: LineParams, delta: XY): LineParams {
     };
 }
 
+/**
+ * The line scaled by `by` about `about` (#1236): every point, and every length it keeps of its own
+ * (its intervals, its offset), so its marchers keep their count and their spacing grows with it.
+ * Bends, ellipses and tensions are angles and ratios, which a scale keeps.
+ */
+export function scaleLine(p: LineParams, by: number, about: XY): LineParams {
+    if (Math.abs(by - 1) < 1e-12) return p;
+    const groups = p.spacing.groups?.map((g) => ({
+        ...g,
+        interval: g.interval * by,
+    }));
+    return {
+        ...p,
+        points: p.points.map((q) => ({
+            ...q,
+            x: about.x + (q.x - about.x) * by,
+            y: about.y + (q.y - about.y) * by,
+        })),
+        spacing: (groups
+            ? { ...p.spacing, groups }
+            : p.spacing) as LineParams["spacing"],
+        ...(p.offset && { offset: { x: p.offset.x * by, y: p.offset.y * by } }),
+    };
+}
+
 /** The ends of `p` that are attached, in order */
 export const attachedEnds = (p: LineParams): LineEnd[] =>
     hasEnds(p) ? LINE_ENDS.filter((end) => p.attach?.[end]) : [];

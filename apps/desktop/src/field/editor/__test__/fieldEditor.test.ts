@@ -36,6 +36,7 @@ function setup({
     onScreen = undefined as FieldOnScreen | undefined,
     snap = undefined as FieldEditorPorts["snap"],
     snapOn = undefined as (() => boolean) | undefined,
+    keepsRatio = undefined as FieldEditorPorts["keepsRatio"],
 } = {}) {
     const clock = { now: 1000 };
     const state = {
@@ -73,6 +74,7 @@ function setup({
         selectionBoxPadding: () => 10,
         selectionCovers,
         snap,
+        keepsRatio,
         openMenu: vi.fn(),
         showPositions: vi.fn((positions) => {
             state.shown = positions;
@@ -2230,6 +2232,16 @@ describe("FieldEditor scale and rotate handles (#198)", () => {
         it("keeps the ratio with the touch pill's Equal on, whatever a box's ratio lock says (#1037)", () => {
             useShapeEditorStore.setState({ ratioLocked: true });
             expect(dropped({}, EQUAL)).toEqual(BOTH_WAYS);
+        });
+
+        it("keeps the ratio with nothing held when placed shapes are selected whole (#1236)", () => {
+            const { editor, state } = setup({
+                selected: ALL,
+                positions: TALL,
+                keepsRatio: () => true,
+            });
+            drag(editor, EAST, { x: 560, y: 150 }, {});
+            expect(state.drops[0].positions).toEqual(BOTH_WAYS);
         });
     });
 
