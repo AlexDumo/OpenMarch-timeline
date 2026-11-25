@@ -15,7 +15,8 @@
 //       body,            // the body type the table is for (its neck radius)
 //       lut,             // the body's table: a 128 x rows RGBA half-float DataTexture (flatsLutTexture)
 //       atlas,           // the composed art, premultiplied alpha
-//       atlasRect,       // { w, h, front: [x, y], back: [x, y], cape: [x, y] | null } in inches (flatsAtlasLayout)
+//       atlasRect,       // { w, h, front: [x, y], back: [x, y], cape: [x, y] | null } in inches (flatsAtlasLayout),
+//                        // and its dpi (pixels per inch)
 //       cape,            // optional { k, midZ }: the cape's grade and mid-plane z (m)
 //   });
 //
@@ -36,12 +37,19 @@ uniform float uFlatCx;            // the panels' centre line (in)
 uniform vec4 uFlatCape;           // cape grade, cape mid-plane z, cape top (m), 1 when the atlas has a cape
 uniform vec2 uFlatWrist;          // t along the left and right forearm (m) below which the glove is sleeve
 uniform float uFlatNeckR;         // the jacket closer than this (m) to the neck's axis is the neck
+uniform float uFlatPx;            // one atlas pixel (in): 1 / the atlas's pixels per inch
 const float OM_FLAT_IN = 0.0254;
 const float OM_FLAT_PI = 3.14159265;
-// The torso's rows end on the jacket hem, where the hips' region starts on the flats. The jacket's lowest few mm
-// hang below it and clamp to its last row: kept this far (in) above the hem, they take the jacket's art rather than
-// a blend of it and the pants' along the boundary.
+// The torso's rows end on the jacket hem, where the hips' rows start on the flats (the hips' y0 is the
+// template's hem line). The jacket's lowest few mm hang below it and clamp to its last row, and the pants' top
+// edge clamps to the hips' first: each is kept at least this far (in) from the hem, and at least one atlas pixel
+// (uFlatPx), so the jacket takes only the jacket's art and the pants only the pants', never a filtered blend of
+// both along the boundary.
 const float OM_FLAT_HEM_INSET = 0.05;
+// The hem inset (in) at this atlas's resolution.
+float omFlatHemInset() {
+  return max(OM_FLAT_HEM_INSET, uFlatPx);
+}
 float omFlatRow(int s, float t) {
   vec4 g = uFlatSeg[s];
   float f = clamp((t - g.z) / (g.w - g.z), 0.0, 1.0);
@@ -98,9 +106,12 @@ vec2 omFlatSpine(int s, vec3 p, float t, out bool front) {
   float psi = atan(p.x, p.z - zc);
   vec4 lut = omFlatLut(psi, row);
   front = abs(psi) <= 0.5 * OM_FLAT_PI;
-  // down the segment: inches, kept to its rows so its ends never reach past the region
-  float tEnd = s == 0 ? g.w - OM_FLAT_HEM_INSET * OM_FLAT_IN : g.w;
-  return vec2(uFlatCx + (front ? lut.r : -lut.g), uFlatY0[s] + clamp(t, g.z, tEnd) / OM_FLAT_IN + lut.a);
+  // down the segment: inches, kept to its rows so its ends never reach past the region, and off the hem
+  // between the torso and the hips
+  float y = uFlatY0[s] + clamp(t, g.z, g.w) / OM_FLAT_IN + lut.a;
+  float hem = uFlatY0[1];
+  y = s == 0 ? min(y, hem - omFlatHemInset()) : max(y, hem + omFlatHemInset());
+  return vec2(uFlatCx + (front ? lut.r : -lut.g), y);
 }
 // Limb segment i (0..7, as uFlatHead): its point on the flats, and t along its bone (m).
 vec2 omFlatLimb(int i, vec3 p, out float t, out float psi, out bool front) {
@@ -268,6 +279,7 @@ export function flatsUniforms(
         uFlatNeckR: {
             value: layout.neckR[body] ?? layout.neckR[layout.median],
         },
+        uFlatPx: { value: 1 / atlasRect.dpi },
         uFlatCape: {
             value: new THREE.Vector4(
                 cape?.k ?? 1,

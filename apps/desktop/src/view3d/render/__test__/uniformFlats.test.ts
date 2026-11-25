@@ -44,6 +44,7 @@ describe("withFlats", () => {
             front: [0, -16] as const,
             back: [34, -16] as const,
             cape: null,
+            dpi: 16,
         },
     };
 
@@ -82,6 +83,9 @@ describe("withFlats", () => {
             layout.neckR["neutral-average"],
         );
         expect(shader.uniforms.uFlatLut.value).toBe(params.lut);
+        // one atlas pixel, for the hem's inset
+        expect(shader.uniforms.uFlatPx.value).toBe(1 / 16);
+        expect(fs).toContain("max(OM_FLAT_HEM_INSET, uFlatPx)");
         expect(shader.uniforms.uFlatArt.value).toBe(params.atlas);
         expect((shader.uniforms.uFlatSeg.value as THREE.Vector4[]).length).toBe(
             10,

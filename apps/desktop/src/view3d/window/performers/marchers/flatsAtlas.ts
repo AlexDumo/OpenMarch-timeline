@@ -648,6 +648,7 @@ async function composeFrom(
             front: rect.front,
             back: rect.back,
             cape: rect.cape,
+            dpi,
         },
         bytes: Math.round((W * H * 4 * 4) / 3),
     };
