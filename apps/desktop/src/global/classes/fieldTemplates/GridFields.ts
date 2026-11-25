@@ -1,4 +1,5 @@
 import { Checkpoint, FieldProperties } from "@openmarch/core";
+import { autoCheckpointNames } from "@/field/edits/naming";
 
 // Indoor floors, named depth x width in feet. 60x90 is WGI's minimum
 // competition area and the usual full-size floor; the rest are common
@@ -123,6 +124,9 @@ export default GridFieldTemplates;
 
 /**
  * Creates an array of checkpoint objects for the x-axis of a grid field.
+ * Lines every 4 steps out from the "5 line" at the center count down to the "0 line" 20 steps
+ * out; past it they are named by steps from center on their side ("Side 1 24 steps from
+ * center", "S1 24"), the names the field editor gives a line it adds there.
  *
  * @param {number} params.xSteps - The number of steps along the x-axis.
  * @returns {Checkpoint[]} - An array of checkpoint objects for the x-axis.
@@ -167,38 +171,45 @@ export function createGridXCheckpoints({
         visible: false,
     });
 
-    let curCheckpoint = 4;
-    for (let steps = -4; steps > -xSteps / 2; steps -= 4) {
-        xCheckpoints.push({
-            id: curId++,
-            name: `${curCheckpoint} line`,
-            axis: "x",
-            terseName: `${curCheckpoint}`,
-            stepsFromCenterFront: steps,
-            useAsReference: true,
-            visible: true,
-        });
-        curCheckpoint -= 1;
-    }
-    curCheckpoint = 4;
-    for (let steps = 4; steps < xSteps / 2; steps += 4) {
-        xCheckpoints.push({
-            id: curId++,
-            name: `${curCheckpoint} line`,
-            axis: "x",
-            terseName: `${curCheckpoint}`,
-            stepsFromCenterFront: steps,
-            useAsReference: true,
-            visible: true,
-        });
-        curCheckpoint -= 1;
-    }
+    // Every 4 steps out from the center: the 4 line down to the 0 line 20 steps out, then
+    // named by steps from center on their side ("Side 1 24 steps from center", "S1 24"), as
+    // the field editor names a line it adds there.
+    for (const side of [-1, 1])
+        for (let out = 4; out < xSteps / 2; out += 4) {
+            const steps = side * out;
+            const { name, terseName } = autoCheckpointNames(
+                { useHashes: false },
+                "x",
+                steps,
+            );
+            xCheckpoints.push({
+                id: curId++,
+                name,
+                axis: "x",
+                terseName,
+                stepsFromCenterFront: steps,
+                useAsReference: true,
+                visible: true,
+            });
+        }
 
     return xCheckpoints;
 }
 
 /**
+ * The letter of the grid's `index`th line from the front: A to Z, then AA, AB… as spreadsheet
+ * columns go.
+ */
+export function gridLineLetters(index: number): string {
+    let letters = "";
+    for (let n = index + 1; n > 0; n = Math.floor((n - 1) / 26))
+        letters = String.fromCharCode(65 + ((n - 1) % 26)) + letters;
+    return letters;
+}
+
+/**
  * Creates an array of checkpoint objects for the y-axis of a grid field.
+ * Lines every 4 steps are lettered from the front: A to Z, then AA, AB… (`gridLineLetters`).
  *
  * @param {number} params.ySteps - The number of steps along the y-axis.
  * @returns {Checkpoint[]} - An array of checkpoint objects for the y-axis.
@@ -239,21 +250,21 @@ export function createGridYCheckpoints({
         });
     }
 
-    let curCharCode = "A".charCodeAt(0);
+    let lineIndex = 0;
     const remainder = ySteps % stepInterval;
     let curSteps = -remainder / 2;
     for (let i = 0; i <= ySteps; i += stepInterval) {
         if (Object.is(curSteps, -0)) curSteps = 0;
+        const letters = gridLineLetters(lineIndex++);
         yCheckpoints.push({
             id: curId++,
-            name: `${String.fromCharCode(curCharCode)} line`,
+            name: `${letters} line`,
             axis: "y",
-            terseName: `${String.fromCharCode(curCharCode)}`,
+            terseName: letters,
             stepsFromCenterFront: curSteps,
             useAsReference: true,
             visible: true,
         });
-        curCharCode++;
         curSteps -= stepInterval;
     }
 
