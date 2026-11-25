@@ -2,7 +2,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { afterEach, expect } from "vitest";
-import type { OpenMarchShowData } from "@openmarch/schema";
+import { SCHEMA_VERSION, type OpenMarchShowData } from "@openmarch/schema";
 import { betterSqliteTestWithProxy, getTempDotsPath } from "@/test/base";
 import type { DB } from "@/global/database/db";
 import * as DatabaseServices from "@/../electron/database/database.services";
@@ -20,9 +20,12 @@ import { hasMotionBetweenPages } from "../pageLines";
  * compared with `upstream-export/<name>.upstream-om.json`: what upstream main (c9784b34a) exports
  * for the same file (see `upstream-export/README.md`).
  *
- * Both are compared as JSON, the form the phone gets. The one difference is the order of `coordinates`: upstream lists them in `marcher_pages` row
- * order, this build page by page. Each entry names its marcher and page, so they are compared
- * sorted.
+ * Both are compared as JSON, the form the phone gets. The order of `coordinates` differs: upstream
+ * lists them in `marcher_pages` row order, this build page by page. Each entry names its marcher
+ * and page, so they are compared sorted.
+ *
+ * This build also writes exact paths (spec Appendix M.7), with the schema version that has them.
+ * A reader that doesn't know `exactPaths` drops it, and then reads the same show as upstream's.
  */
 
 const V017_DIR = path.resolve(
@@ -102,8 +105,18 @@ for (const name of ["small", "realistic"]) {
             JSON.stringify(await toOpenMarchSchema(db as unknown as DB)),
         ) as OpenMarchShowData;
 
+        // What a reader without exact paths reads: everything else, as upstream exports it
+        const { exactPaths, omSchemaVersion, ...rest } = fork;
+        expect(exactPaths?.length).toBeGreaterThan(0);
+        expect(omSchemaVersion).toBe(SCHEMA_VERSION);
+        const withoutExactPaths = {
+            ...rest,
+            omSchemaVersion: upstream.omSchemaVersion,
+        };
         expect(fork.coordinates).toHaveLength(upstream.coordinates.length);
-        expect(sortCoordinates(fork)).toEqual(sortCoordinates(upstream));
+        expect(sortCoordinates(withoutExactPaths)).toEqual(
+            sortCoordinates(upstream),
+        );
         // Straight page-to-page moves: the export panel says nothing
         expect(hasMotionBetweenPages(await readTimelinePageSnapshot(db))).toBe(
             false,

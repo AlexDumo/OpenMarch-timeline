@@ -181,10 +181,15 @@ export type {
 export {
     EXACT_DEFAULT_TOLERANCE,
     bendOfWalkedArc,
+    createExactPathConverter,
     exactPathOfSegments,
     exactPathsOf,
 } from "./exactPathConvert";
-export type { ExactMove, ExactPathsOptions } from "./exactPathConvert";
+export type {
+    ExactMove,
+    ExactPathConverter,
+    ExactPathsOptions,
+} from "./exactPathConvert";
 
 /** The uncached reference oracle (spec section 8), for tests and debug checks only. */
 export function createTimelineOracleForTesting(host: TimelineSnapshot): Oracle {

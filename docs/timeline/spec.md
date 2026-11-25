@@ -4038,3 +4038,29 @@ Validation applies EP-1 to EP-6 to each path and EP-P1 to EP-P3 to the list. Eve
 names its id. The package's tests cover these rules and EP-R2, and check that its copy of EP-R
 matches `packages/core`'s on shared paths. Not checked: whether a path's ends match the marcher's
 spots, and whether `marcherId` names a performer. The export keeps both right.
+
+**The export** (`dots-to-om.ts`, #1163) writes one entry per performer per move the converter
+gives (EP-C1), converted within 1/100 of the show's own step (EP-C4's tolerance, or less on a
+field with smaller steps), and leaves `exactPaths` out when there are none, so a show that never
+moves exports as before. `startTick` and `endTick` are the span's start and end beats × 480, each
+rounded on its own, so moves that meet share a tick; when rounding changes a move's length, its
+keys are retimed (EP-T). Each entry is checked against EP-1 to EP-6 as it's made. A path under
+EP-6's minimum in steps is left out (the converter's minimum is in field units), which holds the
+performer still, as it is. A performer whose walk can't be converted, or whose path breaks
+another rule, gets no exact paths, and so straight lines between sets, and the rest of the show
+still exports: leaving out only the failing move would make a reader hold the performer still
+through it (EP-R2).
+
+**Measured (export, 2026-11-23).** The three v0.1.7 release files and the 42 parity shows, each
+exported, written, read back with `@openmarch/schema` 0.5.0 and played with its reader (straight
+lines between sets where it has none), against `positionAt` at every tick of the show: worst gap
+under `10⁻¹²` steps on every show. `@openmarch/schema` 0.4.2 reads the same files, drops
+`exactPaths`, and gets the same show as before. The parity shows walk only lines (43,264 paths)
+and 8 arcs; cubics are checked by a drawn smooth path in the export's tests and by QA-EP-8. The
+largest file, `perf-heavy` (180 performers, 9,000 paths, two keys each), grows from 827 KB to
+2.98 MB as JSON and from 110 KB to 289 KB gzipped (the phone gets it gzipped); a real 178-marcher
+show grows from 111 KB to 248 KB gzipped. Nearly all of it is one entry of about 230 bytes per
+straight move, which repeats two sets the coordinates already give. Converting `perf-heavy` takes
+about 30 ms, because a move that is one line or arc across its span gets its two keys without
+sampling. Curved moves are still sampled at every tick, about 1.3 ms for an 8-count cubic, so a
+show of curves takes longer; the export yields between moves.

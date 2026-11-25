@@ -270,8 +270,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/musicxml-parser
       '@openmarch/schema':
-        specifier: 0.4.2
-        version: 0.4.2(typescript@6.0.3)
+        specifier: 0.5.0
+        version: 0.5.0(typescript@6.0.3)
       '@openmarch/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -4041,8 +4041,8 @@ packages:
     engines: {node: ^12.13.0 || ^14.15.0 || >=16.0.0}
     deprecated: This functionality has been moved to @npmcli/fs
 
-  '@openmarch/schema@0.4.2':
-    resolution: {integrity: sha512-VEb5avWFEF8wzpMINjeNOUctLBOnG4VJIo1I1/7jPS/g4EXM3ZKUoGXATyD4Z3DARv0hzsHFmEu0p7qlfDz8qQ==}
+  '@openmarch/schema@0.5.0':
+    resolution: {integrity: sha512-INObEig9VLJ1biOLvwYIcfNjqKAsRKiy9EbRMq/QAhryeX0e7/WBU4AOq5a7rA5Z0wVTKsboJzMKA+dmpv6uOw==}
     peerDependencies:
       typescript: ^5
 
@@ -17618,7 +17618,7 @@ snapshots:
       mkdirp: 1.0.4
       rimraf: 3.0.2
 
-  '@openmarch/schema@0.4.2(typescript@6.0.3)':
+  '@openmarch/schema@0.5.0(typescript@6.0.3)':
     dependencies:
       typescript: 6.0.3
       zod: 4.3.6

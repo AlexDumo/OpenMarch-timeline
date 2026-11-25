@@ -25,6 +25,13 @@ import {
     sampleTimelinePagePositions,
     type TimelinePagePosition,
 } from "@/timeline/timelinePagePositions";
+import type { ExactPathEntry } from "@openmarch/schema";
+import {
+    exportExactPaths,
+    stepAxesOf,
+    toSteps,
+    type StepAxes,
+} from "./exact-paths-export";
 import {
     buildPerformerAppearanceShowData,
     fetchPerformerAppearanceExportData,
@@ -83,24 +90,8 @@ function fieldPropsToPerformanceArea(fieldProperties: FieldProperties) {
     };
 }
 
-function getFieldExtentsSteps(fieldProperties: FieldProperties) {
-    const minX = Math.min(
-        ...fieldProperties.xCheckpoints.map((c) => c.stepsFromCenterFront),
-    );
-    const maxX = Math.max(
-        ...fieldProperties.xCheckpoints.map((c) => c.stepsFromCenterFront),
-    );
-    const minY = Math.min(
-        ...fieldProperties.yCheckpoints.map((c) => c.stepsFromCenterFront),
-    );
-    const maxY = Math.max(
-        ...fieldProperties.yCheckpoints.map((c) => c.stepsFromCenterFront),
-    );
-    return {
-        fieldWidthSteps: maxX - minX,
-        fieldHeightSteps: Math.abs(maxY - minY),
-    };
-}
+const fieldPropertiesOf = (row: { json_data: string }) =>
+    new FieldProperties(parseStoredFieldProperties(JSON.parse(row.json_data)));
 
 function buildPagesFromTiming({
     timingRows,
@@ -174,26 +165,25 @@ function buildTempoSections(
 
 function buildCoordinates({
     positionRows,
-    centerXPixels,
-    fieldHeightSteps,
-    pixelsPerStep,
+    axes,
 }: {
     positionRows: readonly PagePositionRow[];
-    centerXPixels: number;
-    fieldHeightSteps: number;
-    pixelsPerStep: number;
+    axes: StepAxes;
 }): {
     marcherId: string;
     pageId: string;
     xSteps: number;
     ySteps: number;
 }[] {
-    return positionRows.map((mp) => ({
-        marcherId: String(mp.marcher_id),
-        pageId: String(mp.page_id),
-        xSteps: (mp.x - centerXPixels) / pixelsPerStep,
-        ySteps: fieldHeightSteps - mp.y / pixelsPerStep,
-    }));
+    return positionRows.map((mp) => {
+        const [xSteps, ySteps] = toSteps(axes, mp.x, mp.y);
+        return {
+            marcherId: String(mp.marcher_id),
+            pageId: String(mp.page_id),
+            xSteps,
+            ySteps,
+        };
+    });
 }
 
 function buildMeasuresFromTiming({
@@ -291,6 +281,8 @@ async function readShowRows(db: DB) {
 
 type DotsData = Awaited<ReturnType<typeof readShowRows>> & {
     positionRows: readonly PagePositionRow[];
+    /** Every performer's moves as the file's exact paths (spec M.7) */
+    exactPaths: ExactPathEntry[];
     /** The music offset in effect (tempo/audioOffset.ts), undefined when nothing sets one */
     audioOffsetSeconds: number | undefined;
 };
@@ -302,8 +294,8 @@ type DotsData = Awaited<ReturnType<typeof readShowRows>> & {
  *
  * Every read and the resolver build happen inside one `withTimelineWriteLock`, so the pages,
  * marchers and positions all come from the same committed state: a write started before the
- * export has committed, and none can start until the reads finish. Sampling runs after the lock
- * is released, on the private resolver.
+ * export has committed, and none can start until the reads finish. Sampling and converting the
+ * moves to exact paths run after the lock is released, on the private resolver.
  */
 async function fetchDotsData(db: DB): Promise<DotsData> {
     const { rows, snapshot, showAudioOffset } = await withTimelineWriteLock(
@@ -315,9 +307,19 @@ async function fetchDotsData(db: DB): Promise<DotsData> {
         }),
     );
     const positionRows = await sampleTimelinePagePositions(snapshot);
+    // Performers only, as the coordinates; a stand-in snapshot without walks has none
+    const exactPaths =
+        snapshot.walks && rows.fieldPropsRow
+            ? await exportExactPaths(
+                  snapshot.walks,
+                  rows.marchersRows.map((m) => m.id),
+                  stepAxesOf(fieldPropertiesOf(rows.fieldPropsRow)),
+              )
+            : [];
     return {
         ...rows,
         positionRows,
+        exactPaths,
         // The show's own offset, else the workspace setting; none of either leaves it out
         audioOffsetSeconds:
             showAudioOffset ?? rows.workspaceSettings?.audioOffsetSeconds,
@@ -343,14 +345,9 @@ function buildOpenMarchFromRows(data: DotsData): OpenMarchShowData {
         throw new Error("Field properties not found");
     }
 
-    const fieldProps: FieldProperties = new FieldProperties(
-        parseStoredFieldProperties(JSON.parse(fieldPropsRow.json_data)),
-    );
-    const pixelsPerStep = fieldProps.pixelsPerStep;
+    const fieldProps = fieldPropertiesOf(fieldPropsRow);
     const performanceArea = fieldPropsToPerformanceArea(fieldProps);
-    const { fieldWidthSteps, fieldHeightSteps } =
-        getFieldExtentsSteps(fieldProps);
-    const centerXPixels = (fieldWidthSteps / 2) * pixelsPerStep;
+    const axes = stepAxesOf(fieldProps);
 
     const metadata = {
         performanceArea,
@@ -382,12 +379,8 @@ function buildOpenMarchFromRows(data: DotsData): OpenMarchShowData {
         pageNumberOffset: workspaceSettings?.pageNumberOffset ?? 0,
     });
     const tempoSections = buildTempoSections(timingRows);
-    const coordinates = buildCoordinates({
-        positionRows,
-        centerXPixels,
-        fieldHeightSteps,
-        pixelsPerStep,
-    });
+    const coordinates = buildCoordinates({ positionRows, axes });
+    const { exactPaths } = data;
     const measures = buildMeasuresFromTiming({ timingRows, measuresById });
 
     const {
@@ -416,6 +409,8 @@ function buildOpenMarchFromRows(data: DotsData): OpenMarchShowData {
         tempoSections,
         coordinates,
         measures: measures.length > 0 ? measures : undefined,
+        // Left out when nothing moves, so such a file is the same as before exact paths
+        ...(exactPaths.length > 0 && { exactPaths }),
     };
 }
 

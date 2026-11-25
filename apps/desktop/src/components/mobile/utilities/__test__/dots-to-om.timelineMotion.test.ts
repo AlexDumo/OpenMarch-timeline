@@ -1,13 +1,17 @@
 import { afterEach, expect } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { FieldProperties } from "@openmarch/core";
+import { FieldProperties, TICKS_PER_BEAT } from "@openmarch/core";
 import type { OpenMarchShowData } from "@openmarch/schema";
-import { safeValidateOpenMarchData } from "@openmarch/schema";
+import {
+    createExactPathReader,
+    safeValidateOpenMarchData,
+} from "@openmarch/schema";
 import { DbConnection, describeDbTests, schema } from "@/test/base";
 import type { DB } from "@/global/database/db";
 import { FieldPropertiesSchema } from "@/components/field/fieldPropertiesSchema";
 import { moveMarchersInTarget } from "@/db-functions/timelineMoves";
 import { setMovePath } from "@/db-functions/timelineCommands";
+import { drawRoute } from "@/db-functions/timelineRoutes";
 import type Page from "@/global/classes/Page";
 import { readShowTiming } from "@/timeline/showTiming";
 import { pageEndBeat } from "@/timeline/timelineCanvas";
@@ -16,6 +20,8 @@ import { readTimelinePageSnapshot } from "@/timeline/timelinePagePositions";
 import { stopTimelineResolver } from "@/timeline/timelineStore";
 import { toOpenMarchSchema } from "../dots-to-om";
 import { hasMotionBetweenPages } from "../pageLines";
+import { stepAxesOf, toSteps } from "../exact-paths-export";
+import { worstGapToApp } from "./exactPathPlayback";
 
 /**
  * Motion only a timeline show has (docs/convergence/inventory.md R1): a move that ends partway
@@ -123,6 +129,21 @@ describeDbTests("dots-to-om timeline-only motion", (it) => {
             9,
         );
         expect(await motionBetweenPages(db)).toBe(true);
+
+        // The file as a reader plays it (EP-R2): the marcher walks to the mid-page spot and holds
+        // there for the rest of the page; everyone else walks straight lines between sets
+        const mover = show.exactPaths!.filter((e) => e.marcherId === "1");
+        expect(mover.length).toBeGreaterThan(0);
+        expect(mover.some((e) => e.endTick === mid * TICKS_PER_BEAT)).toBe(
+            true,
+        );
+        const { worst, at } = worstGapToApp({
+            show,
+            app: resolver,
+            axes: stepAxesOf(await fieldProperties(db)),
+            endTick: Math.max(...pages.map(pageEndBeat)) * TICKS_PER_BEAT,
+        });
+        expect(worst, at).toBeLessThan(0.01);
     });
 
     it("a curved path: the same page positions as the straight move, flagged", async ({
@@ -151,5 +172,86 @@ describeDbTests("dots-to-om timeline-only motion", (it) => {
         expectEveryPage(curved, straight);
         expect(curved.coordinates).toEqual(straight.coordinates);
         expect(await motionBetweenPages(db)).toBe(true);
+
+        // The curve itself is in the file as exact paths (spec M.7): a reader plays the arc
+        // where the app walks it, at every tick of the move
+        const arcs = curved.exactPaths!.filter((e) =>
+            e.path.shapes.some((shape) => shape.kind === "arc"),
+        );
+        expect(arcs.map((e) => e.marcherId)).toContain("1");
+        expect(arcs[0]).toMatchObject({
+            startTick: start * TICKS_PER_BEAT,
+            endTick: end * TICKS_PER_BEAT,
+        });
+        const reader = createExactPathReader(curved);
+        const resolver = await acquireExportResolver(db);
+        const field = await fieldProperties(db);
+        const axes = stepAxesOf(field);
+        let worst = 0;
+        for (
+            let tick = start * TICKS_PER_BEAT;
+            tick <= end * TICKS_PER_BEAT;
+            tick++
+        ) {
+            const [x, y] = resolver.positionAt(1, tick / TICKS_PER_BEAT);
+            const [ex, ey] = toSteps(axes, x, y);
+            const [rx, ry] = reader.positionAt("1", tick)!;
+            worst = Math.max(worst, Math.hypot(rx - ex, ry - ey));
+        }
+        expect(worst).toBeLessThan(0.01);
+    });
+
+    it("a drawn smooth path: exported as cubics, played where the app walks it", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const pages = await sortedPages(db);
+        const start = pageEndBeat(pages[2]!);
+        const end = pageEndBeat(pages[3]!);
+        const resolverBefore = await acquireExportResolver(db);
+        const [x0, y0] = resolverBefore.positionAt(1, start);
+        await moveMarchersInTarget({
+            db,
+            target: { kind: "range", start, end },
+            moves: [{ marcherId: 1, x: x0 + 240, y: y0 }],
+        });
+        const [timeline] = await timelinesOver(db, start, end);
+        await drawRoute({
+            db,
+            timelineId: timeline!.id,
+            marcherId: 1,
+            points: [
+                { at: [x0 + 80, y0 - 90], tension: 1 },
+                { at: [x0 + 170, y0 + 60], tension: 1 },
+            ],
+        });
+        const show = await exportShow(db);
+        expect(safeValidateOpenMarchData(show).success).toBe(true);
+        const mine = show.exactPaths!.filter((e) => e.marcherId === "1");
+        expect(
+            mine.some((e) => e.path.shapes.some((s) => s.kind === "cubic")),
+        ).toBe(true);
+
+        const reader = createExactPathReader(show);
+        const resolver = await acquireExportResolver(db);
+        const axes = stepAxesOf(await fieldProperties(db));
+        let worst = 0;
+        for (
+            let tick = start * TICKS_PER_BEAT;
+            tick <= end * TICKS_PER_BEAT;
+            tick++
+        ) {
+            const [x, y] = resolver.positionAt(1, tick / TICKS_PER_BEAT);
+            const [ex, ey] = toSteps(axes, x, y);
+            const [rx, ry] = reader.positionAt("1", tick)!;
+            worst = Math.max(worst, Math.hypot(rx - ex, ry - ey));
+        }
+        expect(worst).toBeLessThan(0.01);
+    });
+
+    it("a show where nothing moves has no exact paths", async ({ db }) => {
+        const show = await exportShow(db);
+        expect(show.exactPaths).toBeUndefined();
+        expect(safeValidateOpenMarchData(show).success).toBe(true);
     });
 });

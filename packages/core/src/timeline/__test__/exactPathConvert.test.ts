@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import { checkExactPath, exactPlayer, TICKS_PER_BEAT } from "../exactPath";
 import {
     EXACT_DEFAULT_TOLERANCE,
+    exactPathOfSegments,
     exactPathsOf,
     type ExactMove,
 } from "../exactPathConvert";
@@ -285,4 +286,42 @@ describe("exact-path converter (EP-C)", () => {
         expect(shows).toBeGreaterThan(SHOWS / 2);
         expect(worst, worstAt).toBeLessThan(TOL);
     }, 120_000);
+});
+
+describe("one line or arc across the span", () => {
+    const line = (start: number, end: number, from: XY, to: XY) =>
+        ({ kind: "line", start, end, from, to, transitionId: 1 }) as const;
+
+    it("takes its two ends as keys, as sampling every tick does", () => {
+        const one = exactPathOfSegments(
+            [line(4, 12, [0, 0], [96, 48])],
+            4,
+            12,
+        )!;
+        expect(one.keys).toEqual([
+            { tick: 0, u: 0 },
+            { tick: 8 * TICKS_PER_BEAT, u: 1 },
+        ]);
+        // the same walk as two lines takes the sampling route, and walks the same at every tick
+        const two = exactPathOfSegments(
+            [line(4, 8, [0, 0], [48, 24]), line(8, 12, [48, 24], [96, 48])],
+            4,
+            12,
+        )!;
+        expect(two.keys).toHaveLength(2);
+        const a = exactPlayer(one);
+        const b = exactPlayer(two);
+        for (let tick = 0; tick <= 8 * TICKS_PER_BEAT; tick++)
+            expect(d2(a.pointAt(tick), b.pointAt(tick))).toBeLessThan(1e-9);
+    });
+
+    it("samples a line that starts after the span does (a hold first)", () => {
+        const late = exactPathOfSegments(
+            [line(6, 12, [0, 0], [96, 0])],
+            4,
+            12,
+        )!;
+        expect(late.keys.length).toBeGreaterThan(2);
+        expect(exactPlayer(late).pointAt(2 * TICKS_PER_BEAT)).toEqual([0, 0]);
+    });
 });
