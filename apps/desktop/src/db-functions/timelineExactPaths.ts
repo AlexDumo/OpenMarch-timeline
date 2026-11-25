@@ -183,3 +183,57 @@ export async function setExactPath(args: {
         setExactPathInTransaction({ tx, ...rest }),
     );
 }
+
+/**
+ * Make speed even (Record path prototype): each marcher's exact path in move `timelineId` walked
+ * at one steady speed from start to end, keeping its shape (holds and speed changes dropped). One
+ * undo step. Marchers without an exact path there are left alone; returns how many changed.
+ */
+export async function evenExactPathSpeed({
+    db,
+    timelineId,
+    marcherIds,
+}: {
+    db: DbConnection;
+    timelineId: number;
+    marcherIds: readonly number[];
+}): Promise<number> {
+    const T = schema.timeline_transitions;
+    const A = schema.timeline_assignments;
+    const R = schema.timeline_routes;
+    let changed = 0;
+    await transactionWithHistory(db, "evenExactPathSpeed", async (tx) => {
+        for (const marcherId of marcherIds) {
+            const found = await tx
+                .select({ slot: A.slot_index, transitionId: T.id })
+                .from(A)
+                .innerJoin(T, eq(A.transition_id, T.id))
+                .where(
+                    and(
+                        eq(T.timeline_id, timelineId),
+                        eq(A.marcher_id, marcherId),
+                    ),
+                )
+                .orderBy(asc(A.start_beat), asc(A.id))
+                .get();
+            if (!found) continue;
+            const lane = await laneOn(tx, found.transitionId, found.slot);
+            if (!lane || lane.offset_x !== null) continue;
+            const route = await tx
+                .select({ exact: R.exact_path })
+                .from(R)
+                .where(eq(R.id, lane.route_id))
+                .get();
+            if (!route?.exact) continue;
+            const path = JSON.parse(route.exact) as ExactPath;
+            const last = path.keys[path.keys.length - 1]!;
+            if (path.keys.length === 2) continue;
+            await writeExactPathInTransaction(tx, lane.route_id, {
+                ...path,
+                keys: [{ tick: 0, u: 0 }, { ...last }],
+            });
+            changed++;
+        }
+    });
+    return changed;
+}

@@ -4295,5 +4295,20 @@
     "cues.lane.turnLabel": "Label on a turn in the timeline's Facing lane: {icon} is an arrow showing which way they turn (↺ or ↻), {amount} how far (a signed angle such as '180°' or '−90°'), then how many counts the turn takes. Keep {icon} first. Short: it has to fit a narrow bar.",
     "cues.lane.turnLabelShort": "Shorter label on a narrow turn in the timeline's Facing lane: {icon} is an arrow showing which way they turn (↺ or ↻), {amount} how far (such as '180°'). Keep {icon} first.",
     "cues.lane.dragCue": "Tooltip of the diamond that marks a facing change on its count in the timeline's Facing lane (and of its bar): dragging it moves the facing change, with its turn, to another count.",
-    "cues.lane.dragToTurn": "Tooltip of the small tab beside an instant facing change's diamond in the timeline's Facing lane: dragging it left makes the performers turn over the counts before, instead of all at once."
+    "cues.lane.dragToTurn": "Tooltip of the small tab beside an instant facing change's diamond in the timeline's Facing lane: dragging it left makes the performers turn over the counts before, instead of all at once.",
+    "actions.path.evenSpeed": "Name of a command (command palette). For the selected marchers' (performers') recorded paths at the playhead: keeps each path's shape but makes the marcher walk it at one steady speed from start to end, removing pauses and speed changes.",
+    "actions.path.record": "Name of a command (command palette, shortcut settings, the record button's tooltip next to Play). Starts recording: after four clicks the selected marchers' (performers') move at the playhead plays, and the user drags them on the field in real time; what they drag becomes the path each marcher walks. Pressed again while recording, it stops and keeps what was recorded. Like the record button in audio apps.",
+    "pathways.record.button": "Tooltip of the round record button next to Play in the timeline.",
+    "pathways.record.countIn": "Small label over a big countdown number (4, 3, 2, 1) shown on the field before recording starts, like a count-in in music apps.",
+    "pathways.record.countOf": "Shown on the field while recording: which count of the page is playing. {count} and {counts} are numbers, e.g. 'count 5 of 16'. A count is one beat of the music.",
+    "pathways.record.evened": "Message after the 'Make speed even' command: how many marchers' (performers') recorded paths now have a steady speed. {count} is a number.",
+    "pathways.record.hint": "Hint shown on the field while recording a path: the user presses anywhere on the field and drags to move the selected marchers; pressing the Esc key cancels the recording.",
+    "pathways.record.noMove": "Message shown when the user starts recording but the playhead isn't inside a page (a stretch of the show where marchers move), so there's nothing to record into.",
+    "pathways.record.notRecorded": "Message when 'Make speed even' finds no recorded path for the selected marchers (performers) at the playhead.",
+    "pathways.record.nothing": "Message shown after a recording in which the user never dragged on the field, so nothing was saved.",
+    "pathways.record.recording": "Small red label shown on the field while a path is being recorded.",
+    "pathways.record.saveFailed": "Error message shown when a recorded path couldn't be saved.",
+    "pathways.record.selectFirst": "Short message shown when the user starts recording a path with no marchers (performers) selected.",
+    "pathways.record.stop": "Tooltip of the record button while recording: stops the recording and keeps it.",
+    "pathways.record.twoMoves": "Message shown when the selected marchers (performers) are in different moves (stretches of motion between two positions) at the playhead, so one recording can't cover them all."
 }

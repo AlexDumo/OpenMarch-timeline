@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
+import { recordPathMode } from "@/pathways/recordPathMode";
+import { useRecordPathStore } from "@/pathways/recordPathStore";
 import { useQueryClient } from "@tanstack/react-query";
 import type { FieldEditor } from "@/field/editor/fieldEditor";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
@@ -57,6 +59,7 @@ import {
  * out of sight (`useShapeHidden`) the field doesn't draw it or give it presses, and an armed tool
  * with nothing drawn yet closes once the timeline moves off its moment.
  */
+// eslint-disable-next-line max-lines-per-function
 export function useShapeFieldModes(
     editor: FieldEditor,
     isPlaying: boolean,
@@ -108,6 +111,10 @@ export function useShapeFieldModes(
     useEffect(() => () => previewPlacedBox(null), [live, toolOpen]);
 
     const order = useOrderSweepMode(isPlaying);
+    // Record path (prototype): while a take counts in or records, it takes every press, playing
+    const recording = useRecordPathStore(
+        (s) => s.phase === "countIn" || s.phase === "recording",
+    );
     // A tool opened by its key (O for Circle, P for the pen) while Set order is on closes Set
     // order, rather than opening hidden behind it
     useEffect(() => {
@@ -120,17 +127,30 @@ export function useShapeFieldModes(
         // A handle's menu is for the shape it was opened on (#569)
         closeHandleMenu();
         editor.setMode(
-            order
-                ? order
-                : pathOpen && !isPlaying
-                  ? pathPenMode
-                  : toolOpen
-                    ? hidden
-                        ? null
-                        : shapeToolMode
-                    : (live ?? (pathShown && !isPlaying ? pathPenMode : null)),
+            recording
+                ? recordPathMode
+                : order
+                  ? order
+                  : pathOpen && !isPlaying
+                    ? pathPenMode
+                    : toolOpen
+                      ? hidden
+                          ? null
+                          : shapeToolMode
+                      : (live ??
+                        (pathShown && !isPlaying ? pathPenMode : null)),
         );
-    }, [editor, toolOpen, hidden, live, pathOpen, pathShown, isPlaying, order]);
+    }, [
+        editor,
+        toolOpen,
+        hidden,
+        live,
+        pathOpen,
+        pathShown,
+        isPlaying,
+        order,
+        recording,
+    ]);
     useEffect(() => () => editor.setMode(null), [editor]);
     // A selected box takes the presses, but its members' closed group path is still drawn, under
     // it: the group's line and faint lanes, as when the box isn't selected (owner on #683)

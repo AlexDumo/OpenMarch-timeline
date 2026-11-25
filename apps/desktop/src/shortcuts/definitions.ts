@@ -1406,6 +1406,27 @@ const STATIC_ACTIONS = {
         defaultBindings: [],
         ignoreRepeat: true,
     },
+    // Record path (prototype, 2026-11-25): the selected marchers' move at the playhead plays after
+    // four clicks while you drag them; what you drag becomes their exact paths. Pressed again while
+    // recording, it stops and keeps the take. Alt+Shift+R: R and Shift+R are the shape ring's
+    recordPath: {
+        labelKey: "actions.path.record",
+        keywordsKey: "actions.path.keywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: ["Alt+Shift+R"],
+        ignoreRepeat: true,
+    },
+    // Make speed even (Record path prototype): the selected marchers' recorded paths at the
+    // playhead walked at one steady speed. No key: the palette
+    evenPathSpeed: {
+        labelKey: "actions.path.evenSpeed",
+        keywordsKey: "actions.path.keywords",
+        category: "path",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
     // Remove path (AP-R2), the path open or not: the move goes straight again. No key, so it
     // can't happen by accident (owner, 2026-11-04): the path's menu, its bar and the palette
     removePath: {
