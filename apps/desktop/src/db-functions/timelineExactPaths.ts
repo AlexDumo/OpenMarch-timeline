@@ -35,12 +35,11 @@ import {
     markLaneModelInTransaction,
     sweepOrphanRoutesInTransaction,
 } from "./timelineLanes";
+import { marcherName, refuseSharedSpot, routeRefusal } from "./timelineRoutes";
 import {
     exactRouteGeometry,
-    marcherName,
-    refuseSharedSpot,
-    routeRefusal,
-} from "./timelineRoutes";
+    writeExactPathInTransaction,
+} from "./timelineRouteGeometry";
 
 /** What `setExactPathInTransaction` wrote. */
 export interface SetExactPathResult {
@@ -143,7 +142,7 @@ export async function setExactPathInTransaction({
         await markLaneModelInTransaction(tx);
         await markExactPathModelInTransaction(tx);
         if (lane && lane.offset_x === null) {
-            await tx.update(R).set(stored).where(eq(R.id, lane.route_id));
+            await writeExactPathInTransaction(tx, lane.route_id, path);
             return result(lane.route_id);
         }
         const route = (await tx.insert(R).values(stored).returning().get())!;

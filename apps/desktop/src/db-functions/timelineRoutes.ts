@@ -24,7 +24,6 @@ import {
     checkExactPath,
     createResolver,
     EPS_GEOM,
-    exactEnd,
     exactPathOnSpots,
     exactPointAt,
     retimeExactPath,
@@ -52,8 +51,10 @@ import { sampleShape } from "./timelineMoveHelpers";
 import { createTimelineTransitionsInTransaction } from "./timelineTransitionsInTransaction";
 import { createTimelineAssignmentsInTransaction } from "./timelineAssignments";
 import {
+    exactRouteGeometry,
     markArcsInTransaction,
     NOTHING_REHOMED,
+    writeExactPathInTransaction,
     writeRouteGeometryInTransaction,
     type RehomeReport,
 } from "./timelineRouteGeometry";
@@ -518,11 +519,7 @@ export async function drawRouteInTransaction({
 
     return await mapDbErrors(async () => {
         if (current && replacesExact) {
-            await tx
-                .update(schema.timeline_routes)
-                .set({ geometry: json, exact_path: null })
-                .where(eq(schema.timeline_routes.id, current.id));
-            await markArcsInTransaction(tx, geometry);
+            await writeExactPathInTransaction(tx, current.id, null, geometry);
             return result(current.id);
         }
         if (current)
@@ -863,17 +860,6 @@ export function cutExactPath(
     };
 }
 
-/** The plain route geometry beside an exact path: its ends and no points. */
-export const exactRouteGeometry = (path: ExactPath): RouteGeometry => {
-    const end = exactEnd(path);
-    return {
-        v: 1,
-        from: [path.from[0], path.from[1]],
-        to: [end[0], end[1]],
-        points: [],
-    };
-};
-
 /**
  * AP-R7's two halves of `geometry` cut at distance `d` (at `C`) along its walked `path`: the
  * kept inner points (`inner`, none within `EPS_GEOM` of `C`) split by place, ids kept. Step 2: the
@@ -1058,12 +1044,5 @@ export async function writeRouteCutAfterInTransaction(
             .where(eq(schema.timeline_routes.id, cut.routeId));
         return;
     }
-    assertValid(validateRouteGeometry(cut.after), "route");
-    await tx
-        .update(schema.timeline_routes)
-        .set({
-            geometry: JSON.stringify(cut.after),
-            exact_path: JSON.stringify(cut.exact.after),
-        })
-        .where(eq(schema.timeline_routes.id, cut.routeId));
+    await writeExactPathInTransaction(tx, cut.routeId, cut.exact.after);
 }

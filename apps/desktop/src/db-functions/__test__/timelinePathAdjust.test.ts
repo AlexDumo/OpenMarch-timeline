@@ -345,7 +345,15 @@ describeDbTests("Adjust and Re-fit", (it) => {
             .filter((f) => f.endsWith(".ts"))
             .filter((f) => f !== "timelineRouteGeometry.ts")
             .filter((f) => writes(fs.readFileSync(path.join(dir, f), "utf8")));
-        expect(writers).toEqual([]);
+        // timelineLanes retimes an exact path's keys (EP-T) and never its geometry; it stays
+        // standalone for the main process, so it can't import the helper
+        expect(writers).toEqual(["timelineLanes.ts"]);
+        const lanes = fs.readFileSync(
+            path.join(dir, "timelineLanes.ts"),
+            "utf8",
+        );
+        const sets = [...lanes.matchAll(/\.update\(R\)\s*\.set\(\{\s*(\w+):/g)];
+        expect(sets.map((m) => m[1])).toEqual(["exact_path"]);
         expect(
             fs.readFileSync(path.join(dir, "timelineRouteGeometry.ts"), "utf8"),
         ).toMatch(/rehomeProfile/);

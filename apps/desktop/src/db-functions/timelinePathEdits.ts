@@ -16,7 +16,7 @@ import {
     type RouteGeometry,
     type XY,
 } from "@openmarch/core";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { schema } from "@/global/database/db";
 import { readTimelineTables } from "@/timeline/timelineRows";
 import type { DbConnection, DbTransaction } from "./types";
@@ -40,6 +40,7 @@ import {
 import { isGroupLane, laneOffset, lanesOfRoute } from "./timelineLanes";
 import {
     lastLegBulge,
+    writeExactPathInTransaction,
     writeRouteGeometryInTransaction,
     type RehomeReport,
 } from "./timelineRouteGeometry";
@@ -254,15 +255,7 @@ export async function redrawPathInTransaction({
     if (!(await isGroupRoute(tx, routeId))) {
         // Drawing an exact path again replaces it with a drawn one (ADR 0018 §5); its stored
         // geometry is only its ends, from which the new points are drawn
-        await tx
-            .update(schema.timeline_routes)
-            .set({ exact_path: null })
-            .where(
-                and(
-                    eq(schema.timeline_routes.id, routeId),
-                    isNotNull(schema.timeline_routes.exact_path),
-                ),
-            );
+        await writeExactPathInTransaction(tx, routeId, null);
         return await editOwnRoutePointsInTransaction(tx, routeId, fresh);
     }
     const resolver = createResolver((await readTimelineTables(tx)).snapshot);
