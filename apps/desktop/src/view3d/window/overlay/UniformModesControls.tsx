@@ -91,6 +91,8 @@ export function UniformModesControls() {
     const [adding, setAdding] = useState(false);
     const [open, setOpen] = useState<string | null>(null);
     const [problem, setProblem] = useState<string | null>(null);
+    /** What the last edit did that isn't obvious on screen */
+    const [notice, setNotice] = useState<string | null>(null);
 
     const worn = flatsArtworkOf(settings?.uniformArtwork);
     const wornPack = worn && isUniformPackValue(worn) ? worn : null;
@@ -259,6 +261,8 @@ export function UniformModesControls() {
                                 setOpen(open === mode.id ? null : mode.id)
                             }
                             edit={edit}
+                            onRefused={setProblem}
+                            onNotice={setNotice}
                         />
                     ))}
                 </ul>
@@ -284,6 +288,15 @@ export function UniformModesControls() {
                         {t("view3d.uniformModes.removeUnused")}
                     </Button>
                 </div>
+            )}
+            {notice && (
+                <p
+                    className="text-sub text-text/60"
+                    role="status"
+                    data-testid="view3d-uniform-modes-notice"
+                >
+                    {notice}
+                </p>
             )}
             {problem && (
                 <p className="text-sub text-red" role="alert">
@@ -488,6 +501,8 @@ function ModeRow({
     open,
     onToggle,
     edit,
+    onRefused,
+    onNotice,
 }: {
     mode: UniformPackMode;
     index: number;
@@ -499,6 +514,10 @@ function ModeRow({
         change: (c: PackContents) => PackContents,
         options?: PackEditOptions,
     ) => void;
+    /** Says why a greyed-out control did nothing */
+    onRefused: (reason: string) => void;
+    /** Says what an edit did that isn't obvious on screen */
+    onNotice: (text: string | null) => void;
 }) {
     const { t } = useTranslate();
     const { palette, options } = contents;
@@ -579,6 +598,7 @@ function ModeRow({
                     label={t("view3d.uniformModes.moveUp")}
                     reason={upReason}
                     testId="view3d-uniform-mode-up"
+                    onRefused={onRefused}
                     onClick={() => edit((c) => moveMode(c, mode.id, -1))}
                 >
                     <ArrowUpIcon size={16} />
@@ -587,6 +607,7 @@ function ModeRow({
                     label={t("view3d.uniformModes.moveDown")}
                     reason={downReason}
                     testId="view3d-uniform-mode-down"
+                    onRefused={onRefused}
                     onClick={() => edit((c) => moveMode(c, mode.id, 1))}
                 >
                     <ArrowDownIcon size={16} />
@@ -595,9 +616,25 @@ function ModeRow({
                     label={t("view3d.uniformModes.remove")}
                     reason={null}
                     testId="view3d-uniform-mode-remove"
-                    onClick={() =>
-                        edit((c) => removeMode(c, mode.id), { now: true })
-                    }
+                    onRefused={onRefused}
+                    onClick={() => {
+                        // the last mode's removal drops the images it didn't show (the pack then
+                        // draws every layer): say so, since nothing else on screen does
+                        const dropped =
+                            count === 1
+                                ? contents.layers.filter(
+                                      (l) => !mode.layers.includes(l.id),
+                                  ).length
+                                : 0;
+                        edit((c) => removeMode(c, mode.id), { now: true });
+                        onNotice(
+                            dropped > 0
+                                ? t("view3d.uniformModes.lastRemoved", {
+                                      count: dropped,
+                                  })
+                                : null,
+                        );
+                    }}
                 >
                     <TrashIcon size={16} />
                 </IconButton>
@@ -759,12 +796,15 @@ function IconButton({
     reason,
     testId,
     onClick,
+    onRefused,
     children,
 }: {
     label: string;
     reason: string | null;
     testId: string;
     onClick: () => void;
+    /** Called with `reason` when it's clicked greyed out, so touch hears why too */
+    onRefused: (reason: string) => void;
     children: ReactNode;
 }) {
     return (
@@ -783,7 +823,8 @@ function IconButton({
             }
             data-testid={testId}
             onClick={() => {
-                if (!reason) onClick();
+                if (reason) onRefused(reason);
+                else onClick();
             }}
         >
             {children}

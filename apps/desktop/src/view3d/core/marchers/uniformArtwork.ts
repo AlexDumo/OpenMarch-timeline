@@ -153,7 +153,7 @@ export function flatsArtworkOf(value: unknown): FlatsArtworkKey | null {
     const builtIn = uniformArtworkOf(value);
     if (builtIn) return builtIn;
     return typeof value === "string" &&
-        /^library:[^@\s]+@[0-9a-f]{64}$/.test(value)
+        /^library:[^@#\s]+@[0-9a-f]{64}$/.test(value)
         ? (value as UniformPackValue)
         : null;
 }

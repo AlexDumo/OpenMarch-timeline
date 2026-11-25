@@ -3828,7 +3828,8 @@
             },
             "unusedImages": "{count, plural, =1 {One image isn't shown in any mode.} other {# images aren't shown in any mode.}}",
             "removeUnused": "Remove unused images",
-            "loading": "Wait until the uniform has loaded."
+            "loading": "Wait until the uniform has loaded.",
+            "lastRemoved": "{count, plural, =1 {Removing the last mode also removed the one image it didn't show.} other {Removing the last mode also removed the # images it didn't show.}}"
         }
     },
     "web": {

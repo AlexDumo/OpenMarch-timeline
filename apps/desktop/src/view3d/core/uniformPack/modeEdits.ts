@@ -13,9 +13,11 @@
  *   every mode that named it.
  * - **Removing a mode never removes an image** (a layer), like deleting a layer comp in a design
  *   tool: another mode may have it turned off for now. Images no mode shows are removed on their
- *   own ({@link removeUnusedLayers}). Removing the last mode is the exception: the pack then draws
- *   every layer, so it keeps exactly that mode's layers and items, and folds its colors and parts
- *   into the pack's own, so it draws what that mode drew.
+ *   own ({@link removeUnusedLayers}).
+ * - **Except the last mode.** A pack without modes draws every layer, so removing the last mode
+ *   **does remove images**: the ones that mode didn't show, which would otherwise suddenly draw.
+ *   It keeps exactly that mode's layers and items, and folds its colors and parts into the pack's
+ *   own, so the pack draws what that mode drew. The settings say how many images went.
  * - **A mode id is never reused.** Each new id ends in a random part, so a mode made after one was
  *   removed never takes its id, and a venue or cue naming the removed one falls back to the
  *   default instead of picking up the new one.
@@ -279,8 +281,9 @@ export function renameMode(
 }
 
 /**
- * Removes mode `id`, keeping every layer. Removing the last mode keeps exactly its layers and
- * items, and makes its colors and parts the pack's own, so the pack draws what that mode drew.
+ * Removes mode `id`, keeping every layer. Removing the last mode is the exception: it removes the
+ * layers and items that mode didn't show (a pack without modes would draw them all), and makes
+ * its colors and parts the pack's own, so the pack draws what that mode drew.
  */
 export function removeMode(contents: PackContents, id: string): PackContents {
     const gone = contents.modes.find((m) => m.id === id);

@@ -622,20 +622,40 @@ Uniform cue exists in the app yet. This sets the contract #976 builds to.
   stored id changes. The 3D View's own key for a pack worn in a mode,
   `library:<id>@<hash>#<mode id>` (`withMode` / `splitMode`), relies on the
   same rule.
-- **Which Version a cue draws:** the Version the venue's `uniformArtwork`
-  names when it names a Version of that uniform, otherwise the uniform's
-  newest Version. Undo and Redo of an edit move the venue, so cues follow the
-  band's uniform through them.
+- **Which Version a cue draws: the uniform's current Version.** The venue JSON
+  keeps one pointer per imported uniform, the Version the venue last named for
+  it:
+
+  ```ts
+  uniformCurrent?: string[],  // one `library:<id>@<hash>` per uniform
+  ```
+
+  Whenever a write sets `uniformArtwork` to a Version of a uniform, it puts
+  that value in `uniformCurrent` in place of the uniform's earlier entry, in
+  the same write. The venue row is under undo, so Undo and Redo move the
+  pointer with the band's uniform. A cue naming `library:X#<mode>` draws the
+  Version `uniformCurrent` holds for X.
+  - Example: X v1, an edit makes v2, Undo, then pick uniform Y. The pointer
+    for X is back on v1 after the Undo, and picking Y doesn't touch it, so a
+    cue for X draws v1. v2 lingers in the show (Redo was cleared), but nothing
+    names it. "The newest Version" would have drawn the undone v2.
+  - A uniform with no entry (imported before the pointer existed, or never
+    worn) draws its newest Version, and the next write that names it adds
+    its entry.
 - **A mode the uniform no longer has** (removed), or a uniform the show no
   longer has, falls back to the band's uniform in its default mode. The cue
   is flagged as a value the compiler doesn't know, like any other.
 - **Removal and delete-protection without a Version.** A version-free value
   protects the uniform by its asset id:
   - Remove unused… (ADR 0010, amendment 2026-11-15) counts a
-    `library:<asset id>#…` value as a use of that asset's **newest** Version,
-    the one it draws when the venue doesn't name another. The venue protects
-    the Version it names. Older Versions that nothing else names stay
-    removable.
+    `library:<asset id>#…` value as a use of the Version `uniformCurrent`
+    holds for that asset (the newest only when it has no entry), the one the
+    cue draws. The pointer itself is a reference too: each Version it holds
+    is in use. Older Versions that nothing names, like the undone v2 above,
+    stay removable.
+  - History: `uniformCurrent` is in the venue row, so the history check
+    (`valuesNamedInHistory`) finds the Versions an undo or redo step would
+    point it back to, as it does for `uniformArtwork`.
   - Deleting a uniform that a cue names (any Version) offers "Replace with…"
     and lists the cues that name its asset id, as for a Version-pinned value
     [26.10].
@@ -661,6 +681,8 @@ Uniform cue exists in the app yet. This sets the contract #976 builds to.
 ### Verification
 
 - When #976 lands: a cue naming `library:<id>#<mode>` draws that mode on the
-  band's Version and follows an edit; removing the mode flags the cue and
-  draws the default; Remove unused… keeps the newest Version a cue names and
-  removes an older one nothing names; an asset id with `#` is refused.
+  uniform's current Version and follows an edit; after edit, Undo, then
+  picking another uniform, it draws the Version before the edit, and Remove
+  unused… keeps that Version and may remove the undone one; removing the mode
+  flags the cue and draws the default; an asset id with `#` is refused (done
+  in fork #1257 step 5: `isShowAssetId`, `flatsArtworkOf`).
