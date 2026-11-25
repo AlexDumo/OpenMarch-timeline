@@ -66,9 +66,21 @@ describe("venuePasses", () => {
             expect(kept.has(role)).toBe(true);
     });
 
-    it("keeps everything in Full color", () => {
+    it("keeps the turf's lines in Full color, but leaves the yard numbers and arrows to the 2D grid", () => {
         const [pass] = venuePasses(turf, VENUE_LOOKS.full);
-        expect(pass.items).toHaveLength(turf.items.length);
+        const kept = roles(pass.items);
+        expect(roles(turf.items).has("yardNumber")).toBe(true);
+        expect(roles(turf.items).has("arrow")).toBe(true);
+        expect(kept.has("yardNumber")).toBe(false);
+        expect(kept.has("arrow")).toBe(false);
+        for (const role of [
+            "yardLine",
+            "hash",
+            "stripe",
+            "endZoneText",
+            "centerLogo",
+        ] as FieldRole[])
+            expect(kept.has(role)).toBe(true);
     });
 
     it("paints only end zones, lightly, then the lettering and logo for Markings only", () => {

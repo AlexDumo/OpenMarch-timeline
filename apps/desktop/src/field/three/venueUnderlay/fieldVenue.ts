@@ -28,7 +28,11 @@ export interface VenueLook {
     detail: number;
     /** Markings only: the logo and end zones as faint grey ink, no turf. */
     ink: boolean;
-    /** Keeps the turf's own yard lines, hashes and numbers (and draws the grid in light ink). */
+    /**
+     * Keeps the turf's own yard lines and hashes (and draws the grid in light ink). Its
+     * yard numbers and arrows still drop out: the 2D grid draws its own, crisp and from
+     * the field's settings, and the two sets don't line up.
+     */
     keepMarkings: boolean;
     /** Share of color for the stands around the field. */
     aroundAmount: number;
@@ -113,6 +117,11 @@ const MARKINGS: ReadonlySet<FieldRole> = new Set<FieldRole>([
     "arrow",
     "grain",
 ]);
+/** What the 2D grid paints even in Full color; the turf's copies would ghost beside them. */
+const NUMBERS: ReadonlySet<FieldRole> = new Set<FieldRole>([
+    "yardNumber",
+    "arrow",
+]);
 /** Markings only: end zones as a light tint, the logo and lettering as ink. */
 const INK_ZONES: ReadonlySet<FieldRole> = new Set<FieldRole>([
     "endZone",
@@ -131,7 +140,7 @@ const INK_MARKS: ReadonlySet<FieldRole> = new Set<FieldRole>([
  * The plan's items a look paints, in passes: each pass is painted at its
  * alpha, in order. Markings only paints end zones lightly, then the logo and
  * lettering; the other looks paint everything but what the 2D grid draws
- * (Full color keeps it all).
+ * (Full color keeps the turf's lines, but not its yard numbers and arrows).
  */
 export function venuePasses(
     plan: FieldPlan,
@@ -150,9 +159,11 @@ export function venuePasses(
         ];
     return [
         {
-            items: look.keepMarkings
-                ? plan.items
-                : plan.items.filter((i) => !MARKINGS.has(i.role)),
+            items: plan.items.filter((i) =>
+                look.keepMarkings
+                    ? !NUMBERS.has(i.role)
+                    : !MARKINGS.has(i.role),
+            ),
             alpha: 1,
         },
     ];
