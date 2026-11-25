@@ -17,6 +17,7 @@ import {
 } from "@/shapes/tool/shapeToolStore";
 import { PlacedBoxKeys } from "@/shapes/placed/PlacedBoxKeys";
 import { useBoxSelectionStore } from "@/shapes/placed/boxSelectionStore";
+import { useRemoveFromShapeAction } from "@/shapes/placed/useRemoveFromShape";
 import { useUnsetActionHandlers } from "./handlers/useUnsetActionHandlers";
 import { useHoldActionHandlers } from "./handlers/useHoldActionHandlers";
 import { useCueActionHandlers } from "./handlers/useCueActionHandlers";
@@ -54,6 +55,7 @@ export function EditorActionHandlers() {
     useCursorActionHandlers();
     useShapeToolActions();
     useClipboardActions();
+    useRemoveFromShapeAction();
     useUnsetActionHandlers();
     useHoldActionHandlers();
     useCueActionHandlers();

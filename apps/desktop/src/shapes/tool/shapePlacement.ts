@@ -50,6 +50,11 @@ export interface ShapePlacement {
      * of marchers does, and any shape they stood in loses them
      */
     readonly plain?: boolean;
+    /**
+     * Members listed in the recipe whose positions this write leaves as they are: open spots
+     * (ADR 0006 §9.1), whose marchers keep their own timing when the shape is dealt again
+     */
+    readonly listedOnly?: ReadonlySet<number>;
 }
 
 /** What placing the open shape would write; null while there is nothing to place */
@@ -119,6 +124,10 @@ export function placesNothing(
     );
 }
 
+/** The members whose positions a placement writes: all but those it only lists */
+const writtenIds = ({ members, listedOnly }: ShapePlacement): number[] =>
+    members.map((m) => m.marcherId).filter((id) => !listedOnly?.has(id));
+
 /**
  * Writes a placement: the one write behind every shape placed (#344), a new one (`placeShape`)
  * or an edit of a placed one (`commitBox`). Its members move to their spots through the same path as a canvas drag (they
@@ -143,7 +152,7 @@ export async function writePlacement(
 ): Promise<boolean> {
     const { members, replaces } = placement;
     const to = new Map(members.map((m) => [m.marcherId, m]));
-    const marcherIds = members.map((m) => m.marcherId);
+    const marcherIds = writtenIds(placement);
     let saved = false;
     const spotsOf = (current: readonly { readonly marcher_id: number }[]) =>
         current.flatMap((c) => {

@@ -1619,6 +1619,19 @@ const STATIC_ACTIONS = {
         hiddenFromPalette: true,
     },
 
+    // Take the selected marchers whose spots in a placed shape are open (a ring where the member
+    // isn't standing) out of it, spots and all; the shape deals its spots again for the members
+    // left (ADR 0006 revision of 2026-11-22, §9.1). The field's menu on an open spot or on such a
+    // marcher, and the palette. No keys
+    shapeRemoveFromShape: {
+        labelKey: "actions.shape.removeFromShape",
+        keywordsKey: "actions.shape.removeFromShapeKeywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+
     // The open shape's pivot back to the center: what a double-click on the pivot does, as an
     // entry in the floating editor's pivot menu for a tablet (tablet 1.5)
     shapeCenterPivot: {

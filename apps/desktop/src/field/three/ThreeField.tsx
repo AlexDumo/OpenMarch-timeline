@@ -78,6 +78,7 @@ import {
 import {
     drawnPlacedBoxes,
     PlacedBoxesOverlay,
+    openSpotAt,
 } from "@/shapes/placed/PlacedBoxesOverlay";
 import { ShapeEditor } from "@/shapes/editor/ShapeEditorBar";
 import { PathEditor } from "@/pathways/PathEditor";
@@ -600,6 +601,8 @@ function ThreeFieldView() {
                     // #315: a right-click opens the field's menu there
                     openMenu: (at, hit, actions) =>
                         openMenuAt.current(at.screen, hit, actions),
+                    // ADR 0006 §9.1: a placed shape's open spot opens Remove from shape
+                    openSpotAt,
                 },
                 {
                     isMac: isMacPlatform(),
