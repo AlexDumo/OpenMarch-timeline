@@ -6,6 +6,11 @@ import { GESTURE_TIMING } from "@/components/canvas/touch/touchGestures";
 import { fieldPointerAt, useFieldViewStore } from "./fieldView";
 import { fieldGesturesOwn } from "./fieldGestures";
 import { setView } from "./fieldNavigation";
+import {
+    describePointerEvent,
+    fieldDragUndone,
+    noteFieldInput,
+} from "@/field/fieldInputTrace";
 
 export type FieldPointerInputOptions = {
     /**
@@ -56,6 +61,11 @@ export function attachFieldPointerInput(
     let captured: number | null = null;
     /** The button that started that press */
     let capturedButton = 0;
+    /** For the input trace (`fieldInputTrace.ts`): the buttons last seen held, and the moves since the press */
+    let tracedButtons = 0;
+    let moves = 0;
+    /** The pointer of the editor's last press, until its release is seen anywhere */
+    let pressed: number | null = null;
     const penPan = attachPenPan(element, editor);
     const penHold = watchPenHold(editor, pointer);
     const down = (event: PointerEvent) => {
@@ -70,8 +80,16 @@ export function attachFieldPointerInput(
             // Held and lifted unmoved, it opens the menus, as anywhere
             return penHold.down(event);
         }
-        if (!editor.pointerDown(drag ? { ...press, area: drag } : press))
-            return;
+        const took = editor.pointerDown(
+            drag ? { ...press, area: drag } : press,
+        );
+        tracedButtons = event.buttons;
+        moves = 0;
+        noteFieldInput(
+            `${describePointerEvent(event)} (${took ? "the editor's" : "not the editor's"})`,
+        );
+        if (!took) return;
+        pressed = event.pointerId;
         captured = event.pointerId;
         capturedButton = event.button;
         element.setPointerCapture(event.pointerId);
@@ -84,6 +102,15 @@ export function attachFieldPointerInput(
         if (penPan.move(event)) {
             if (penPan.panning(event.pointerId)) penHold.cancel(event);
             return;
+        }
+        if (event.pointerId === captured) {
+            moves++;
+            if (event.buttons !== tracedButtons) {
+                tracedButtons = event.buttons;
+                noteFieldInput(
+                    `buttons changed mid-press: ${describePointerEvent(event)}`,
+                );
+            }
         }
         const at = pointer(event);
         resting.set(event.buttons === 0 ? at : null);
@@ -103,14 +130,25 @@ export function attachFieldPointerInput(
         // holds ends then all the same, with its own button, or the release is lost and the drag
         // snaps back when the capture goes
         const ends = event.pointerId === captured && event.buttons === 0;
+        noteFieldInput(
+            `${describePointerEvent(event)} after ${moves} moves${captured === null ? " (no press held)" : ""}`,
+        );
         editor.pointerUp(ends ? { ...at, button: capturedButton } : at);
+        // The release ended the pointer's last button: nothing the press started may be left running
+        if (ends && editor.pressing())
+            fieldDragUndone("the release left the press running");
     };
     const cancel = (event: PointerEvent) => {
         penHold.cancel(event);
         penPan.cancel(event);
         if (event.pointerId !== captured) return;
+        noteFieldInput(`${describePointerEvent(event)} after ${moves} moves`);
         captured = null;
-        editor.pointerCancel();
+        editor.pointerCancel(
+            event.type === "pointercancel"
+                ? "the browser cancelled the pointer"
+                : "the canvas lost the pointer before its release",
+        );
     };
     const leave = (event: PointerEvent) => {
         if (event.buttons === 0) editor.pointerLeave();
@@ -126,6 +164,13 @@ export function attachFieldPointerInput(
     element.addEventListener("lostpointercapture", cancel);
     element.addEventListener("pointerleave", leave);
     const detachRight = listenForCapturedRightPresses(element, editor, pointer);
+    const detachTrace = traceAroundTheField(element, {
+        captured: () => captured,
+        pressed: () => pressed,
+        released: () => {
+            pressed = null;
+        },
+    });
     const unsubscribe = editor.subscribe(showCursor);
     showCursor();
     return () => {
@@ -139,8 +184,64 @@ export function attachFieldPointerInput(
         detachRight();
         penHold.stop();
         unsubscribe();
-        editor.pointerCancel();
+        detachTrace();
+        editor.pointerCancel("the field's input was detached");
         element.style.cursor = "";
+    };
+}
+
+/**
+ * Notes for the input trace what happens around the field that can end a press: the window losing
+ * focus or being hidden, the canvas losing its GPU context, and a release or cancel of the held
+ * pointer that lands somewhere other than the canvas. Returns the detach.
+ */
+function traceAroundTheField(
+    element: HTMLElement,
+    press: {
+        captured: () => number | null;
+        pressed: () => number | null;
+        released: () => void;
+    },
+): () => void {
+    const held = () => {
+        const id = press.captured();
+        return id === null ? "" : ` (pointer #${id} held)`;
+    };
+    const onWindow = (event: Event) =>
+        noteFieldInput(`window ${event.type}${held()}`);
+    const onVisibility = () =>
+        noteFieldInput(`document ${document.visibilityState}${held()}`);
+    const onContext = (event: Event) =>
+        noteFieldInput(`canvas ${event.type}${held()}`);
+    const elsewhere = (event: PointerEvent) => {
+        if (event.pointerId !== press.pressed()) return;
+        if (event.type === "pointerup" && event.buttons === 0) press.released();
+        if (event.target === element) return;
+        const target =
+            event.target instanceof Element
+                ? event.target.tagName.toLowerCase()
+                : "?";
+        noteFieldInput(
+            `${describePointerEvent(event)} went to a ${target}, not the canvas`,
+        );
+    };
+    window.addEventListener("blur", onWindow);
+    window.addEventListener("focus", onWindow);
+    document.addEventListener("visibilitychange", onVisibility);
+    element.addEventListener("webglcontextlost", onContext);
+    element.addEventListener("webglcontextrestored", onContext);
+    document.addEventListener("pointerup", elsewhere, true);
+    document.addEventListener("pointercancel", elsewhere, true);
+    noteFieldInput("field input attached");
+    return () => {
+        window.removeEventListener("blur", onWindow);
+        window.removeEventListener("focus", onWindow);
+        document.removeEventListener("visibilitychange", onVisibility);
+        element.removeEventListener("webglcontextlost", onContext);
+        element.removeEventListener("webglcontextrestored", onContext);
+        document.removeEventListener("pointerup", elsewhere, true);
+        document.removeEventListener("pointercancel", elsewhere, true);
+        noteFieldInput("field input detached");
     };
 }
 

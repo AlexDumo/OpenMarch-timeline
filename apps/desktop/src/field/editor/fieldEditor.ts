@@ -64,6 +64,7 @@ import { RotateGesture, ScaleGesture } from "./transformGestures";
 import { linesUnder, type LinePull } from "./linePull";
 import { lineCoordinate } from "@/shapes/field/lineCoordinate";
 import { isPanButton } from "./view";
+import { fieldDragUndone, noteFieldInput } from "@/field/fieldInputTrace";
 
 /**
  * The field editor (ADR 0005 D-1): what a press, click or drag on the field
@@ -299,6 +300,8 @@ export const CLICK_SLOP = thresholdsFor("mouse").clickSlop;
 
 /** How long a drop may take to save before the editor logs that it hasn't settled. */
 const DROP_SETTLE_WARNING_MS = 30_000;
+/** How long after a drop saves the field looks whether it is drawn where it was dropped */
+const DROP_DRAWN_CHECK_MS = 500;
 
 /**
  * A press within this many milliseconds and screen pixels of a click on empty
@@ -878,7 +881,9 @@ export class FieldEditor {
                     : null;
             return false;
         }
-        this.cancelGesture();
+        this.cancelGesture(
+            "a new press came while it was still under way (its release never arrived)",
+        );
         this.ignoredButton = null;
         // A mouse's edit press comes with no other button down: a right press (or a Mac's
         // Ctrl-press) whose release never arrived is over, and mustn't take this one's release
@@ -963,8 +968,13 @@ export class FieldEditor {
             return;
         }
         if (this.modePress) {
-            if (isPastSlop(this.modePress.start, pointer))
+            if (
+                !this.modePress.dragged &&
+                isPastSlop(this.modePress.start, pointer)
+            ) {
                 this.modePress.dragged = true;
+                noteFieldInput(`drag started: ${this.mode?.gesture.kind}`);
+            }
             this.mode?.move(pointer);
             return;
         }
@@ -1018,6 +1028,7 @@ export class FieldEditor {
         this.lastClick = null;
         this.gesture = this.startDrag(press, pointer);
         this.gestureButton = press.start.button;
+        noteFieldInput(`drag started: ${this.gesture?.kind ?? "nothing"}`);
         if (!this.gesture) {
             this.ignoredButton = press.start.button;
             return;
@@ -1079,6 +1090,7 @@ export class FieldEditor {
             if (pointer.button !== this.gestureButton) return;
             const gesture = this.gesture;
             this.gesture = null;
+            noteFieldInput(`${gesture.kind} ended by its release`);
             gesture.end(pointer);
             this.emit();
             return;
@@ -1257,20 +1269,28 @@ export class FieldEditor {
         );
     }
 
-    /** The pointer was lost (capture lost, the window lost focus): nothing is clicked or dropped. */
-    pointerCancel(): void {
+    /**
+     * The pointer was lost (capture lost, the window lost focus): nothing is clicked or dropped.
+     * `reason`, when the loss is unexpected, says what lost it: a drag under way then is reported
+     * as undone (`fieldInputTrace.ts`). Expected cancels (a second finger, Preview) give none.
+     */
+    pointerCancel(reason?: string): void {
         // The last click stays: the renderer also cancels after every release
         // A press the prop tool was drawing with is dropped (a second finger
         // landed to move the view): the corners already down stay
         this.propTool?.cancel();
         if (this.modePress) {
+            if (reason && this.modePress.dragged)
+                fieldDragUndone(
+                    `${this.mode?.gesture.kind} cancelled: ${reason}`,
+                );
             this.modePress = null;
             this.mode?.cancel();
             this.emit();
         }
         this.press = null;
         this.ignoredButton = null;
-        this.cancelGesture();
+        this.cancelGesture(reason);
     }
 
     /**
@@ -1393,7 +1413,7 @@ export class FieldEditor {
         this.mode = mode;
         this.hoverHandle = null;
         if (mode) {
-            this.cancelGesture();
+            this.cancelGesture("a field mode turned on");
             this.press = null;
             // A click a mode took can change the mode (a path clicked under a selected box goes
             // from the box's mode to the path's); the next click can still be its double-click
@@ -1419,7 +1439,7 @@ export class FieldEditor {
             this.emit();
             return;
         }
-        this.cancelGesture();
+        this.cancelGesture("the prop tool turned on");
         this.press = null;
         this.lastClick = null;
         this.lastToolPress = null;
@@ -1706,7 +1726,7 @@ export class FieldEditor {
         if (this.playing === playing) return;
         this.playing = playing;
         if (playing) {
-            this.cancelGesture();
+            this.cancelGesture("the show started playing");
             this.picking = false;
             this.pickAt = null;
         }
@@ -2496,6 +2516,10 @@ export class FieldEditor {
         );
         const settle = (result?: DropResult) => {
             clearTimeout(unsettled);
+            noteFieldInput(`drop ${result ?? "failed"}`);
+            if (result !== "saved")
+                fieldDragUndone(`the drop was ${result ?? "lost to an error"}`);
+            else this.checkDropDrawn(starts, positions);
             // A rotation typed over this drop started from where it snaps back from
             if (result !== "saved") this.cancelRotation();
             // A pivot on a free spot moves with the drop only once it's saved: refused, the
@@ -2510,6 +2534,43 @@ export class FieldEditor {
             );
         };
         this.ports.drop(positions).then(settle, () => settle());
+    }
+
+    /**
+     * A saved drop should be drawn where it was dropped. Looks a moment after it saved: when every
+     * moved marcher is drawn back on its start instead, the drop looked undone, so it's reported
+     * (`fieldInputTrace.ts`) for the Mac drags that snap back on release.
+     */
+    private checkDropDrawn(
+        starts: readonly MarcherPosition[],
+        positions: readonly MarcherPosition[],
+    ) {
+        const moved = positions.filter(
+            (p, i) => p.x !== starts[i].x || p.y !== starts[i].y,
+        );
+        const startOf = new Map(starts.map((s) => [s.id, s]));
+        setTimeout(() => {
+            if (this.live || this.pending) return;
+            const drawn = new Map(
+                this.drawnPositions(moved.map((p) => p.id)).map((p) => [
+                    p.id,
+                    p,
+                ]),
+            );
+            const atStart = (p: MarcherPosition) => {
+                const now = drawn.get(p.id);
+                const start = startOf.get(p.id);
+                return (
+                    now !== undefined &&
+                    start !== undefined &&
+                    Math.hypot(now.x - start.x, now.y - start.y) < 0.01
+                );
+            };
+            if (moved.length > 0 && moved.every(atStart))
+                fieldDragUndone(
+                    "the saved drop is drawn back where it started",
+                );
+        }, DROP_DRAWN_CHECK_MS);
     }
 
     /**
@@ -2633,10 +2694,12 @@ export class FieldEditor {
         );
     }
 
-    private cancelGesture() {
+    /** Ends the gesture under way with nothing done; `reason`, when unexpected, reports it undone. */
+    private cancelGesture(reason?: string) {
         if (!this.gesture) return;
         const gesture = this.gesture;
         this.gesture = null;
+        if (reason) fieldDragUndone(`${gesture.kind} cancelled: ${reason}`);
         gesture.cancel();
         this.emit();
     }
