@@ -21,6 +21,7 @@ describe("timeline lanes in use (#992)", () => {
         ).toEqual({
             moves: { inShow: true, shown: true },
             equipment: { inShow: false, shown: false },
+            facing: { inShow: false, shown: false },
         });
         expect(
             byId(
@@ -33,6 +34,7 @@ describe("timeline lanes in use (#992)", () => {
         ).toEqual({
             moves: { inShow: false, shown: false },
             equipment: { inShow: true, shown: true },
+            facing: { inShow: false, shown: false },
         });
     });
 
@@ -51,6 +53,7 @@ describe("timeline lanes in use (#992)", () => {
         expect(byId(hidden)).toEqual({
             moves: { inShow: true, shown: false },
             equipment: { inShow: true, shown: false },
+            facing: { inShow: false, shown: false },
         });
         expect(hiddenLaneCount(hidden)).toBe(2);
     });
@@ -76,14 +79,20 @@ describe("the Lanes menu (#992)", () => {
         expect(model.inShow.map((s) => s.lane.id)).toEqual(["moves"]);
         expect(
             model.add.map((f) => [f.familyKey, f.lanes.map((s) => s.lane.id)]),
-        ).toEqual([["cues.laneFamily.equipment", ["equipment"]]]);
+        ).toEqual([
+            ["cues.laneFamily.equipment", ["equipment"]],
+            ["cues.laneFamily.facing", ["facing"]],
+        ]);
     });
 
     it("has nothing to add once every built lane is in the show", () => {
         const model = lanesMenuModel(
             laneStates({
                 saved: {},
-                cueCounts: counts([["equipment", 1]]),
+                cueCounts: counts([
+                    ["equipment", 1],
+                    ["facing", 2],
+                ]),
                 expert: true,
             }),
             "",
@@ -92,6 +101,7 @@ describe("the Lanes menu (#992)", () => {
         expect(model.inShow.map((s) => s.lane.id)).toEqual([
             "moves",
             "equipment",
+            "facing",
         ]);
         expect(model.inShow[1].cueCount).toBe(1);
         expect(model.add).toEqual([]);

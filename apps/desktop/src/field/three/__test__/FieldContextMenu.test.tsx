@@ -370,6 +370,8 @@ describe("FieldContextMenu", () => {
             [
                 "equipment",
                 "select-holding",
+                // Facing (#993)
+                "facing",
                 "cueAddSelected",
                 "cueRemoveSelected",
             ],

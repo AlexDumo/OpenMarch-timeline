@@ -95,6 +95,16 @@ import {
     useLaneShown,
 } from "@/timeline/timelineLanes";
 import { LANES_ROW_HEIGHT, LanesRow, useLaneNameMenu } from "./LanesMenu";
+import { useFacingLaneParts } from "./FacingLane";
+import {
+    DRAG_SLOP_PX,
+    EMPTY,
+    HEADER,
+    PAD,
+    ROW,
+    SUMMARY,
+    useLongPressMenu,
+} from "./cueLaneParts";
 import {
     countToSpecBeat,
     equipmentLane,
@@ -102,14 +112,6 @@ import {
     type LanePiece,
     type LaneRow,
 } from "@/cues/equipmentLane";
-
-const HEADER = 20;
-const ROW = 20;
-const SUMMARY = 24;
-const EMPTY = 22;
-const PAD = 4;
-/** A mouse press on a cue moves this far before it drags, as a move's clip does */
-const DRAG_SLOP_PX = 3;
 
 /** Each thing held, as a lane color. */
 const FILL: Readonly<Record<PerformerCarry, string>> = {
@@ -139,6 +141,7 @@ export function equipmentLaneHeight(
 export function useEquipmentLaneBand(): TimelineBand | undefined {
     const shown = useLaneShown("equipment");
     const folded = useLaneFolded("equipment");
+    const facing = useFacingLaneParts();
     const show = useShowCues();
     const beats = useTimingObjects()?.beats;
     const lane = useMemo(
@@ -156,10 +159,12 @@ export function useEquipmentLaneBand(): TimelineBand | undefined {
         if (!beats) return undefined;
         // The lanes area: the cue lanes that show, then the Lanes row, always last
         const equipmentHeight = shown ? equipmentLaneHeight(lane, folded) : 0;
+        const facingHeight = facing.height;
+        const lanesHeight = equipmentHeight + facingHeight;
         return {
-            height: equipmentHeight + LANES_ROW_HEIGHT,
+            height: lanesHeight + LANES_ROW_HEIGHT,
             // Only a shown cue lane keeps the playhead and start flag above it
-            takesPresses: shown,
+            takesPresses: shown || facingHeight > 0,
             render: (geometry) => (
                 <>
                     {shown && (
@@ -171,11 +176,15 @@ export function useEquipmentLaneBand(): TimelineBand | undefined {
                             folded={folded}
                         />
                     )}
+                    {facing.render({
+                        ...geometry,
+                        top: geometry.top + equipmentHeight,
+                    })}
                     <div
                         data-testid="timeline-lanes-row-area"
                         className="absolute left-0 flex items-center"
                         style={{
-                            top: geometry.top + equipmentHeight,
+                            top: geometry.top + lanesHeight,
                             width: geometry.width,
                             height: LANES_ROW_HEIGHT,
                         }}
@@ -188,7 +197,7 @@ export function useEquipmentLaneBand(): TimelineBand | undefined {
                 </>
             ),
         };
-    }, [shown, folded, lane, show, beats]);
+    }, [shown, folded, lane, show, beats, facing]);
 }
 
 type CueMenu = { x: number; y: number; cueId: number };
@@ -470,11 +479,15 @@ export function EquipmentLaneView({
             // their own)
             onPointerDown={(e) => {
                 if (e.target === e.currentTarget) pick(null);
+                // A press in the lane's menus and popovers (drawn elsewhere in the page, but
+                // inside the lane for React) is theirs, not the timeline's
                 if (
-                    e.target instanceof Element &&
-                    e.target.closest(
-                        '[data-testid="equipment-lane-header"], button',
-                    )
+                    !(e.target instanceof Node) ||
+                    !e.currentTarget.contains(e.target) ||
+                    (e.target instanceof Element &&
+                        e.target.closest(
+                            '[data-testid="equipment-lane-header"], button',
+                        ))
                 )
                     e.stopPropagation();
             }}
@@ -630,61 +643,6 @@ export function EquipmentLaneView({
             )}
         </div>
     );
-}
-
-/** How long a finger holds still on a cue to open its menu. */
-const LONG_PRESS_MS = 500;
-/** How far a finger may drift during a long press. */
-const LONG_PRESS_SLOP = 10;
-
-/**
- * A finger held still on a cue (a bar or a mark) opens its menu, as a right-click does. `start`
- * goes in the press handler, the rest on the element.
- */
-function useLongPressMenu(onMenu: (clientX: number, clientY: number) => void) {
-    const press = useRef<{
-        x: number;
-        y: number;
-        timer: ReturnType<typeof setTimeout>;
-    } | null>(null);
-    const end = () => {
-        if (press.current) clearTimeout(press.current.timer);
-        press.current = null;
-    };
-    return {
-        start: (e: ReactPointerEvent<HTMLElement>) => {
-            if (e.pointerType === "mouse") return;
-            const { clientX, clientY } = e;
-            end();
-            press.current = {
-                x: clientX,
-                y: clientY,
-                timer: setTimeout(() => {
-                    press.current = null;
-                    onMenu(clientX, clientY);
-                }, LONG_PRESS_MS),
-            };
-        },
-        handlers: {
-            onPointerMove: (e: ReactPointerEvent<HTMLElement>) => {
-                const p = press.current;
-                if (
-                    p &&
-                    Math.hypot(e.clientX - p.x, e.clientY - p.y) >
-                        LONG_PRESS_SLOP
-                )
-                    end();
-            },
-            onPointerUp: end,
-            onPointerCancel: end,
-            onContextMenu: (e: ReactMouseEvent<HTMLElement>) => {
-                e.preventDefault();
-                e.stopPropagation();
-                end();
-                onMenu(e.clientX, e.clientY);
-            },
-        },
-    };
 }
 
 /** One piece of a row: a cue's bar or pill, or the dashed default. */

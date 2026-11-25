@@ -388,7 +388,7 @@ describe("lasting and momentary cues (ADR 0015 D-2)", () => {
 });
 
 describe("transitions (ADR 0015 D-2)", () => {
-    it("takes the value's default: a snap for horns, 2 counts for a facing", () => {
+    it("takes the value's default: a snap for horns; a facing is instant on its count", () => {
         const compiled = compile([
             cue(10, "position", 8, "builtin:horn.down", [1]),
             cue(11, "facing", 8, "builtin:facing.back", [1]),
@@ -400,10 +400,10 @@ describe("transitions (ADR 0015 D-2)", () => {
             snap: true,
             cueId: 10,
         });
-        // 2 counts, counted inclusively: it starts on count 7's click
+        // A facing's turn starts on its count (#993): with no counts, it's instant there
         expect(shape(compiled.segments(1, "facing"))).toEqual([
-            [0, 7, "default", "builtin:facing.front"],
-            [7, 8, "transition", "builtin:facing.back"],
+            [0, 8, "default", "builtin:facing.front"],
+            [8, 8, "transition", "builtin:facing.back"],
             [8, 32, "lasting", "builtin:facing.back"],
         ]);
     });
@@ -439,16 +439,16 @@ describe("transitions (ADR 0015 D-2)", () => {
 
     it("starts no earlier than the cue before it, and flags the cut", () => {
         const compiled = compile([
-            cue(10, "facing", 8, "builtin:facing.back", [1]),
-            cue(11, "facing", 10, "builtin:facing.side1", [1], {
+            cue(10, "position", 8, "builtin:horn.down", [1], { transition: 2 }),
+            cue(11, "position", 10, "builtin:horn.up", [1], {
                 transition: 8,
             }),
         ]);
-        expect(shape(compiled.segments(1, "facing"))).toEqual([
-            [0, 7, "default", "builtin:facing.front"],
-            [7, 8, "transition", "builtin:facing.back"],
-            [8, 10, "transition", "builtin:facing.side1"],
-            [10, 32, "lasting", "builtin:facing.side1"],
+        expect(shape(compiled.segments(1, "position"))).toEqual([
+            [0, 7, "default", "builtin:horn.up"],
+            [7, 8, "transition", "builtin:horn.down"],
+            [8, 10, "transition", "builtin:horn.up"],
+            [10, 32, "lasting", "builtin:horn.up"],
         ]);
         expect(compiled.flags).toEqual([
             { kind: "transition_cut", cueIds: [10, 11], marcherIds: [1] },
@@ -457,16 +457,16 @@ describe("transitions (ADR 0015 D-2)", () => {
 
     it("leads a momentary cue in, and cuts back when it ends", () => {
         const compiled = compile([
-            cue(10, "facing", 8, "builtin:facing.back", [1], {
+            cue(10, "position", 8, "builtin:horn.down", [1], {
                 length: 4,
                 transition: 3,
             }),
         ]);
-        expect(shape(compiled.segments(1, "facing"))).toEqual([
-            [0, 6, "default", "builtin:facing.front"],
-            [6, 8, "transition", "builtin:facing.back"],
-            [8, 12, "momentary", "builtin:facing.back"],
-            [12, 32, "default", "builtin:facing.front"],
+        expect(shape(compiled.segments(1, "position"))).toEqual([
+            [0, 6, "default", "builtin:horn.up"],
+            [6, 8, "transition", "builtin:horn.down"],
+            [8, 12, "momentary", "builtin:horn.down"],
+            [12, 32, "default", "builtin:horn.up"],
         ]);
     });
 

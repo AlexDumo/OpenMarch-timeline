@@ -32,6 +32,12 @@ import {
 } from "./equipment";
 import { itemKeyOf } from "./equipmentItems";
 import { endAtCount, type EndRefusal } from "./cueEdges";
+import {
+    facingAlready,
+    planFacingSet,
+    facingValueOf,
+    type FacingChoice,
+} from "./facing";
 
 /**
  * The beat a cue made at the paused playhead sits on: the beat whose click is the playhead. Spec
@@ -97,11 +103,25 @@ export interface CueCommands {
      * the playhead not after its start, past the next cue that stops it, or it ends there already.
      */
     readonly endToPlayhead: () =>
-        | { readonly length: number | null }
+        | {
+              readonly length: number | null;
+          }
         | { readonly refused: EndRefusal | "noCount" }
         | null;
     /** Ends the cue at the playhead's count (momentary for that many counts), as one undo step. */
     readonly endAtPlayhead: () => void;
+    /** Whether every selected performer already faces what `choice` gives at the playhead. */
+    readonly facingAlready: (choice: FacingChoice) => boolean;
+    /** Turns the selection from the paused playhead (one instant, lasting cue), as one undo step. */
+    readonly setFacing: (choice: FacingChoice) => void;
+    /**
+     * Changes the picked Facing cue's turn, as one undo step: where it turns to (`choice`) and how
+     * many counts it takes (`transition`, null for instant). Fields left out are kept.
+     */
+    readonly editTurn: (edit: {
+        readonly choice?: FacingChoice;
+        readonly transition?: number | null;
+    }) => void;
     readonly deleteCue: () => void;
 }
 
@@ -200,6 +220,9 @@ export function useCueCommands(): CueCommands {
         const endToPlayhead = () => {
             if (!cue || !show) return null;
             if (count === null) return { refused: "noCount" as const };
+            // A Facing cue lasts until the next one; its turn leads into it (#993)
+            if (cue.type === "facing")
+                return { refused: "lastingOnly" as const };
             return endAtCount({
                 cues: show.cues,
                 cue,
@@ -308,6 +331,58 @@ export function useCueCommands(): CueCommands {
                     words,
                 );
                 if (plan) edit(plan);
+            },
+            facingAlready: (choice) =>
+                show !== null &&
+                count !== null &&
+                facingAlready({
+                    compiled: show.compiled,
+                    choice,
+                    marcherIds: selectedIds,
+                    count,
+                }),
+            setFacing: (choice) => {
+                if (!beat || !show) return;
+                const plan = planFacingSet({
+                    cues: show.cues,
+                    choice,
+                    marcherIds: selectedIds,
+                    beatId: beat.id,
+                    labelFor: (ids) =>
+                        describePerformers({
+                            ids,
+                            marchers: show.marchers,
+                            words,
+                        }),
+                    relabelFor: relabelIn(show, words),
+                });
+                if (equipmentSetIsEmpty(plan)) return;
+                // A first Facing cue makes its lane appear, even one hidden before
+                if (!show.cues.some((c) => c.type === "facing"))
+                    revealLane("facing");
+                edit(plan);
+            },
+            editTurn: ({ choice, transition }) => {
+                if (!cue || !show || cue.type !== "facing") return;
+                const set = choice ? facingValueOf(choice) : null;
+                const changed =
+                    (set !== null &&
+                        (set.value !== cue.value ||
+                            JSON.stringify(set.settings) !==
+                                JSON.stringify(cue.settings))) ||
+                    (transition !== undefined && transition !== cue.transition);
+                if (!changed) return;
+                edit({
+                    deletedCueIds: [],
+                    newCues: [],
+                    modifiedCues: [
+                        {
+                            id: cue.id,
+                            ...(set ?? {}),
+                            ...(transition !== undefined && { transition }),
+                        },
+                    ],
+                });
             },
             deleteCue: () => {
                 if (!cue) return;

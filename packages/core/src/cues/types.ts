@@ -263,6 +263,13 @@ export interface CueSegment {
      * show here: a kneel while the dot travels.
      */
     hiddenCueId?: number;
+    /**
+     * Facing (#993): the angle in degrees, unwrapped (0 front, 90 side 2),
+     * that this performer holds over the segment, or turns to by its end.
+     */
+    degrees?: number;
+    /** Facing: the angle a turn (a `transition` segment) starts from. */
+    fromDegrees?: number;
 }
 
 export type CueFlagKind =

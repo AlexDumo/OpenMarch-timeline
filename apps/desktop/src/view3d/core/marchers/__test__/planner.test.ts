@@ -1124,16 +1124,39 @@ describe("facing", () => {
         expect(clipPerCount(plan)[1]).toBe("8to5");
     });
 
-    it("slides with the upper body held when the travel is across the facing", () => {
-        // facing the backfield, travel toward side 2: to the performer's right
+    it("slides toward the 50 forward when facing the backfield", () => {
+        // facing the backfield at 10 m on side 2, travel toward side 1: to the performer's left
+        const plan = planMarcher(
+            input([...repeat<Count>(4, [-STEP, 0]), "hold"], {
+                heading: BACK,
+                x0: 10,
+            }),
+        );
+        expect(clipPerCount(plan)[1]).toBe("slideL8to5");
+    });
+
+    it("keeps the slide-to-the-50 rule with any facing: away from it, backward (#993)", () => {
+        // facing the backfield, travel toward side 2 (the performer's right), away from the 50:
+        // the legs point at the 50, as when facing front
         const plan = planMarcher(
             input([...repeat<Count>(4, [STEP, 0]), "hold"], {
                 heading: BACK,
                 x0: 10,
             }),
         );
-        // away from the 50, but the 50 rule is for the front facing only
-        expect(clipPerCount(plan)[1]).toBe("slideR8to5");
+        expect(clipPerCount(plan)[1]).toBe("back8to5");
+    });
+
+    it("leaves a slide up the field to the legs' own rule when facing a side", () => {
+        // facing side 2, travel toward the backfield: to the performer's left; the 50 gives no
+        // answer (no sideline-to-sideline travel)
+        const plan = planMarcher(
+            input([...repeat<Count>(4, [0, -STEP]), "hold"], {
+                heading: SIDE2,
+                x0: 10,
+            }),
+        );
+        expect(clipPerCount(plan)[1]).toBe("slideL8to5");
     });
 
     it("lands on the dot facing the backfield", () => {
@@ -1152,7 +1175,7 @@ describe("facing", () => {
         expect(worst).toBeLessThan(0.3);
     });
 
-    it("eases the turn between count boundaries, the short way round", () => {
+    it("turns evenly between count boundaries, by the unwrapped headings (#993)", () => {
         const plan = planMarcher(
             input(repeat(4, "hold" as const), {
                 heading: [0, 0, SIDE2, SIDE2, SIDE2],
@@ -1161,13 +1184,28 @@ describe("facing", () => {
         expect(headingAt(plan, 1)).toBeCloseTo(0, 9);
         expect(headingAt(plan, 1.5)).toBeCloseTo(SIDE2 / 2, 9);
         expect(headingAt(plan, 2)).toBeCloseTo(SIDE2, 9);
-        const wrap = planMarcher(
+        // 170 to 190 degrees passes through 180; 170 to -170 goes the long way, through 0
+        const deg = (d: number) => (d * Math.PI) / 180;
+        const short = planMarcher(
             input(repeat(2, "hold" as const), {
-                heading: [(170 * Math.PI) / 180, (-170 * Math.PI) / 180, 0],
+                heading: [deg(170), deg(190), deg(190)],
             }),
         );
-        // 170 to -170 degrees passes through 180, not through 0
-        expect(Math.abs(headingAt(wrap, 0.5))).toBeCloseTo(Math.PI, 9);
+        expect(headingAt(short, 0.5)).toBeCloseTo(Math.PI, 9);
+        const long = planMarcher(
+            input(repeat(2, "hold" as const), {
+                heading: [deg(170), deg(-170), deg(-170)],
+            }),
+        );
+        expect(headingAt(long, 0.5)).toBeCloseTo(0, 9);
+        // a full spin in one count faces the back halfway through it
+        const spin = planMarcher(
+            input(repeat(2, "hold" as const), {
+                heading: [0, 2 * Math.PI, 2 * Math.PI],
+            }),
+        );
+        expect(headingAt(spin, 0.5)).toBeCloseTo(Math.PI, 9);
+        expect(headingAt(spin, 0.25)).toBeCloseTo(Math.PI / 2, 9);
     });
 
     it("keeps the slide-to-the-50 rule with the front facing", () => {

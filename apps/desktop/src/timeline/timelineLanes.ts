@@ -24,7 +24,7 @@ import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { allCuesQueryOptions } from "@/hooks/queries/useCues";
 import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 
-export type TimelineLaneId = "moves" | "equipment";
+export type TimelineLaneId = "moves" | "equipment" | "facing";
 
 export interface TimelineLaneDefinition {
     readonly id: TimelineLaneId;
@@ -51,6 +51,13 @@ export const TIMELINE_LANES: readonly TimelineLaneDefinition[] = [
         toggleAction: "toggleEquipmentLane",
         cueType: "equipment",
         familyKey: "cues.laneFamily.equipment",
+    },
+    {
+        id: "facing",
+        labelKey: "cues.lane.facing",
+        toggleAction: "toggleFacingLane",
+        cueType: "facing",
+        familyKey: "cues.laneFamily.facing",
     },
 ];
 

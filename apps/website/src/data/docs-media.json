@@ -377,6 +377,31 @@
         "width": 1468,
         "height": 1404
     },
+    "marchers-facing-lane": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 1600,
+        "height": 456
+    },
+    "marchers-facing-menu": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 1104,
+        "height": 1404
+    },
+    "marchers-facing-popover": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 1600,
+        "height": 396
+    },
+    "marchers-facing-stretch": {
+        "chapter": "marchers",
+        "kind": "clip",
+        "width": 1280,
+        "height": 364,
+        "seconds": 5
+    },
     "marchers-inspector": {
         "chapter": "marchers",
         "kind": "still",
