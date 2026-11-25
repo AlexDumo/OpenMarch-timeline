@@ -337,6 +337,51 @@ export function planCueChange({
 }
 
 /**
+ * Moves every cue in `cueIds` to `beatId` as one write (the Facing lane's shared keyframe, fork
+ * #1315): each moves as `planCueChange` moves it alone, keeping its turn, one after another, and
+ * the plan is what changed in the end. Nothing when nothing changes.
+ */
+export function planCuesMove({
+    cues,
+    cueIds,
+    beatId,
+    relabelFor,
+}: {
+    cues: readonly DatabaseCue[];
+    cueIds: readonly number[];
+    beatId: number;
+    relabelFor: (marcherIds: readonly number[]) => string | null;
+}): EquipmentSet {
+    let now: DatabaseCue[] = [...cues];
+    for (const cueId of cueIds) {
+        // A cue an earlier one merged into is gone
+        if (!now.some((c) => c.id === cueId)) continue;
+        now = withEquipmentSet(
+            now,
+            planCueChange({ cues: now, cueId, change: { beatId }, relabelFor }),
+        );
+    }
+    const plan = emptyPlan();
+    const after = new Map(now.map((c) => [c.id, c]));
+    for (const cue of cues) {
+        const next = after.get(cue.id);
+        if (!next) {
+            plan.deletedCueIds.push(cue.id);
+            continue;
+        }
+        const ids = next.marcherIds.join() !== cue.marcherIds.join();
+        const fields: ModifiedCueArgs = {
+            id: cue.id,
+            ...(next.beatId !== cue.beatId && { beatId: next.beatId }),
+            ...(ids && { marcherIds: next.marcherIds }),
+            ...(next.label !== cue.label && { label: next.label }),
+        };
+        if (Object.keys(fields).length > 1) plan.modifiedCues.push(fields);
+    }
+    return plan;
+}
+
+/**
  * `cues` as they would be after `plan` is written, for drawing a drag's preview from the very edit
  * its drop writes: deleted cues gone, modified ones changed. A plan that makes new cues (setting
  * equipment) isn't previewed; a cue change makes none.

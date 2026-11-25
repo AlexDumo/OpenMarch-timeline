@@ -10,6 +10,7 @@ import { useTimingObjects } from "@/hooks/useTimingObjects";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { setLaneShown, type TimelineLaneId } from "@/timeline/timelineLanes";
+import { requestLaneReveal } from "@/timeline/laneReveal";
 import { activeFieldEditor } from "@/field/editor/activeFieldEditor";
 import { useShowCues, type EditorCues } from "./useShowCues";
 import { pickedCueIn, useCueSelectionStore } from "./cueSelectionStore";
@@ -271,7 +272,10 @@ export function useCueCommands(): CueCommands {
                 // A first Equipment cue makes its lane appear, even one hidden before (#992)
                 if (!show.cues.some((c) => c.type === "equipment"))
                     revealLane("equipment");
-                edit(plan);
+                // Its lane shows itself once the cue is drawn, below the fold or not (#1315)
+                edit(plan, {
+                    onSuccess: () => requestLaneReveal("equipment"),
+                });
             },
             holders,
             selectHolding: (values) => {
@@ -360,7 +364,7 @@ export function useCueCommands(): CueCommands {
                 // A first Facing cue makes its lane appear, even one hidden before
                 if (!show.cues.some((c) => c.type === "facing"))
                     revealLane("facing");
-                edit(plan);
+                edit(plan, { onSuccess: () => requestLaneReveal("facing") });
             },
             editTurn: ({ choice, transition }) => {
                 if (!cue || !show || cue.type !== "facing") return;

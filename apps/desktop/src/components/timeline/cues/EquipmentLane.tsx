@@ -96,6 +96,7 @@ import {
 } from "@/timeline/timelineLanes";
 import { LANES_ROW_HEIGHT, LanesRow, useLaneNameMenu } from "./LanesMenu";
 import { useFacingLaneParts } from "./FacingLane";
+import { useLaneReveal } from "@/timeline/laneReveal";
 import {
     DRAG_SLOP_PX,
     EMPTY,
@@ -249,6 +250,8 @@ export function EquipmentLaneView({
     const [menu, setMenu] = useState<CueMenu | null>(null);
     const [drag, setDrag] = useState<LaneDrag | null>(null);
     const rootRef = useRef<HTMLDivElement>(null);
+    // A cue just set shows its lane, below the fold or not (#1315)
+    useLaneReveal("equipment", rootRef);
     const ppb = geometry.pixelsPerBeat;
     const { xOf, axis, specOf } = useMemo(() => {
         const axis = createTimelineBeatAxis(beats);

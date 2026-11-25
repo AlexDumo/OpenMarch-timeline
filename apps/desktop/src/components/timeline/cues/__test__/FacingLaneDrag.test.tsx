@@ -21,6 +21,8 @@ import { useCueSelectionStore } from "@/cues/cueSelectionStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { FacingLaneView, turnBarLabel } from "../FacingLane";
 import { useTurnPopoverStore } from "@/cues/turnPopoverStore";
+import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
+import type { FieldEditor } from "@/field/editor/fieldEditor";
 import { useTimelinePointer } from "../../TimelinePrimitives";
 import type { TimelineBeatRange } from "../../TimelineViewModel";
 
@@ -117,6 +119,8 @@ function renderLane(
     timeline: {
         onSeek?: (beat: number) => void;
         onSelectRange?: (range: TimelineBeatRange) => void;
+        /** Who's selected: the lane draws their rows (both guard members unless said) */
+        selectedIds?: readonly number[];
     } = {},
 ) {
     const compiled = compileShowCues(marchers, beats, cues);
@@ -145,7 +149,7 @@ function renderLane(
                         lane={lane}
                         show={show}
                         beats={beats}
-                        folded={false}
+                        selectedIds={timeline.selectedIds ?? [1, 2]}
                     />
                 </Surface>
             </QueryClientProvider>
@@ -377,5 +381,95 @@ describe("the Facing lane (#993)", () => {
             useTimelineSelectionStore.getState();
         expect([startBeat, playheadBeat]).toEqual([3, 9]);
         await act(async () => useTurnPopoverStore.getState().close());
+    });
+});
+
+describe("one row of keyframes (#1315)", () => {
+    // G1 turns to side 2 over 4 counts and G2 faces the back at once, both on count 12
+    const shared = () => [
+        cue(1, 12, "side2", { marcherIds: [1], transition: 5 }),
+        cue(2, 12, "back", { marcherIds: [2] }),
+        cue(3, 20, "front", { marcherIds: [1] }),
+    ];
+    const select = vi.fn();
+    beforeEach(() => {
+        select.mockReset();
+        setActiveFieldEditor({ select } as unknown as FieldEditor);
+    });
+    afterEach(() => setActiveFieldEditor(null));
+    const keyAt = (container: HTMLElement, count: number) =>
+        container.querySelector(
+            `[data-testid="facing-lane-key"][data-count="${count}"]`,
+        )!;
+
+    it("draws one keyframe per count, shared by the cues on it, and no rows with nothing selected", () => {
+        const { container } = renderLane(shared(), { selectedIds: [] });
+        const keys = container.querySelectorAll(
+            '[data-testid="facing-lane-key"]',
+        );
+        expect([...keys].map((k) => k.getAttribute("data-count"))).toEqual([
+            "12",
+            "20",
+        ]);
+        expect(keyAt(container, 12).getAttribute("data-cues")).toBe("1,2");
+        expect(
+            keyAt(container, 12).querySelector(
+                '[data-testid="facing-lane-key-shared"]',
+            )?.textContent,
+        ).toBe("2");
+        expect(keyAt(container, 12).getAttribute("aria-label")).toContain(
+            "2 groups change facing here",
+        );
+        expect(
+            container.querySelectorAll('[data-testid="facing-lane-row"]'),
+        ).toHaveLength(0);
+    });
+
+    it("shows the turns of the selection's groups only", () => {
+        const { container } = renderLane(shared(), { selectedIds: [2] });
+        const rows = container.querySelectorAll(
+            '[data-testid="facing-lane-row"]',
+        );
+        expect([...rows].map((r) => r.getAttribute("data-marchers"))).toEqual([
+            "2",
+        ]);
+        // G1's keyframe at count 20 is dimmed: nobody selected changes there
+        expect(keyAt(container, 20).hasAttribute("data-active")).toBe(false);
+        expect(keyAt(container, 12).hasAttribute("data-active")).toBe(true);
+    });
+
+    it("selects who changes on a keyframe when it's clicked, adding them with Shift", async () => {
+        const { container } = renderLane(shared(), { selectedIds: [] });
+        await clickAt(keyAt(container, 12), 500);
+        expect(select).toHaveBeenLastCalledWith([1, 2]);
+        // A keyframe with one cue picks it, so the cue commands act on it
+        await clickAt(keyAt(container, 20), 500);
+        expect(select).toHaveBeenLastCalledWith([1]);
+        expect(useCueSelectionStore.getState().cueId).toBe(3);
+        cleanup();
+        const view = renderLane(shared(), { selectedIds: [2] });
+        await act(async () => {
+            fireEvent.pointerDown(keyAt(view.container, 20), {
+                ...mouse,
+                clientX: 500,
+                shiftKey: true,
+            });
+        });
+        await act(async () => {
+            fireEvent.pointerUp(window, { ...mouse, clientX: 500 });
+        });
+        expect(select).toHaveBeenLastCalledWith([2, 1]);
+        expect(written).toEqual([]);
+    });
+
+    it("moves every cue on a keyframe's count when it's dragged, each keeping its turn", async () => {
+        const { container } = renderLane(shared(), { selectedIds: [] });
+        await dragBy(keyAt(container, 12), 32);
+        expect(written.at(-1)?.modifiedCues).toEqual([
+            { id: 1, beatId: 100 + 14 },
+            { id: 2, beatId: 100 + 14 },
+        ]);
+        // A drag selects nobody
+        expect(select).not.toHaveBeenCalled();
     });
 });

@@ -3,12 +3,14 @@ import { describe, expect, it } from "vitest";
 import { facingAt } from "@openmarch/core";
 import type { DatabaseCue } from "@/db-functions/cues";
 import { compileShowCues } from "../showCues";
-import { planCueChange } from "../equipment";
+import { planCueChange, planCuesMove } from "../equipment";
 import {
     facingAlready,
     facingLane,
+    facingRowsFor,
     facingValueOf,
     planFacingSet,
+    selectionAfterKeyClick,
     turnLabel,
 } from "../facing";
 
@@ -257,5 +259,105 @@ describe("the Facing lane (#993)", () => {
         expect(
             turnLabel({ kind: "hold", fromDegrees: -90, degrees: -90 }, names),
         ).toBe("Side 1 · −90°");
+    });
+});
+
+describe("one row of keyframes (#1315)", () => {
+    // Three sections: 1–2 turn to side 2 over 3 counts and 3 turns instantly, both landing on
+    // count 8; 4 faces the back on count 16
+    const sections = () => [
+        stored(8, "builtin:facing.side2", [1, 2], { transition: 4 }),
+        stored(8, "builtin:facing.back", [3]),
+        stored(16, "builtin:facing.back", [4], { transition: 2 }),
+    ];
+    const laneOf = (cues: DatabaseCue[]) =>
+        facingLane({
+            compiled: compileShowCues(MARCHERS, BEATS, cues).compiled,
+            cues,
+            marcherIds: [1, 2, 3, 4],
+        });
+
+    it("gives each count one keyframe, shared by every cue on it whatever its turn", () => {
+        const cues = sections();
+        const lane = laneOf(cues);
+        expect(lane.keys).toEqual([
+            {
+                count: 8,
+                cueIds: [cues[0]!.id, cues[1]!.id],
+                marcherIds: [1, 2, 3],
+            },
+            { count: 16, cueIds: [cues[2]!.id], marcherIds: [4] },
+        ]);
+        expect(lane.rows).toHaveLength(3);
+    });
+
+    it("draws rows only for the selection's groups", () => {
+        const lane = laneOf(sections());
+        expect(facingRowsFor(lane.rows, [])).toEqual([]);
+        expect(facingRowsFor(lane.rows, [2]).map((r) => r.marcherIds)).toEqual([
+            [1, 2],
+        ]);
+        expect(
+            facingRowsFor(lane.rows, [2, 4]).map((r) => r.marcherIds),
+        ).toEqual([[1, 2], [4]]);
+    });
+
+    it("selects who changes on a keyframe; Shift adds them, or takes them out when all are in", () => {
+        const key = { marcherIds: [1, 2, 3] };
+        expect(selectionAfterKeyClick([4], key, false)).toEqual([1, 2, 3]);
+        expect(selectionAfterKeyClick([4, 1], key, true)).toEqual([4, 1, 2, 3]);
+        expect(selectionAfterKeyClick([3, 4, 1, 2], key, true)).toEqual([4]);
+    });
+
+    it("moves every cue on a keyframe's count together, each keeping its turn", () => {
+        const cues = sections();
+        const plan = planCuesMove({
+            cues,
+            cueIds: [cues[0]!.id, cues[1]!.id],
+            beatId: beatOf(10),
+            relabelFor: label,
+        });
+        expect(plan.deletedCueIds).toEqual([]);
+        expect(plan.modifiedCues).toEqual([
+            { id: cues[0]!.id, beatId: beatOf(10) },
+            { id: cues[1]!.id, beatId: beatOf(10) },
+        ]);
+        expect(
+            planCuesMove({
+                cues,
+                cueIds: [cues[2]!.id],
+                beatId: beatOf(16),
+                relabelFor: label,
+            }).modifiedCues,
+        ).toEqual([]);
+    });
+
+    it("moving a keyframe onto another count wins there, as moving one cue does", () => {
+        const cues = sections();
+        // Count 8's cues onto count 16: 4's cue there keeps its own performers
+        const plan = planCuesMove({
+            cues,
+            cueIds: [cues[0]!.id, cues[1]!.id],
+            beatId: beatOf(16),
+            relabelFor: label,
+        });
+        expect(plan.modifiedCues.map((m) => [m.id, m.beatId])).toEqual([
+            [cues[0]!.id, beatOf(16)],
+            [cues[1]!.id, beatOf(16)],
+        ]);
+        // One cue alone moves as it always has
+        const merged = planCuesMove({
+            cues: [cues[1]!, cues[2]!],
+            cueIds: [cues[1]!.id],
+            beatId: beatOf(16),
+            relabelFor: label,
+        });
+        const single = planCueChange({
+            cues: [cues[1]!, cues[2]!],
+            cueId: cues[1]!.id,
+            change: { beatId: beatOf(16) },
+            relabelFor: label,
+        });
+        expect(merged.deletedCueIds).toEqual(single.deletedCueIds);
     });
 });
