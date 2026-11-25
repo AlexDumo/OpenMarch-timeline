@@ -414,3 +414,84 @@ export function withEquipmentSet(
             };
         });
 }
+
+/**
+ * "Add selected to this cue" (fork #992, #1318): `marcherIds` join cue `cueId` and leave the cue
+ * of theirs it replaces, so they do what it does there rather than keep a cue of their own beside
+ * it. A cue left with nobody is deleted; one write, so one undo step.
+ *
+ * - **Equipment:** their other cue of the same kind (lasting, or momentary of one length) on its
+ *   count, as setting that equipment there would.
+ * - **Facing:** every Facing cue of theirs in its slot: after the cue's performers' previous
+ *   Facing cue and before their next (the start and end of the show when there's none), its own
+ *   count included. A cue of theirs a couple of counts off is the same turn, written apart.
+ *
+ * Nothing when they're all in it already or the cue isn't there.
+ */
+export function planAddToCue({
+    cues,
+    cueId,
+    marcherIds,
+    countOf,
+    relabelFor,
+}: {
+    cues: readonly DatabaseCue[];
+    cueId: number;
+    marcherIds: readonly number[];
+    /** A beat's count, for the Facing cue's slot */
+    countOf: (beatId: number) => number | undefined;
+    /** The label for a cue now holding these performers */
+    relabelFor: (marcherIds: readonly number[]) => string | null;
+}): EquipmentSet {
+    const plan = emptyPlan();
+    const cue = cues.find((c) => c.id === cueId);
+    if (!cue) return plan;
+    const joined = editedPerformers(cue, marcherIds, "add");
+    if (!joined) return plan;
+    const added = marcherIds.filter((id) => !cue.marcherIds.includes(id));
+    // A Facing cue's slot: between its performers' Facing cues before and after it
+    const at = countOf(cue.beatId);
+    const theirs = cues.flatMap((c) => {
+        const count = countOf(c.beatId);
+        return c.type === "facing" &&
+            c.id !== cue.id &&
+            count !== undefined &&
+            c.marcherIds.some((id) => cue.marcherIds.includes(id))
+            ? [count]
+            : [];
+    });
+    const previous =
+        at === undefined
+            ? Infinity
+            : Math.max(-Infinity, ...theirs.filter((count) => count < at));
+    const next =
+        at === undefined
+            ? -Infinity
+            : Math.min(Infinity, ...theirs.filter((count) => count > at));
+    const replaced = (other: DatabaseCue): boolean => {
+        if (other.id === cue.id || other.type !== cue.type) return false;
+        if (cue.type === "equipment")
+            return other.beatId === cue.beatId && other.length === cue.length;
+        if (cue.type !== "facing") return false;
+        const there = countOf(other.beatId);
+        return there !== undefined && there > previous && there < next;
+    };
+    for (const other of cues) {
+        if (!replaced(other)) continue;
+        const rest = editedPerformers(other, added, "remove");
+        if (rest === null) continue;
+        if (rest.length === 0) plan.deletedCueIds.push(other.id);
+        else
+            plan.modifiedCues.push({
+                id: other.id,
+                marcherIds: rest,
+                label: relabelFor(rest),
+            });
+    }
+    plan.modifiedCues.push({
+        id: cue.id,
+        marcherIds: joined,
+        label: relabelFor(joined),
+    });
+    return plan;
+}

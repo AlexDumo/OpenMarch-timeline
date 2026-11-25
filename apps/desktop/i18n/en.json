@@ -4493,7 +4493,11 @@
             "keyHint": "Click to select who changes here, Shift-click to add them. Drag to move.",
             "keyHintPlaying": "Click to select who changes here. Pause to move it.",
             "keySelectAll": "Select everyone who changes here",
-            "keySelectGroup": "Select {name}"
+            "keySelectGroup": "Select {name}",
+            "partOf": "{part} of {count}",
+            "selectAllOf": "Select all {count}",
+            "restHint": "The rest of the cue the selection was split from. Click to select them.",
+            "popoverPart": "{name} ({part} of {count})"
         },
         "item": {
             "flag": "Flag",

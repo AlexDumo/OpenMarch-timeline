@@ -21,6 +21,7 @@ import { useCueSelectionStore } from "@/cues/cueSelectionStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { FacingLaneView, turnBarLabel } from "../FacingLane";
 import { useTurnPopoverStore } from "@/cues/turnPopoverStore";
+import { useFacingSplitStore } from "@/cues/facingSplit";
 import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
 import type { FieldEditor } from "@/field/editor/fieldEditor";
 import { useTimelinePointer } from "../../TimelinePrimitives";
@@ -482,5 +483,86 @@ describe("one row of keyframes (#1315)", () => {
         ]);
         // A drag selects nobody
         expect(select).not.toHaveBeenCalled();
+    });
+});
+
+describe("edits follow the selection (#1318)", () => {
+    const select = vi.fn();
+    beforeEach(() => {
+        select.mockReset();
+        setActiveFieldEditor({ select } as unknown as FieldEditor);
+        useFacingSplitStore.setState({ follow: null, rest: null });
+    });
+    afterEach(() => setActiveFieldEditor(null));
+    const hold = (container: HTMLElement, cueId: number) =>
+        container.querySelector(
+            `[data-testid="facing-lane-hold"][data-cue-id="${cueId}"]`,
+        )!;
+
+    it("says how many of a partly selected row are selected, and selects them all on a click", async () => {
+        const { getByTestId } = renderLane([cue(1, 12, "side2")], {
+            selectedIds: [1],
+        });
+        const name = getByTestId("facing-lane-row-name");
+        expect(name.textContent).toContain("1 of 2");
+        expect(name.getAttribute("title")).toBe("Select all 2");
+        fireEvent.click(name);
+        expect(select).toHaveBeenLastCalledWith([1, 2]);
+    });
+
+    it("moves only the selected performers when some of the cue's are selected", async () => {
+        const { container } = renderLane([cue(1, 12, "side2")], {
+            selectedIds: [1],
+        });
+        await dragBy(hold(container, 1), 32);
+        const edit = written.at(-1)!;
+        expect(edit.deletedCueIds).toEqual([]);
+        expect(edit.modifiedCues).toEqual([
+            expect.objectContaining({ id: 1, marcherIds: [2] }),
+        ]);
+        expect(edit.newCues).toEqual([
+            expect.objectContaining({ beatId: 100 + 14, marcherIds: [1] }),
+        ]);
+        // The lane keeps the rest of the cue drawn, for this selection
+        expect(useFacingSplitStore.getState().rest?.ids).toEqual([2]);
+    });
+
+    it("moves the whole cue when all of it is selected", async () => {
+        const { container } = renderLane([cue(1, 12, "side2")], {
+            selectedIds: [1, 2],
+        });
+        await dragBy(hold(container, 1), 32);
+        expect(written.at(-1)).toEqual({
+            deletedCueIds: [],
+            modifiedCues: [{ id: 1, beatId: 100 + 14 }],
+            newCues: [],
+        });
+        expect(useFacingSplitStore.getState().rest).toBeNull();
+    });
+
+    it("draws a split's rest dimmed and read-only under the selection's row; its name selects them", async () => {
+        const split = [
+            cue(1, 12, "side2", { marcherIds: [2] }),
+            cue(2, 14, "side2", { marcherIds: [1] }),
+        ];
+        useFacingSplitStore.setState({ rest: { ids: [2], selection: "1" } });
+        const { container, getByTestId } = renderLane(split, {
+            selectedIds: [1],
+        });
+        const rest = getByTestId("facing-lane-rest-row");
+        expect(rest.getAttribute("data-marchers")).toBe("2");
+        expect(
+            rest.querySelector('[data-testid="facing-lane-turn-tab"]'),
+        ).toBeNull();
+        expect(
+            container.querySelectorAll('[data-testid="facing-lane-row"]'),
+        ).toHaveLength(1);
+        fireEvent.click(getByTestId("facing-lane-rest-name"));
+        expect(select).toHaveBeenLastCalledWith([2]);
+        cleanup();
+        // Another selection, and it's gone
+        const other = renderLane(split, { selectedIds: [2] });
+        expect(other.queryByTestId("facing-lane-rest-row")).toBeNull();
+        expect(useFacingSplitStore.getState().rest).toBeNull();
     });
 });
