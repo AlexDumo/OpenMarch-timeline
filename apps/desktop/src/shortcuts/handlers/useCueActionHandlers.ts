@@ -1,5 +1,5 @@
 import { equipmentCatalog, EQUIPMENT_NONE } from "@openmarch/core";
-import { showAssetsView } from "@/components/assets/openAssets";
+import { showPropsPanel } from "@/components/items/openProps";
 import { parseShowAssetRef } from "@/showAssets/ref";
 import { publishCueCommands } from "@/cues/latestCueCommands";
 import { useIsPlaying } from "@/context/IsPlayingContext";
@@ -252,9 +252,9 @@ export function useCueActionHandlers() {
         "equipmentShowFlag",
         (args) => {
             const value = typeof args?.value === "string" ? args.value : null;
-            // From the palette, with no flag named: where the show's flags are
+            // From the palette, with no flag named: where the show's flags are (Props › Flags)
             if (!value || !isShowAssetValue(value)) {
-                showAssetsView();
+                showPropsPanel();
                 return;
             }
             commands.setEquipment(value);
@@ -269,7 +269,7 @@ export function useCueActionHandlers() {
         (args) => {
             const value = typeof args?.value === "string" ? args.value : null;
             if (!value || !isShowAssetValue(value)) {
-                showAssetsView();
+                showPropsPanel();
                 return;
             }
             commands.selectHolding([value]);

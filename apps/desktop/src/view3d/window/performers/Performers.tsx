@@ -68,8 +68,6 @@ import { marcherAppearancesQueryOptions } from "@/hooks/queries/useMarcherAppear
 import { allSectionAppearancesQueryOptions } from "@/hooks/queries/useSectionAppearances";
 import { useVenueSettings } from "@/hooks/queries/useVenueSettings";
 import { brassFinishOf, tubaModelOf } from "@/view3d/core/venueSettings";
-import { silkShapeOf } from "@/view3d/core/sizes/silkShapes";
-import { useSilkArtworkTexture } from "./marchers/useSilkArtworkTexture";
 import { cueSectionsOf } from "./cueSections";
 import {
     guardUniformPresetOf,
@@ -151,11 +149,13 @@ import type { Carry } from "@/view3d/core/instruments/catalog";
 import {
     heldHornEvents,
     slotEquipment,
+    type FlagOf,
     type SlotEquipment,
 } from "@/view3d/core/marchers/equipmentSpans";
 import { useStoredCues } from "./useStoredCues";
 import { useShowFlags } from "@/hooks/queries/useShowFlags";
-import { flagCueValues, flagsByValue } from "@/showAssets/flags";
+import { flagCueValues } from "@/showAssets/flags";
+import { useFlagArtworkAtlas } from "./marchers/flagArtworkAtlas";
 import { SilkMotion } from "./marchers/silkMotion";
 
 const CYLINDER_SEGMENTS = 20;
@@ -228,10 +228,6 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     // the brass line's finish and the tubas' horn, from the same settings
     const brassFinish = brassFinishOf(venue?.brassFinish);
     const tuba = tubaModelOf(venue?.tuba);
-    // the guard's flag silks' shape (fork #973)
-    const silkShape = silkShapeOf(venue?.silkShape);
-    // and the Artwork they're painted with, once it's decoded
-    const silkArtwork = useSilkArtworkTexture(venue?.silkArtwork, silkShape);
     // om-pose marchers (ADR 0010 D-7); the cylinders stand in until they load.
     const { data: sectionAppearances } = useQuery(
         allSectionAppearancesQueryOptions(),
@@ -279,8 +275,6 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 {
                     finish: brassFinish,
                     tuba,
-                    silkShape,
-                    silkArtwork,
                     ...(carry !== undefined ? { carry } : {}),
                 },
                 uniformArtwork,
@@ -292,8 +286,6 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         guardUniformPreset,
         brassFinish,
         tuba,
-        silkShape,
-        silkArtwork,
         uniformArtwork,
     ]);
     const marcherLooks = useMemo<MarcherSlotLook[] | null>(() => {
@@ -393,12 +385,19 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     // up; the Show settings' step-off foot. `carries` decides each marcher's
     // Position default.
     const storedCues = useStoredCues();
-    // The show's flags (fork #985): Equipment values the cues hand out, each in its own shape
+    // The show's flags (fork #985): Equipment values the cues hand out, each the 6 ft flag painted
+    // with its own design, its tile in the flags' texture
     const flags = useShowFlags();
+    useFlagArtworkAtlas(flags);
     const flagValues = useMemo(() => flagCueValues(flags), [flags]);
-    const flagShapeOf = useMemo(() => {
-        const byValue = flagsByValue(flags);
-        return (value: string) => byValue.get(value)?.shape;
+    const flagOf = useMemo<FlagOf>(() => {
+        const byValue = new Map(
+            flags.map((flag, tile) => [
+                flag.value,
+                { shape: flag.shape, artwork: tile },
+            ]),
+        );
+        return (value: string) => byValue.get(value);
     }, [flags]);
     const cues = useMemo(() => {
         if (!marchers || !carriesKey || !cueSectionsKey || !storedCues)
@@ -441,11 +440,11 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                     cues.compiled.segments(id, "equipment"),
                     (c) => heldAt(cues.compiled, id, c),
                     marcherLooks[i]?.uniform.options.carry ?? null,
-                    flagShapeOf,
+                    flagOf,
                 ),
             ),
         );
-    }, [marcherLooks, cues, slots.ids, flagShapeOf]);
+    }, [marcherLooks, cues, slots.ids, flagOf]);
     const equipment = useMemo(
         () =>
             equipmentKey

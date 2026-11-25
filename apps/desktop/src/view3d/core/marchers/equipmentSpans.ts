@@ -31,16 +31,22 @@ export function carryForValue(
     value: string | null,
     holds: PerformerCarry,
     base: Carry | null,
-    flagShapeOf?: FlagShapeOf,
+    flagOf?: FlagOf,
 ): Carry | null {
     if (holds === "none") return null;
-    // One of the show's flags (fork #985): the 6 ft flag, in its own silk shape
-    const flagShape = value !== null ? flagShapeOf?.(value) : undefined;
-    if (flagShape !== undefined) {
+    // One of the show's flags (fork #985): the 6 ft flag in its own silk shape, painted with its
+    // own design
+    const showFlag = value !== null ? flagOf?.(value) : undefined;
+    if (showFlag !== undefined) {
         const flag = carryForModel("flag6");
-        return flagShape === DEFAULT_SILK_SHAPE
-            ? flag
-            : { ...flag, options: { ...flag.options, silkShape: flagShape } };
+        const shaped =
+            showFlag.shape === DEFAULT_SILK_SHAPE
+                ? flag
+                : {
+                      ...flag,
+                      options: { ...flag.options, silkShape: showFlag.shape },
+                  };
+        return { ...shaped, artwork: showFlag.artwork };
     }
     const model = modelOfValue(value);
     if (model) {
@@ -53,8 +59,15 @@ export function carryForValue(
     return null;
 }
 
-/** The silk shape of the show's flag an Equipment value names, or undefined for another value */
-export type FlagShapeOf = (value: string) => SilkShapeId | undefined;
+/** One of the show's flags as the 3D View draws it: its silk shape and its design's tile */
+export interface ShowFlagCarry {
+    readonly shape: SilkShapeId;
+    /** Its design's tile in the flags' texture (`flagArtworkAtlas.ts`) */
+    readonly artwork: number;
+}
+
+/** The show's flag an Equipment value names, or undefined for another value */
+export type FlagOf = (value: string) => ShowFlagCarry | undefined;
 
 /** The 6 ft flag and the tuba are the section default, which a show setting may swap. */
 const sameKind = (a: string, b: string) =>
@@ -84,19 +97,14 @@ export function slotEquipment(
     segments: readonly CueSegment[],
     holdsAt: (count: number) => PerformerCarry,
     base: Carry | null,
-    flagShapeOf?: FlagShapeOf,
+    flagOf?: FlagOf,
 ): SlotEquipment | null {
     const carries: (Carry | null)[] = [base];
     const keys = [JSON.stringify(base)];
     const spans: HeldSpan[] = [];
     for (const seg of segments) {
         if (!(seg.to > seg.from)) continue;
-        const carry = carryForValue(
-            seg.value,
-            holdsAt(seg.from),
-            base,
-            flagShapeOf,
-        );
+        const carry = carryForValue(seg.value, holdsAt(seg.from), base, flagOf);
         const key = JSON.stringify(carry);
         let held = keys.indexOf(key);
         if (held < 0) {

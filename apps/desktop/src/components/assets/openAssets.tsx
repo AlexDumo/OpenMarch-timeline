@@ -1,25 +1,18 @@
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 import { AssetsContents } from "./AssetsView";
 
-/** The Assets panel's id in the sidebar */
-export const ASSETS_PANEL_ID = "assets";
-
 /**
- * Opens the Assets panel (the `openAssets` action), with Remove unused… asking at once
- * (`removeUnusedAssets`) or Add flag open (`addFlag`).
+ * Opens the Assets view, a view of the Props panel (the `openAssets` action), or with Remove
+ * unused… asking at once (`removeUnusedAssets`).
  */
 let opened = 0;
 
-export function showAssetsView({ openRemove = false, addFlag = false } = {}) {
+export function showAssetsView({ openRemove = false } = {}) {
     const { setContent, setOpen } = useSidebarModalStore.getState();
-    // A fresh view each time, so asking again opens Remove unused… or Add flag again
+    // A fresh view each time, so asking again opens Remove unused… again
     setContent(
-        <AssetsContents
-            key={++opened}
-            openRemove={openRemove}
-            addFlag={addFlag}
-        />,
-        ASSETS_PANEL_ID,
+        <AssetsContents key={++opened} openRemove={openRemove} />,
+        "props",
     );
     setOpen(true);
 }

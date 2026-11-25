@@ -1111,7 +1111,7 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: [],
     },
-    // Opens the Assets panel with Add flag open (fork #985): a flag's shape, template and Artwork
+    // Opens the Props panel's Flags with Add flag open (fork #985): a flag's template and design
     addFlag: {
         labelKey: "actions.ui.addFlag",
         keywordsKey: "actions.ui.addFlagKeywords",
@@ -1120,7 +1120,7 @@ const STATIC_ACTIONS = {
         defaultBindings: [],
     },
     // Hands the show's flag `value` (args) to the selection from the paused playhead: an
-    // Equipment cue, as the catalog's items are (fork #985). Without a flag, the Assets panel.
+    // Equipment cue, as the catalog's items are (fork #985). Without a flag, Props › Flags.
     equipmentShowFlag: {
         labelKey: "actions.cues.equipmentShowFlag",
         keywordsKey: "actions.cues.equipmentKeywords",

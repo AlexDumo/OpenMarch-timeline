@@ -6,7 +6,6 @@ import {
     flagCueValues,
     flagNameOfFile,
     flagOfAsset,
-    flagsByValue,
     showFlags,
 } from "@/showAssets/flags";
 import { carryForValue } from "@/view3d/core/marchers/equipmentSpans";
@@ -165,20 +164,32 @@ describe("handing out the show's flags with Equipment cues (fork #985)", () => {
         );
     });
 
-    it("the 3D View hands a holder the 6 ft flag in the flag's own shape", () => {
-        const byValue = flagsByValue(flags);
-        const shapeOf = (v: string) => byValue.get(v)?.shape;
-        const swing = carryForValue(opener, "flag", null, shapeOf);
+    it("the 3D View hands a holder the 6 ft flag painted with the flag's own design", () => {
+        const tiles = new Map(
+            flags.map((f, tile) => [
+                f.value,
+                { shape: f.shape, artwork: tile },
+            ]),
+        );
+        const flagOf = (v: string) => tiles.get(v);
+        // each flag its own tile in the flags' texture
+        const swing = carryForValue(opener, "flag", null, flagOf);
         expect(swing?.model).toBe("flag6");
+        expect(swing?.artwork).toBe(0);
         expect(swing?.options?.silkShape).toBe("swing");
-        // the default shape needs no option, as the guard's own flag
-        const plain = carryForValue(ballad, "flag", null, shapeOf);
+        const plain = carryForValue(ballad, "flag", null, flagOf);
         expect(plain?.model).toBe("flag6");
+        expect(plain?.artwork).toBe(1);
+        // the default shape needs no option
         expect(plain?.options?.silkShape).toBeUndefined();
-        // a catalog item is unchanged
-        expect(
-            carryForValue("builtin:equipment.rifle", "rifle", null, shapeOf)
-                ?.model,
-        ).toBe("rifle");
+        // a catalog item is unchanged, with no design of its own
+        const rifle = carryForValue(
+            "builtin:equipment.rifle",
+            "rifle",
+            null,
+            flagOf,
+        );
+        expect(rifle?.model).toBe("rifle");
+        expect(rifle?.artwork).toBeUndefined();
     });
 });

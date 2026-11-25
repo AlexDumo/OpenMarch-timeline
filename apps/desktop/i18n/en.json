@@ -1847,7 +1847,14 @@
                 "overTriangleCap": "Still detailed: {triangles} triangles (the aim is {cap})"
             }
         },
-        "modelMissing": "This prop's model isn't in the show any more, so it draws as a block."
+        "modelMissing": "This prop's model isn't in the show any more, so it draws as a block.",
+        "flags": {
+            "title": "Flags",
+            "add": "Add flag…",
+            "give": "Hand {name} to the selected performers",
+            "empty": "Add a flag for each silk design the show uses.",
+            "hint": "Select performers, then pick a flag to hand it to them from the playhead. It's also in the field's right-click menu: Equipment › Guard equipment."
+        }
     },
     "frontEnsemble": {
         "title": "Front ensemble and podiums",
@@ -4382,8 +4389,7 @@
         "props": "Props",
         "music": "Music",
         "renderFail": "Sidebar modal content failed to render",
-        "settings": "Show settings",
-        "assets": "Assets"
+        "settings": "Show settings"
     },
     "infoTip": {
         "moreInfo": "More info"
@@ -5681,7 +5687,7 @@
     },
     "assets": {
         "title": "Assets",
-        "empty": "This show has no assets of its own yet. Add a flag, or import a 3D model.",
+        "empty": "This show has no imported assets yet. Import a 3D model from the Props panel.",
         "notes": {
             "unused": "{count, plural, one {# asset isn't used} other {# assets aren't used}} anywhere in the show · {size}",
             "missing": "{count, plural, one {# prop names a model this show doesn't have, so it draws as a block.} other {# props name models this show doesn't have, so they draw as blocks.}}",
@@ -5733,10 +5739,7 @@
         "otherVersions": "{count, plural, one {# other version} other {# other versions}}, {size}",
         "tryAgain": "Try again",
         "loading": "Loading…",
-        "importModel": "Import 3D model",
         "flags": {
-            "open": "Add flag…",
-            "hint": "Add as many flags as the show uses. Hand one to performers from the field's right-click menu: Equipment › Guard equipment.",
             "addTitle": "Add a flag",
             "shape": "Silk shape",
             "template": "Template to paint:",

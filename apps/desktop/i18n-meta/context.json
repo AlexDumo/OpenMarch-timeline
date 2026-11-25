@@ -4464,11 +4464,7 @@
     "cues.lane.turnLabelShort": "Shorter label on a narrow turn in the timeline's Facing lane: {icon} is an arrow showing which way they turn (↺ or ↻), {amount} how far (such as '180°'). Keep {icon} first.",
     "cues.lane.dragCue": "Tooltip of the diamond that marks a facing change on its count in the timeline's Facing lane (and of its bar): dragging it moves the facing change, with its turn, to another count.",
     "cues.lane.dragToTurn": "Tooltip of the small tab beside an instant facing change's diamond in the timeline's Facing lane: dragging it left makes the performers turn over the counts before, instead of all at once.",
-    "sidebar.assets": "Tooltip and spoken name of the sidebar button that opens the Assets panel: the show's own files, such as its flags, imported 3D models and uniforms. One short word.",
     "assets.kind.flag": "What kind of file an asset is, in the Assets panel's list: a color guard flag (a silk with its painted design) the designer added. Short.",
-    "assets.importModel": "Button in the Assets panel that starts importing a 3D model file (for a prop). Short.",
-    "assets.flags.open": "Button at the top of the Assets panel that opens the form for adding a color guard flag (a silk shape with a painted design). The ellipsis means more input follows.",
-    "assets.flags.hint": "Help text under the Add flag button in the Assets panel. Says a show can have many flags and how to give one to performers: right-click on the field, then the Equipment submenu, then its Guard equipment submenu. Keep the menu names as the app shows them.",
     "assets.flags.addTitle": "Heading of the form in the Assets panel for adding a color guard flag to the show.",
     "assets.flags.shape": "Label of the list where the designer picks the flag's silk shape (rectangle, swing, teardrop and so on) in the Add a flag form.",
     "assets.flags.template": "Label before three buttons (PNG, SVG, PDF) that download a printable template of the chosen silk shape to paint the flag's design on. Ends with a colon.",
@@ -4490,5 +4486,10 @@
     "actions.ui.addFlag": "Name of an action in the command palette: opens the form for adding a color guard flag (a silk shape with a painted design) to the show's assets.",
     "actions.ui.addFlagKeywords": "Search words (space-separated) for the Add a flag action in the command palette. Translate each word; keep them space-separated.",
     "actions.cues.equipmentShowFlag": "Name of an action in the command palette: gives the selected performers one of the color guard flags the designer added to the show, from the playhead on. The field's right-click menu lists each flag by its own name.",
-    "actions.cues.selectHoldingShowFlag": "Name of an action in the command palette: selects every performer holding a given one of the show's own color guard flags at the playhead. The field's right-click menu lists each flag by its own name."
+    "actions.cues.selectHoldingShowFlag": "Name of an action in the command palette: selects every performer holding a given one of the show's own color guard flags at the playhead. The field's right-click menu lists each flag by its own name.",
+    "props.flags.title": "Heading in the Props panel over the show's color guard flags: each a rectangular silk with its own painted design. Short.",
+    "props.flags.add": "Tile label in the Props panel's Flags group: opens the form to add a color guard flag (a painted silk design). Very short, fits under a small picture. The ellipsis means more input follows.",
+    "props.flags.give": "Tooltip and screen-reader name of a flag's tile in the Props panel: clicking it gives that flag to the selected performers as their equipment. {name} is the flag's name, e.g. \"Opener silk\".",
+    "props.flags.empty": "Hint under the Flags group in the Props panel when the show has no flags yet. A show can have one flag per silk design.",
+    "props.flags.hint": "Help under the Flags group in the Props panel: select performers, then click a flag to give it to them from the playhead (the current time in the show). Also names the field's right-click menu path Equipment, then Guard equipment; keep those names as the app shows them."
 }

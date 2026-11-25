@@ -12,9 +12,9 @@
  * - Cloth, not metal: metalness 0, matte, double-sided. A silk is plain in
  *   its color (the section's 2D fill, else its uniform preset's carry), or
  *   painted with its preset's pattern (`uniformPresets.ts`), sampled from
- *   {@link silkPatternTexture} at the grid's (u, v), or with the show's
- *   imported Artwork ({@link setSilkArtwork}), laid flat as its template is.
- *   Silk cues (C5.4) come later.
+ *   {@link silkPatternTexture} at the grid's (u, v), or, for one of the
+ *   show's flags (fork #985), with that flag's design: its tile in the
+ *   flags' texture ({@link setFlagArtworks}), laid flat as its template is.
  * - A slot whose Equipment cues change what it holds has the silks of each
  *   piece it holds (`heldLooks`), drawn only while it holds that piece.
  * - Shaped: a silk with a shape (`core/sizes/silkShapes.ts`) clips what
@@ -165,43 +165,43 @@ export function silkMaskTexture(): THREE.DataTexture {
     return texture;
 }
 
-/** Where the Artwork lies in its image: the trim's offset and size, in uv. */
-export interface SilkArtworkRect {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
+/** How the flags' texture is laid out: a grid of square tiles, row by row from the top. */
+export interface FlagArtworkGrid {
+    cols: number;
+    rows: number;
+    /** A tile's side, in pixels */
+    tile: number;
 }
 
-const blank = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+// transparent: a silk whose design hasn't loaded shows its plain color
+const blank = new THREE.DataTexture(new Uint8Array([255, 255, 255, 0]), 1, 1);
 blank.needsUpdate = true;
 
 /**
- * The show's silk Artwork, shared by every silk material: the image, and
- * the trim's rectangle in it (a template's PNG carries the bleed around
- * it). Silks marked for Artwork sample it.
+ * The show's flags' designs (fork #985), shared by every silk material: one
+ * texture with a tile per flag, each the design's trim stretched over the
+ * tile, and the grid's (columns, rows, tile pixels).
  */
-const artworkUniforms = {
-    uSilkArtwork: { value: blank as THREE.Texture },
-    uSilkArtworkRect: { value: new THREE.Vector4(0, 0, 1, 1) },
+const flagArtworkUniforms = {
+    uFlagArtworks: { value: blank as THREE.Texture },
+    uFlagArtworkGrid: { value: new THREE.Vector3(1, 1, 1) },
 };
 
-/** Sets the show's silk Artwork; null puts the blank back. */
-export function setSilkArtwork(
+/** Sets the show's flags' texture; null puts the blank back. */
+export function setFlagArtworks(
     texture: THREE.Texture | null,
-    rect: SilkArtworkRect = { x: 0, y: 0, width: 1, height: 1 },
+    grid: FlagArtworkGrid = { cols: 1, rows: 1, tile: 1 },
 ): void {
-    artworkUniforms.uSilkArtwork.value = texture ?? blank;
-    artworkUniforms.uSilkArtworkRect.value.set(
-        rect.x,
-        rect.y,
-        rect.width,
-        rect.height,
+    flagArtworkUniforms.uFlagArtworks.value = texture ?? blank;
+    flagArtworkUniforms.uFlagArtworkGrid.value.set(
+        grid.cols,
+        grid.rows,
+        grid.tile,
     );
 }
 
-/** `aPattern` for a silk painted with the show's Artwork. */
-export const SILK_ARTWORK_PATTERN = -2;
+/** `aPattern` for a silk painted with the design in tile `tile` of the flags' texture. */
+export const flagArtworkPattern = (tile: number): number => -2 - tile;
 
 /** Per-instance attributes and how many floats each takes. */
 const INSTANCE_ATTRIBUTES = {
@@ -220,7 +220,7 @@ const INSTANCE_ATTRIBUTES = {
     aColor: 3,
     /**
      * The silk's pattern: its index in `SILK_PATTERN_IDS`, -1 for plain, or
-     * `SILK_ARTWORK_PATTERN` for the show's Artwork.
+     * `flagArtworkPattern(tile)` for a show flag's design.
      */
     aPattern: 1,
 } as const;
@@ -260,8 +260,8 @@ uniform sampler2D uSilkPatterns;
 uniform float uSilkPatternCount;
 uniform sampler2D uSilkMasks;
 uniform float uSilkMaskCount;
-uniform sampler2D uSilkArtwork;
-uniform vec4 uSilkArtworkRect;
+uniform sampler2D uFlagArtworks;
+uniform vec3 uFlagArtworkGrid;
 varying vec3 vSilkColor;
 varying vec2 vSilkUv;
 varying vec2 vSilkPlanar;
@@ -280,11 +280,14 @@ float silkCutAlpha(vec2 p, float cut) {
   float m = texture2D(uSilkMasks, vec2(q.x, (floor(cut + 0.5) + q.y) / uSilkMaskCount)).r;
   return clamp(0.5 + (m - ${(SILK_MASK_EDGE / 255).toFixed(6)}) * ${(255 / (2 * (SILK_MASK_EDGE - 1))).toFixed(6)}, 0.0, 1.0);
 }
-/** The show's Artwork at the flat silk point p, over the plain color. */
-vec3 silkArtworkColor(vec2 p, vec3 plain) {
-  vec2 a = uSilkArtworkRect.xy + p * uSilkArtworkRect.zw;
-  // images load flipped: their top row is at v = 1
-  vec4 art = texture2D(uSilkArtwork, vec2(a.x, 1.0 - a.y));
+/** A show flag's design (tile t of the flags' texture) at the flat silk point p, over the plain color. */
+vec3 flagArtworkColor(vec2 p, float t, vec3 plain) {
+  vec2 cell = vec2(mod(t, uFlagArtworkGrid.x), floor(t / uFlagArtworkGrid.x));
+  // inside the tile by half a pixel, so the next tile's edge doesn't bleed in
+  vec2 q = clamp(p, vec2(0.5 / uFlagArtworkGrid.z), vec2(1.0 - 0.5 / uFlagArtworkGrid.z));
+  vec2 a = (cell + q) / uFlagArtworkGrid.xy;
+  // the texture's top row is at v = 1
+  vec4 art = texture2D(uFlagArtworks, vec2(a.x, 1.0 - a.y));
   return mix(plain, art.rgb, art.a);
 }
 /** The silk's pattern at (u, v), kept inside its own band of the texture. */
@@ -319,8 +322,8 @@ export function silkMaterial(composer: Composer): THREE.MeshStandardMaterial {
         };
         shader.uniforms.uSilkMasks = { value: silkMaskTexture() };
         shader.uniforms.uSilkMaskCount = { value: SILK_SHAPE_IDS.length + 1 };
-        shader.uniforms.uSilkArtwork = artworkUniforms.uSilkArtwork;
-        shader.uniforms.uSilkArtworkRect = artworkUniforms.uSilkArtworkRect;
+        shader.uniforms.uFlagArtworks = flagArtworkUniforms.uFlagArtworks;
+        shader.uniforms.uFlagArtworkGrid = flagArtworkUniforms.uFlagArtworkGrid;
         shader.vertexShader = shader.vertexShader
             .replace("#include <common>", `#include <common>\n${SILK_HEAD}`)
             .replace(
@@ -358,7 +361,7 @@ export function silkMaterial(composer: Composer): THREE.MeshStandardMaterial {
                 `#include <color_fragment>
   diffuseColor.a *= silkCutAlpha(vSilkPlanar, vSilkCut);
   diffuseColor.rgb *= vSilkPattern < -1.5
-    ? silkArtworkColor(vSilkPlanar, vSilkColor)
+    ? flagArtworkColor(vSilkPlanar, floor(-vSilkPattern - 2.0 + 0.5), vSilkColor)
     : vSilkPattern < -0.5
     ? vSilkColor
     : silkPatternColor(vSilkUv, floor(vSilkPattern + 0.5));`,
@@ -465,15 +468,15 @@ function addSilks(
         });
         byLook.set(key, specs);
     }
-    const { carryColor, silk, silkArtwork } = u.options;
+    const { carryColor, silk } = u.options;
     const color = lin(l.silkColor ?? carryColor ?? u.colors.primary);
-    // a Silk cue (`silkColor`) makes the silk plain; else the show's
-    // Artwork paints it; else a fill makes it plain
+    // a Silk cue (`silkColor`) makes the silk plain; else a show flag's
+    // design paints it; else a fill makes it plain
     const pattern =
         l.silkColor !== undefined
             ? -1
-            : silkArtwork
-              ? SILK_ARTWORK_PATTERN
+            : carry.artwork !== undefined
+              ? flagArtworkPattern(carry.artwork)
               : silk
                 ? SILK_PATTERN_IDS.indexOf(silk)
                 : -1;
