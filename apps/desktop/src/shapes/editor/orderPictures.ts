@@ -31,7 +31,7 @@ const NEAREST = leastTravel(FROM, TO);
 /**
  * The new line read first spot to last: the number (from 1) of the sample marcher standing on each
  */
-export function orderSequence(choice: OrderChoice): number[] {
+export function orderSequence(choice: PicturedOrder): number[] {
     const spotOf =
         choice === "nearest"
             ? NEAREST
@@ -95,8 +95,21 @@ const before: readonly OrderPictureNumber[] = (() => {
     }));
 })();
 
+/**
+ * The choices drawn as a picture. Inside out, Zipper and Within sections aren't: four marchers
+ * can't show them apart (Inside out of 1 2 3 4 reads 2 1 4 3, the sample's Least travel), so their
+ * menu rows say what they do in words instead.
+ */
+export type PicturedOrder = Extract<
+    OrderChoice,
+    "nearest" | "keep" | "reverse"
+>;
+
+export const isPictured = (choice: OrderChoice): choice is PicturedOrder =>
+    choice === "nearest" || choice === "keep" || choice === "reverse";
+
 /** The picture for a choice */
-export function orderPicture(choice: OrderChoice): OrderPicture {
+export function orderPicture(choice: PicturedOrder): OrderPicture {
     const step = 8;
     const first = W - 4 - step * (TO.length - 1);
     return {

@@ -90,6 +90,7 @@ export function marchersOnField(
             id: m.id,
             at,
             drillRank: rank.get(m.id)!,
+            ...(m.marcher.section ? { section: m.marcher.section } : {}),
             ...(from && Math.hypot(from.x - at.x, from.y - at.y) > 1e-6
                 ? { from }
                 : {}),

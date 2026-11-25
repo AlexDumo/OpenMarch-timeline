@@ -42,7 +42,6 @@ import {
 } from "../field/shapePointer";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { runAction } from "@/shortcuts/registry";
-import type { OrderChoice } from "../assign";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { keepFocus } from "./keepFocus";
 import { RichTips } from "@/components/ui/Tip";
@@ -149,6 +148,7 @@ import { GroupChips } from "./GroupChips";
 import { GROUP_MENU_ATTRIBUTE, GroupMenu } from "./GroupMenu";
 import { useFocusCarry } from "./focusCarry";
 import { OrderMenu } from "./OrderMenu";
+import { PickControls } from "./PickControls";
 import { OutlineGap } from "./OutlineGap";
 import { PivotMenu } from "./PivotGrid";
 import { CloseUpButton } from "./CloseUpButton";
@@ -776,8 +776,7 @@ function ShapeEditorBar({
                     kind={kind}
                     shown={fillShown(kind, params, spots)}
                     canPlace={target.place !== undefined}
-                    order={target.order?.current}
-                    keepOffered={target.order?.keepOffered}
+                    order={target.order?.key}
                     testId={testId}
                 />
             )}
@@ -1563,9 +1562,8 @@ const FillPill = memo(function FillPill({
     kind: AnyToolKind;
     shown: string;
     canPlace: boolean;
-    /** Only redraw it: who goes where, and whether Keep order is offered */
-    order: OrderChoice | undefined;
-    keepOffered: boolean | undefined;
+    /** Only redraw it: what the Who goes where menu shows */
+    order: string | undefined;
     testId: string;
 }) {
     const env = () => envFor();
@@ -1580,6 +1578,8 @@ const FillPill = memo(function FillPill({
             <RowsMenu target={target} />
             {/* Who goes where on a Line (#528) */}
             <OrderMenu target={target} />
+            {/* Who goes where by hand and Swap, on an open shape (09-who-goes-where.md) */}
+            {canPlace && <PickControls />}
             <ModeMenu target={target} envFor={env} />
             {/* What the mode has, after a divider (owner); nothing, and no divider, when it
                 has none */}

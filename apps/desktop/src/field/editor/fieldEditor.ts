@@ -508,6 +508,19 @@ export type FieldModeDrawing = {
     stage?: "drawing" | "open";
     /** Who will stand on each spot */
     labels?: readonly { at: FieldPoint; text: string }[];
+    /**
+     * Picking who goes where by hand, or Swap (09-who-goes-where.md): which shape is in front (the
+     * marchers' start ghosts or the spots; the other is drawn faint), the picks waiting for a
+     * partner, numbered in the order picked, what a press would pick, the walks of marchers placed
+     * by hand (drawn heavier, in the shape's color), and the drag's trail
+     */
+    pick?: {
+        readonly front: "marchers" | "spots";
+        readonly marks: readonly { at: FieldPoint; text: string }[];
+        readonly hover: { at: FieldPoint; text: string } | null;
+        readonly picked: readonly { from: FieldPoint; to: FieldPoint }[];
+        readonly trail: readonly FieldPoint[] | null;
+    };
     /** The rotate knob and the foot of its stem on the shape's back edge */
     knob?: { at: FieldPoint; stem: FieldPoint };
     /** The dot that moves the whole shape */
