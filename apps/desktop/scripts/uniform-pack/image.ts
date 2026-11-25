@@ -5,7 +5,7 @@
  *
  *   pnpm uniform:image template <outDir>
  *   pnpm uniform:image grid <photo> <out.png> [--step 100]
- *   pnpm uniform:image sample <photo> <x,y[,w,h]> ...
+ *   pnpm uniform:image sample <photo> <x,y[,w,h]> ... [--mark <out.png>]
  *   pnpm uniform:image crop <photo> <x,y,w,h> <out.png> [--size WxH]
  *
  * Exit codes: 0 done, 4 bad arguments, 2 anything else.
@@ -16,9 +16,11 @@ import { resolveFromCaller } from "./lib/args";
 import { openToolPage } from "./lib/browser";
 
 const USAGE = `usage: pnpm uniform:image <command> ...
-  template <outDir>                          the app's uniform-template.png/.svg and uniform-regions.json
+  template <outDir>                          the app's uniform-template.png/.svg/.pdf and uniform-regions.json
   grid <photo> <out.png> [--step 100]        the photo with a labelled pixel grid, to read coordinates off
-  sample <photo> <x,y[,w,h]> ...             mean and median hex color of each box (photo pixels)
+  sample <photo> <x,y[,w,h]> ... [--mark <out.png>]
+                                             mean and median hex of each box, in the pixels of the
+                                             image given; --mark draws the numbered boxes on it
   crop <photo> <x,y,w,h> <out.png> [--size WxH]   a box of the photo, for a print's tile texture`;
 
 const numbers = (s: string | undefined, n: number[]) => {
@@ -37,6 +39,7 @@ async function main(argv: string[]): Promise<number> {
     };
     const step = Number(flag("--step") ?? 100);
     const size = flag("--size");
+    const mark = flag("--mark");
     const bad = (why: string) => {
         console.error(`error: ${why}\n${USAGE}`);
         return 4;
@@ -90,8 +93,19 @@ async function main(argv: string[]): Promise<number> {
                 `wrote ${write(rest[1], r.png)} (${r.width} × ${r.height} px, grid every ${step} px)`,
             );
         } else if (command === "sample") {
-            const r = await page.image<unknown[]>("sample", photo(), boxes);
-            for (const box of r) console.log(JSON.stringify(box));
+            const r = await page.image<{ boxes: unknown[]; marked?: string }>(
+                "sample",
+                photo(),
+                boxes,
+                !!mark,
+            );
+            r.boxes.forEach((box, i) =>
+                console.log(JSON.stringify({ n: i + 1, ...(box as object) })),
+            );
+            if (mark && r.marked)
+                console.log(
+                    `wrote ${write(mark, r.marked)} (the boxes, numbered)`,
+                );
         } else {
             const r = await page.image<{
                 png: string;

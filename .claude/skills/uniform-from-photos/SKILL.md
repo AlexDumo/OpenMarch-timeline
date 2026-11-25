@@ -38,10 +38,14 @@ stands.
   crotch), `leg-L`/`-R` (to the hem), on each panel. Each outline is the side seam where front
   meets back. Head, neck, hands, shoes and hat are outside every region: palette colors only.
 - **Seams:** each region's `seams` gives both seam x's every 0.25 in of height. A band drawn at the
-  same heights on both panels closes round the limb.
-- **Heights** (`guides`, `landmarks`): collar 18.84, chest 25.32, elbow 29.28, jacket hem 38.31,
-  sleeve cuff 41.32, crotch 43.24, knee 56.3, leg hem 74.04. Chest centre (17, 25.32) on the front,
-  back number centre (17, 28.47) on the back.
+  same heights on both panels closes round the limb. The cape has no seams.
+- **Heights** (`guides`, `landmarks`, each region's `bbox`): collar 18.84, sleeve top (the
+  shoulder point) 20.42, chest 25.32, elbow 29.28, jacket hem 38.31, sleeve cuff 41.32, crotch
+  43.24, knee 56.3, leg hem 74.04. The torso's first seam rows run over the shoulder tops, from the
+  neck out to the sleeve. Chest centre (17, 25.32) on the front, back number centre (17, 28.47) on
+  the back.
+- **Neck:** the jacket's mesh reaches a little up the neck, above every region, and takes the
+  palette's `primary`. Choose `primary` for how the neckline should read (usually the jacket fabric).
 - **Wrap band:** the outer 15% of each half-width squeezes round the side of the body. Keep logos
   and text inside the dashed safe areas.
 
@@ -56,6 +60,16 @@ For each photo, make a grid copy and look at it with the grid:
 pnpm uniform:image grid <photo> <work>/grid-<name>.png --step 50
 ```
 
+When the uniform is small in the photo (under about 400 px tall), crop it and scale it up first,
+then grid and sample the crop. Coordinates are always in the pixels of the image you pass:
+
+```bash
+pnpm uniform:image crop <photo> 20,40,200,400 <work>/figure.png --size 600x1200
+```
+
+Measure positions on the most front-on, standing figure; arms raised to hold a horn hide the
+chest and pull the sleeves.
+
 Write `<work>/inventory.md`: one row per **garment element** (jacket body, yoke, each braid row,
 sash, buttons, cummerbund, pants, stripes, gauntlets, hat, …):
 
@@ -65,24 +79,31 @@ sash, buttons, cummerbund, pants, stripes, gauntlets, hat, …):
 - **Where:** convert photo positions to template heights by measuring between two landmarks you
   can see on the body (shoulder line, belt, knee, hem) and interpolating.
 - **Hex:** sample each color in 3 or more evenly lit boxes, away from highlights and shadows, and
-  take the median:
+  take the median. `--mark` draws the numbered boxes on the image: open it and drop any box that
+  missed (background, skin, another person):
 
   ```bash
-  pnpm uniform:image sample <photo> 212,340,6,6 230,410,6,6 198,455,6,6
+  pnpm uniform:image sample <photo> 212,340,6,6 230,410,6,6 198,455,6,6 --mark <work>/marks.png
   ```
 
-  A `spread` over about 25 means the box mixes colors or texture: move it or shrink it.
+  A `spread` over about 25 means the box mixes colors or texture: move it or shrink it. When photos
+  disagree, trust the one in even daylight over a stage or studio shot, whose lights crush darks
+  and burn out sheen. Record the photo's hex here; step 5 may paint a different hex so the render
+  reads like the photo.
 
 - **Modes:** every way it is worn in the photos (zipped, sash out, unzipped, …). Each mode's change
-  becomes its own layer.
+  becomes its own layer. If the builder refuses `modes` (a checkout before pack format 3), build
+  the first mode only and keep the others in the inventory, with what each would change.
 - **How**, one of:
   - _fabric_: painted on a layer, filling its regions
   - _detail_: painted on a layer (bands, stripes, yokes, piping, braid)
-  - _item_: a logo, number, crest, patch, button or frog knot, placed with a grade
+  - _item_: a logo, number, crest, patch, button or frog knot, placed with a grade (step 3)
   - _print_: a real all-over print (sequins, script, camo), as a `tile` item from a photo crop
   - _palette_: collar, cuffs, gloves, shoes, hat, plume (`palette` and `options`)
   - _can't_: hangs or stands off the body (sashes, tabards, coat tails, flared gauntlets),
-    sheer layers, hat shapes. Paint may show what lies flat on the body; note the rest.
+    sheer layers, hat shapes, standing collars, fabric sheen or texture (velvet, satin, metallic),
+    gloves that cover only part of the hand. Paint may show what lies flat on the body; note the
+    rest.
 - **Unseen** parts (often the back): pick the likeliest and mark the row _guessed_.
 
 Done when every element visible in every photo is a row, and every row has a hex, its modes and a
@@ -96,16 +117,25 @@ example: clip paths from the region polygons, bands, and seam stripes from the s
 
 - **Base layer:** `front.svg` and `back.svg`, each `viewBox="0 0 34 78"`. Fill every region the
   garment covers, on both panels, clipped to its polygon, in the fabric hex. A jacket that covers
-  the hips fills `hips` too. Bare skin inside a region (a cap sleeve's arm) is painted a sampled
-  skin hex.
-- **Details:** draw anything that goes round a limb or across a side on both panels at the same
+  the hips fills `hips` too. Bare skin inside a region (the arm below a cap sleeve) has to be
+  painted, in one skin hex for every marcher, so it won't match each marcher's own face and hands:
+  paint it a mid skin tone and list it under _can't_ in the report.
+- **Details:** paint anything that is part of the cloth and follows it: bands, stripes, yokes,
+  braid rows. Draw anything that goes round a limb or across a side on both panels at the same
   heights. A stripe down a side seam follows the seam rows.
 - **Mode layers:** one more pair of SVGs per mode change, holding only what changes (the sash, the
   open front); everything else transparent.
-- **Items:** each in its own SVG, its `viewBox` tight round its art, outside the flats. Place it by
-  its centre in panel inches. Grades: `proportional` for logos, numbers and crests, `fixed` for
-  buttons and patches, `line` for a thin braid or piping line (its width is its length). At most
-  32 items.
+- **Items:** each in its own SVG, outside the flats. The builder trims the image to its painted
+  pixels, and `at` is the centre of that trimmed art, in panel inches; `rotate` turns it about
+  that centre. So to land one point of the art (a frog's button) somewhere, work out where it sits
+  in the art's own bounding box. Grades:
+  - `proportional`: logos, numbers and crests, which grow with the body
+  - `fixed`: buttons, patches, frog knots and other trims that keep their real size
+  - `line`: one thin braid or piping line that must keep its width (the image's width is the
+    line's length; turn it 90° for a vertical line)
+
+  At most 32 items.
+
 - **Prints:** crop a clean, flat swatch from the photo and place it as a `tile` item over its
   regions, at the tile's real size (at least 1 in):
 
@@ -120,7 +150,7 @@ example: clip paths from the region polygons, bands, and seam stripes from the s
 Then write `<work>/pack/uniform.json`: name, style, all ten palette roles (the jacket fabric as
 `primary`, the pants as `pants`, the rest from the inventory), the options as the photos show them
 (`hat: false` for a bare head), the layers bottom first, the items and the modes. Format:
-the README's `uniform.json` section.
+the README's `uniform.json` section. A pack without modes renders as one mode named `default`.
 
 Done when every inventory row whose how is fabric, detail, item, print or palette is in the pack.
 
@@ -143,11 +173,19 @@ Exit 3 means no GPU: stop and say so; there is no CPU fallback.
 
 Open every `contact-<mode>.png`, and for each mode `stand-neutral-average-front.png`,
 `stand-neutral-average-back.png` and `atlas-neutral-average.png` at full size. Read `report.json`:
-each mode's `errors` and `warnings`. Then compare with the photos, row by row of the inventory:
+each mode's `errors` and `warnings`. They catch the mistakes the app warns about (a template left
+in, a painted logo, an item not drawn), never likeness: the images are the check. In the atlas,
+each region's edge colors are smeared 1.5 in outward so filtering never reaches the empty page;
+judge only what lies inside the outlines.
+
+Then compare with the photos, row by row of the inventory:
 
 - **present** in the right modes, and on the right side of the body
 - **height** against the photo's landmarks, and **size** against the scale bar (1 in blocks)
-- **color** against the sampled hex
+- **color:** does the render read like the photo? The venue's daylight and the shader darken paint,
+  and nothing shows sheen, so a dark fabric can go black and a satin band can vanish into velvet.
+  Lighten the paint until the render reads like the photo, and note the hex you chose in
+  `rounds.md`.
 - **seams:** bands close round limbs; front and back meet
 - **body types:** logos stay round, stripe counts hold, nothing slides off a slim or full body
 - **stands view:** from 40 m it reads like the uniform in the photos

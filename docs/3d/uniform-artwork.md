@@ -289,7 +289,7 @@ code in headless Chromium:
   `.omasset`, drawn by the app's import and written by the app's writer. It refuses with every
   problem it finds.
 - `pnpm uniform:render <pack> <outDir>`: renders a pack on all 7 body types with the 3D View's own
-  marchers and atlas, on the GPU (no CPU fallback): front, back, side and three-quarter views, the
+  marchers and atlas, on the GPU (no CPU fallback): front, back, left-side and three-quarter views, the
   median body mid-stride, a stands view, a contact sheet per mode and a `report.json` of the quiet
   notes below.
 - `pnpm uniform:image`: the template downloads, and photo helpers (a pixel grid, color samples,

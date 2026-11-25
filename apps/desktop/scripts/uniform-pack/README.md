@@ -9,7 +9,8 @@ the 3D View's marchers and its flats atlas. Only the show database is replaced
 
 The agent skill `.claude/skills/uniform-from-photos` uses them to turn photos into a pack.
 
-Run every command from `apps/desktop`. Paths are relative to the folder you typed the command in.
+Run every command from `apps/desktop`. A relative path is taken from the folder you typed the
+command in, not from `apps/desktop`.
 
 | Command          | What it does                                                                  |
 | ---------------- | ----------------------------------------------------------------------------- |
@@ -183,9 +184,11 @@ A render of one mode takes about 8 s on the RTX 3060 Ti, most of it starting up.
 ## `uniform:image`
 
 ```bash
-pnpm uniform:image template <outDir>                      # uniform-template.png/.svg, uniform-regions.json
+pnpm uniform:image template <outDir>                      # uniform-template.png/.svg/.pdf, uniform-regions.json
 pnpm uniform:image grid <photo> <out.png> [--step 100]    # the photo with a labelled pixel grid
-pnpm uniform:image sample <photo> 120,340,8,8 410,90      # mean and median hex of each box (x,y[,w,h] px)
+pnpm uniform:image sample <photo> 120,340,8,8 410,90 [--mark <out.png>]
+                                    # mean and median hex of each box (x,y[,w,h] in the image's pixels);
+                                    # --mark draws the numbered boxes, to check where they landed
 pnpm uniform:image crop <photo> 300,420,64,64 <out.png> [--size 256x256]
 ```
 

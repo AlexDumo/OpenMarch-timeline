@@ -56,15 +56,18 @@ export async function grid(data: string, step: number) {
     return { png: await png(c), width: img.width, height: img.height };
 }
 
-/** Each box's mean and median color as hex, and how much it varies (0 to 255) */
-export async function sample(data: string, boxes: number[][]) {
+/**
+ * Each box's mean and median color as hex, and how much it varies (0 to 255). With `mark`, also
+ * the photo with each box outlined and numbered, to check the boxes landed where meant.
+ */
+export async function sample(data: string, boxes: number[][], mark = false) {
     const img = await decode(data);
     const c = new OffscreenCanvas(img.width, img.height);
     const x = c.getContext("2d", { willReadFrequently: true })!;
     x.drawImage(img, 0, 0);
     const hex = (r: number, g: number, b: number) =>
         `#${[r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("")}`;
-    return boxes.map(([bx, by, bw = 1, bh = 1]) => {
+    const results = boxes.map(([bx, by, bw = 1, bh = 1]) => {
         const x0 = Math.max(0, Math.min(img.width - 1, Math.round(bx)));
         const y0 = Math.max(0, Math.min(img.height - 1, Math.round(by)));
         const w = Math.max(1, Math.min(img.width - x0, Math.round(bw)));
@@ -89,6 +92,42 @@ export async function sample(data: string, boxes: number[][]) {
             spread: Math.round(spread),
         };
     });
+    if (!mark) return { boxes: results };
+    // outlined in magenta over a dark rim, numbered from 1, on a copy at least 900 px wide
+    const scale = Math.max(1, Math.ceil(900 / img.width));
+    const m = new OffscreenCanvas(img.width * scale, img.height * scale);
+    const mx = m.getContext("2d")!;
+    mx.imageSmoothingEnabled = false;
+    mx.drawImage(img, 0, 0, m.width, m.height);
+    mx.font = "bold 14px sans-serif";
+    results.forEach(({ box: [bx, by, bw, bh] }, i) => {
+        for (const [color, width] of [
+            ["#000", 3],
+            ["#f0f", 1],
+        ] as const) {
+            mx.strokeStyle = color;
+            mx.lineWidth = width;
+            mx.strokeRect(
+                bx * scale - 1,
+                by * scale - 1,
+                bw * scale + 2,
+                bh * scale + 2,
+            );
+        }
+        mx.fillStyle = "#000";
+        mx.fillText(
+            String(i + 1),
+            bx * scale + bw * scale + 4,
+            by * scale + 12,
+        );
+        mx.fillStyle = "#ff0";
+        mx.fillText(
+            String(i + 1),
+            bx * scale + bw * scale + 3,
+            by * scale + 11,
+        );
+    });
+    return { boxes: results, marked: await png(m) };
 }
 
 /** A box of the photo, optionally scaled to `size` (for a tile's texture) */
@@ -103,10 +142,10 @@ export async function crop(data: string, box: number[], size?: number[]) {
     return { png: await png(c), width: w, height: h };
 }
 
-/** The app's template downloads: uniform-template.png/.svg and uniform-regions.json */
+/** The app's template downloads: uniform-template.png/.svg/.pdf and uniform-regions.json */
 export async function template() {
     const out: Record<string, string> = {};
-    for (const format of ["png", "svg", "json"] as const) {
+    for (const format of ["png", "svg", "pdf", "json"] as const) {
         const file = await uniformTemplateFile(
             format,
             (w, h): UniformCanvas => {
