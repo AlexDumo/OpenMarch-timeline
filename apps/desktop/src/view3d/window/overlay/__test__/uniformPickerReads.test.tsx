@@ -255,7 +255,12 @@ describe("the uniform picker's notes, through the real read", () => {
         show.job = "ok";
         act(() => show.release!());
         await screen.findByTestId("view3d-uniform-preview-worn");
-        expect(screen.queryByTestId("view3d-uniform-loadFailed")).toBeNull();
+        // the note goes once Try again settles, which can be a tick after the worn note shows
+        await vi.waitFor(() =>
+            expect(
+                screen.queryByTestId("view3d-uniform-loadFailed"),
+            ).toBeNull(),
+        );
     });
 
     it("says the show's uniforms couldn't be listed, with the setting on and the band in a preset", async () => {
