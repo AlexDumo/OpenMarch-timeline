@@ -111,9 +111,13 @@ export function useShapeFieldModes(
     useEffect(() => () => previewPlacedBox(null), [live, toolOpen]);
 
     const order = useOrderSweepMode(isPlaying);
-    // Record path (prototype): while a take counts in or records, it takes every press, playing
+    // Record path (prototype): in Record mode (armed) and while a take counts in or records, it
+    // takes every press, playing
     const recording = useRecordPathStore(
-        (s) => s.phase === "countIn" || s.phase === "recording",
+        (s) =>
+            s.phase === "armed" ||
+            s.phase === "countIn" ||
+            s.phase === "recording",
     );
     // A tool opened by its key (O for Circle, P for the pen) while Set order is on closes Set
     // order, rather than opening hidden behind it

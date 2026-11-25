@@ -1,4 +1,5 @@
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { armedMove } from "@/pathways/recordPathStore";
 
 /**
  * Whether the app takes an edit press on the field for itself, so the
@@ -8,11 +9,13 @@ import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
  * not the playhead, where edits land. The first press only puts the field
  * back on the playhead (#189 story 60), so nothing is selected or dragged
  * from the held positions. Asked before a mode (the shape tool) gets the press.
+ * Record mode holds the move's start on purpose: its presses arm marchers.
  */
 export function takeFieldPress(): boolean {
     const timeline = useTimelineSelectionStore.getState();
     if (timeline.cursorBeat === null || timeline.playback !== null)
         return false;
+    if (armedMove() !== null) return false;
     timeline.clearCursor();
     return true;
 }
