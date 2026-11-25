@@ -112,26 +112,28 @@ export function RecordPathCounter() {
     if (phase !== "countIn" && phase !== "recording") return null;
     return (
         <div
-            className="pointer-events-none absolute inset-x-0 top-12 z-20 flex flex-col items-center"
+            className="pointer-events-none absolute inset-x-0 top-12 z-20 flex justify-center"
             data-testid="record-path-counter"
         >
-            <div className="text-text text-h1 font-bold tabular-nums drop-shadow">
-                {phase === "countIn" ? countIn : count}
-            </div>
-            <div className="bg-bg-1/80 text-sub rounded-full px-8 py-2">
-                {phase === "countIn" ? (
-                    t("pathways.record.countIn")
-                ) : (
-                    <>
-                        <span className="text-red font-medium">
-                            ● {t("pathways.record.recording")}
-                        </span>{" "}
-                        · {t("pathways.record.countOf", { count, counts })}
-                    </>
-                )}
-            </div>
-            <div className="text-text-subtitle text-sub mt-2 drop-shadow">
-                {t("pathways.record.hint")}
+            <div className="bg-bg-1/90 border-stroke rounded-6 flex flex-col items-center border px-16 py-8 shadow-md">
+                <div className="text-text text-h1 leading-none font-bold tabular-nums">
+                    {phase === "countIn" ? countIn : count}
+                </div>
+                <div className="text-sub mt-4">
+                    {phase === "countIn" ? (
+                        t("pathways.record.countIn")
+                    ) : (
+                        <>
+                            <span className="text-red font-medium">
+                                ● {t("pathways.record.recording")}
+                            </span>{" "}
+                            · {t("pathways.record.countOf", { count, counts })}
+                        </>
+                    )}
+                </div>
+                <div className="text-text-subtitle text-sub mt-4">
+                    {t("pathways.record.hint")}
+                </div>
             </div>
         </div>
     );
