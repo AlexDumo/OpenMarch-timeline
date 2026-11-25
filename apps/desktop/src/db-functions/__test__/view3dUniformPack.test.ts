@@ -691,3 +691,149 @@ describeDbTests("view3dUniformPack", (it) => {
         });
     });
 });
+
+/** The tag-1 "Cadets 2019" with plain and sash out modes (format version 3, #1257 step 5) */
+const modesPack = (sashName = "Sash out") =>
+    writeUniformPack(
+        {
+            ...sampleManifest("Cadets 2019"),
+            layers: [
+                {
+                    id: "base",
+                    name: "Base",
+                    file: "layers/base.png",
+                    covers: "page",
+                },
+                {
+                    id: "sash",
+                    name: "Sash",
+                    file: "layers/sash.png",
+                    covers: "page",
+                },
+            ],
+            modes: [
+                { id: "plain", name: "Plain", layers: ["base"], items: [] },
+                {
+                    id: "sash-out",
+                    name: sashName,
+                    layers: ["base", "sash"],
+                    items: [],
+                },
+            ],
+        },
+        {
+            "layers/base.png": fakePng(3360, 2816, 1),
+            "layers/sash.png": fakePng(3360, 2816, 2),
+        },
+    );
+
+describeDbTests("view3dUniformPack modes (#1257 step 5)", (it) => {
+    it("keeps a burst of mode edits to one undo step, back to the pack without modes", async ({
+        db,
+    }) => {
+        const origin = await store(
+            db,
+            writeUniformPack(sampleManifest("Cadets 2019"), {
+                "layers/base.png": fakePng(3360, 2816, 1),
+            }),
+        );
+        const id = parseShowAssetRef(origin)!.id;
+        let latest = origin;
+        let token: string | null | undefined;
+        // add the sash mode, then rename it twice, in one burst
+        for (const name of ["Mode 2", "Sash", "Sash out"]) {
+            const pack = modesPack(name);
+            const saved = await saveUniformItemsPack({
+                db,
+                pack,
+                manifest: readUniformPack(pack).manifest,
+                field,
+                versionOf: id,
+                expect: latest,
+                amend: token ?? undefined,
+            });
+            token = saved.token;
+            latest = saved.value;
+        }
+        const ref = parseShowAssetRef(latest)!;
+        expect((await getShowAsset({ db, ref }))?.sidecar).toEqual({
+            formatVersion: 3,
+        });
+        // the stored file, what Save uniform file writes, carries the modes
+        const asset = await getShowAsset({ db, ref });
+        const bytes = await readShowAssetBlob({
+            db,
+            hash: asset!.parts.pack,
+        });
+        expect(
+            readUniformPack(bytes!).manifest.modes?.map((m) => m.name),
+        ).toEqual(["Plain", "Sash out"]);
+        // two versions, one undo step
+        expect(
+            (await getShowAssets({ db })).filter((a) => a.id === id),
+        ).toHaveLength(2);
+        await performUndo(db);
+        expect((await getStoredVenueSettings({ db }))?.uniformArtwork).toBe(
+            origin,
+        );
+        await performRedo(db);
+        expect((await getStoredVenueSettings({ db }))?.uniformArtwork).toBe(
+            latest,
+        );
+    });
+
+    it("keeps the mode the band wears across a new version, and drops it when removed or for a new uniform", async ({
+        db,
+    }) => {
+        const first = await store(db, modesPack());
+        const venue = (await getStoredVenueSettings({ db }))!;
+        await updateVenueSettings({
+            db,
+            settings: { ...venue, uniformMode: "sash-out" },
+        });
+        const edited = modesPack("Sash on");
+        await setUniformPack({
+            db,
+            pack: edited,
+            manifest: readUniformPack(edited).manifest,
+            field,
+            versionOf: parseShowAssetRef(first)!.id,
+        });
+        expect((await getStoredVenueSettings({ db }))?.uniformMode).toBe(
+            "sash-out",
+        );
+        // a version without that mode (it was removed) clears it in the same write
+        const removed = readUniformPack(edited).manifest;
+        const without = writeUniformPack(
+            {
+                ...removed,
+                modes: removed.modes!.filter((m) => m.id !== "sash-out"),
+            },
+            {
+                "layers/base.png": fakePng(3360, 2816, 1),
+                "layers/sash.png": fakePng(3360, 2816, 2),
+            },
+        );
+        await setUniformPack({
+            db,
+            pack: without,
+            manifest: readUniformPack(without).manifest,
+            field,
+            versionOf: parseShowAssetRef(first)!.id,
+        });
+        expect(
+            (await getStoredVenueSettings({ db }))?.uniformMode,
+        ).toBeUndefined();
+        await updateVenueSettings({
+            db,
+            settings: {
+                ...(await getStoredVenueSettings({ db }))!,
+                uniformMode: "plain",
+            },
+        });
+        await store(db, packFile("Away", 5));
+        expect(
+            (await getStoredVenueSettings({ db }))?.uniformMode,
+        ).toBeUndefined();
+    });
+});

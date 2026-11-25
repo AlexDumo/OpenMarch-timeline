@@ -37,7 +37,7 @@ import { pickMarchers } from "../camera/inputMath";
 import { pickPerformerIndex } from "../camera/followMath";
 import { useFollowStore } from "../camera/followStore";
 import { performersMoved, setPerformerSource } from "../camera/performerTrack";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
@@ -133,7 +133,9 @@ import {
 } from "./marchers/useMarcherBodies";
 import { useMarcherFlats } from "./marchers/useMarcherFlats";
 import { useFlatsWear } from "@/view3d/window/uniformPack/useFlatsWear";
-import { clipsToLoad } from "./marchers/marcherBodies";
+import { clipsToLoad, flatsBody } from "./marchers/marcherBodies";
+import { flatsDpi } from "@/view3d/core/marchers/uniformArtwork";
+import { useSettledFlatsWear } from "@/view3d/window/uniformPack/useSettledFlatsWear";
 import { hornRowsOf } from "./marchers/hornRows";
 import { sectionCueCarry } from "@/view3d/core/marchers/hornChannel";
 import { DEFAULT_HOLD, windowHornEvents } from "./windowHorn";
@@ -184,7 +186,19 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     const uniformPreset = uniformPresetOf(venue?.uniforms);
     // the band's flats uniform, a preview (docs/3d/uniform-artwork.md): a
     // built-in, or the show's imported pack (fork #1257)
-    const uniformArtwork = useFlatsWear(venue?.uniformArtwork);
+    const wantedArtwork = useFlatsWear(
+        venue?.uniformArtwork,
+        venue?.uniformMode,
+    );
+    // the body types wearing flats now, as their atlases are keyed: a new
+    // wear (a mode switch, an edit) waits for its atlases on these, so its
+    // art and palette arrive together (fork #1257 step 5)
+    const [flatsBodies, setFlatsBodies] = useState("");
+    const uniformArtwork = useSettledFlatsWear(
+        wantedArtwork,
+        flatsBodies,
+        flatsDpi(quality),
+    );
     const guardUniformPreset = guardUniformPresetOf(venue?.guardUniforms);
     // the brass line's finish and the tubas' horn, from the same settings
     const brassFinish = brassFinishOf(venue?.brassFinish);
@@ -456,6 +470,13 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         return [...out];
     }, [hornSlots]);
     const marcherFlats = useMarcherFlats(marcherLooks, quality);
+    useEffect(() => {
+        const bodies = new Set<string>();
+        for (const look of marcherLooks ?? [])
+            if (look.uniform.options.artwork)
+                bodies.add(flatsBody(look.body.bodyType, quality));
+        setFlatsBodies([...bodies].sort().join(","));
+    }, [marcherLooks, quality]);
     const marcherBodies = useMarcherBodies(
         marcherAssets,
         clipNames,

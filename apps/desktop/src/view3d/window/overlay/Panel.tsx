@@ -1,7 +1,7 @@
 /**
  * Building blocks shared by the overlay's floating panels (ui.md UI-2).
  */
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Button, ToggleGroup, ToggleGroupItem } from "@openmarch/ui";
 import clsx from "clsx";
 import { Tip } from "@/components/ui/Tip";
@@ -216,5 +216,53 @@ export function SegmentedMany<T extends string>({
                 </ToggleGroupItem>
             ))}
         </ToggleGroup>
+    );
+}
+
+/**
+ * A color swatch. The native picker updates the swatch while it is open and
+ * saves once when it closes, so one pick is one undo step.
+ */
+export function ColorField({
+    label,
+    value,
+    onCommit,
+    testId,
+}: {
+    label: string;
+    value: string;
+    onCommit: (color: string) => void;
+    testId?: string;
+}) {
+    const ref = useRef<HTMLInputElement>(null);
+    const commitRef = useRef(onCommit);
+    commitRef.current = onCommit;
+
+    // React's onChange fires on every `input`; saving waits for `change`.
+    useEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+        const onChange = () => commitRef.current(el.value.toLowerCase());
+        el.addEventListener("change", onChange);
+        return () => el.removeEventListener("change", onChange);
+    }, []);
+    useEffect(() => {
+        if (ref.current && ref.current.value !== value) {
+            ref.current.value = value;
+        }
+    }, [value]);
+
+    return (
+        <label className="flex items-center gap-6" title={label}>
+            <span className="text-sub text-text/60">{label}</span>
+            <input
+                ref={ref}
+                type="color"
+                defaultValue={value}
+                aria-label={label}
+                data-testid={testId}
+                className="border-stroke rounded-4 size-28 shrink-0 cursor-pointer border bg-transparent p-2"
+            />
+        </label>
     );
 }

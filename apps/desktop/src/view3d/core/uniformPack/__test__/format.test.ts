@@ -208,7 +208,7 @@ describe("uniform pack file", () => {
                     zipOf({
                         "manifest.json": manifestJson({
                             ...sampleManifest(),
-                            formatVersion: 3,
+                            formatVersion: 4,
                         }),
                     }),
                 ),

@@ -7,6 +7,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { UniformPackItem } from "@/view3d/core/uniformPack/format";
 import type { UniformPackValue } from "@/view3d/core/marchers/uniformArtwork";
+import { contentsOf } from "@/view3d/core/uniformPack/modeEdits";
+import { sampleManifest } from "@/view3d/core/uniformPack/__test__/fixtures";
 
 interface Pending {
     expect: string;
@@ -47,6 +49,7 @@ vi.mock("../storeUniformPack", () => {
 
 const {
     editItems,
+    editUnsettled,
     itemListState,
     observeWorn,
     resetItemDraftsForTests,
@@ -64,14 +67,19 @@ const crest = (x: number): UniformPackItem => ({
     at: [x, 25.32],
     width: 6,
 });
+/** The pack's contents holding `items` (no modes) */
+const storedWith = (items: UniformPackItem[]) => ({
+    ...contentsOf(sampleManifest()),
+    items,
+});
 const flush = async () => {
     for (let i = 0; i < 10; i++) await Promise.resolve();
 };
 const draft = () => useItemDrafts.getState().draft;
-const xOf = () => draft()!.items[0].at[0];
+const xOf = () => draft()!.contents.items[0].at[0];
 /** Types Across `x`, then lets the save's pause pass */
 const type = async (worn: UniformPackValue, x: number, wait = true) => {
-    editItems(worn, [crest(17)], () => [crest(x)]);
+    editItems(worn, storedWith([crest(17)]), () => [crest(x)]);
     if (wait) {
         await vi.advanceTimersByTimeAsync(800);
         await flush();
@@ -215,5 +223,40 @@ describe("edits while the band's uniform saves", () => {
         expect(draft()).not.toBeNull();
         await vi.advanceTimersByTimeAsync(4100);
         expect(draft()).toBeNull();
+    });
+
+    it("holds Band wears until the save is back in the venue, by the same arrive rules (#1257 step 5)", async () => {
+        const unsettled = () =>
+            editUnsettled(draft(), useItemDrafts.getState().saving);
+        observeWorn(v(1), true);
+        expect(unsettled()).toBe(false);
+        await type(v(1), 14);
+        // saving
+        expect(unsettled()).toBe(true);
+        // the venue shows the save before its answer: still saving
+        observeWorn(v(2), false);
+        expect(unsettled()).toBe(true);
+        await answer(0, v(2));
+        // answered, and the venue already named it: settled once its pack loads
+        expect(unsettled()).toBe(false);
+        observeWorn(v(2), true);
+        expect(draft()).toBeNull();
+        expect(unsettled()).toBe(false);
+
+        // a second save answered before the venue shows it: held until it does
+        await type(v(2), 10);
+        await answer(1, v(3));
+        expect(draft()?.arrived).toBe(false);
+        expect(unsettled()).toBe(true);
+        observeWorn(v(3), true);
+        expect(unsettled()).toBe(false);
+
+        // a save the venue never shows: held until the arrive timer ends the draft
+        await type(v(3), 8);
+        await answer(2, v(4));
+        expect(unsettled()).toBe(true);
+        await vi.advanceTimersByTimeAsync(4100);
+        expect(draft()).toBeNull();
+        expect(unsettled()).toBe(false);
     });
 });

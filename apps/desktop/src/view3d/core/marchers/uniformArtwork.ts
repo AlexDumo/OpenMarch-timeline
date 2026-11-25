@@ -153,7 +153,7 @@ export function flatsArtworkOf(value: unknown): FlatsArtworkKey | null {
     const builtIn = uniformArtworkOf(value);
     if (builtIn) return builtIn;
     return typeof value === "string" &&
-        /^library:[^@\s]+@[0-9a-f]{64}$/.test(value)
+        /^library:[^@#\s]+@[0-9a-f]{64}$/.test(value)
         ? (value as UniformPackValue)
         : null;
 }
@@ -162,6 +162,31 @@ export function flatsArtworkOf(value: unknown): FlatsArtworkKey | null {
 export const isUniformPackValue = (
     key: FlatsArtworkKey,
 ): key is UniformPackValue => key.startsWith("library:");
+
+/**
+ * The 3D View key of a pack worn in a mode (format version 3, step 5 of fork #1257):
+ * `<pack or draft key>#<mode id>`, so each (uniform, mode, body type) gets its own atlas. A pack
+ * without modes keeps its plain key. Mode ids are `[a-z0-9-]` and asset ids never hold `#`
+ * (`isShowAssetId`), so the only `#` is this one, and the key holds no `~` or `|` after it.
+ */
+export const withMode = (
+    key: UniformPackValue,
+    modeId: string | null | undefined,
+): UniformPackValue => (modeId ? `${key}#${modeId}` : key);
+
+/** A pack key's pack (or draft) key and its mode, the inverse of {@link withMode} */
+export function splitMode(key: UniformPackValue): {
+    pack: UniformPackValue;
+    mode: string | null;
+} {
+    const at = key.indexOf("#");
+    return at < 0
+        ? { pack: key, mode: null }
+        : {
+              pack: key.slice(0, at) as UniformPackValue,
+              mode: key.slice(at + 1),
+          };
+}
 
 /** A flats uniform as a look wears it: which art, and the palette around it. */
 export interface FlatsWear {

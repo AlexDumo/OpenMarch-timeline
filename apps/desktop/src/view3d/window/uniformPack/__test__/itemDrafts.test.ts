@@ -5,10 +5,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { UniformPackItem } from "@/view3d/core/uniformPack/format";
 import type { UniformPackValue } from "@/view3d/core/marchers/uniformArtwork";
+import { addMode, contentsOf } from "@/view3d/core/uniformPack/modeEdits";
+import { sampleManifest } from "@/view3d/core/uniformPack/__test__/fixtures";
 import {
     draftKey,
     draftOrigin,
     editItems,
+    editPack,
     itemListState,
     observeWorn,
     resetItemDraftsForTests,
@@ -24,8 +27,9 @@ const draft = (latest: UniformPackValue): ItemDraft => ({
     latest,
     previous: null,
     arrived: true,
-    items: [],
+    contents: contentsOf(sampleManifest()),
     images: {},
+    layerImages: {},
     revision: 3,
     shown: 3,
     saved: 2,
@@ -47,6 +51,58 @@ describe("item drafts", () => {
         expect(draftOrigin(draftKey(v(1), 3))).toBe(v(1));
         expect(draftOrigin(v(4))).toBe(v(4));
     });
+});
+
+describe("one draft for items and modes (#1257 step 5)", () => {
+    afterEach(() => {
+        vi.clearAllTimers();
+        vi.useRealTimers();
+        useItemDrafts.setState({ draft: null, saving: false });
+    });
+
+    it("keeps mode and item edits in one draft, a new item showing in every mode", () => {
+        vi.useFakeTimers();
+        const stored = contentsOf(sampleManifest("Cadets 2019"));
+        editPack(
+            v(1),
+            stored,
+            (c) =>
+                addMode(c, { name: "Sash out", defaultName: "Plain" }).contents,
+            { now: true },
+        );
+        editItems(v(1), stored, (items) => [
+            ...items,
+            {
+                id: "crest",
+                file: "items/crest.png",
+                panel: "front",
+                at: [17, 25.32],
+                width: 6,
+            },
+        ]);
+        const d = useItemDrafts.getState().draft!;
+        expect(d.revision).toBe(2);
+        expect(d.contents.modes.map((m) => m.name)).toEqual([
+            "Plain",
+            "Sash out",
+        ]);
+        expect(d.contents.modes.every((m) => m.items.includes("crest"))).toBe(
+            true,
+        );
+        // removing the item takes it out of every mode
+        editItems(v(1), stored, () => []);
+        expect(
+            useItemDrafts
+                .getState()
+                .draft!.contents.modes.every((m) => m.items.length === 0),
+        ).toBe(true);
+    });
+});
+
+/** A pack's contents holding `items` */
+const withItems = (items: UniformPackItem[]) => ({
+    ...contentsOf(sampleManifest()),
+    items,
 });
 
 const item = (id: string, width: number): UniformPackItem => ({
@@ -75,8 +131,9 @@ describe("an edit right after a save or an Undo (#1287 re-review)", () => {
         latest: N,
         previous: P,
         arrived: false,
-        items: [item("crest", 6)],
+        contents: withItems([item("crest", 6)]),
         images: {},
+        layerImages: {},
         revision: 2,
         shown: 2,
         saved: 2,
@@ -93,10 +150,10 @@ describe("an edit right after a save or an Undo (#1287 re-review)", () => {
         // not the deleted number coming back
         expect(shown).toEqual({ items: [item("crest", 6)], editable: true });
         // resizing the crest now edits the draft's items, so the number stays deleted
-        editItems(N, pItems, (list) =>
+        editItems(N, withItems(pItems), (list) =>
             list.map((i) => (i.id === "crest" ? { ...i, width: 7 } : i)),
         );
-        expect(useItemDrafts.getState().draft?.items).toEqual([
+        expect(useItemDrafts.getState().draft?.contents.items).toEqual([
             item("crest", 7),
         ]);
         // once N's pack has loaded and everything is saved, the draft ends

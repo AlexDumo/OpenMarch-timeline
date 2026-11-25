@@ -34,6 +34,7 @@ export type VenueChange =
     | { kind: "params"; params: Partial<VenueParams> }
     | { kind: "uniforms"; uniforms: UniformPresetId }
     | { kind: "uniformArtwork"; uniformArtwork: FlatsArtworkKey }
+    | { kind: "uniformMode"; uniformMode: string }
     | { kind: "guardUniforms"; guardUniforms: GuardUniformPresetId }
     | { kind: "brassFinish"; brassFinish: Finish }
     | { kind: "tuba"; tuba: TubaModelId }
@@ -77,15 +78,24 @@ export function applyVenueChange(
                 fieldLines: change.fieldLines,
             });
         case "uniforms": {
-            // a preset takes the band out of any flats uniform
+            // a preset takes the band out of any flats uniform, and its mode
             // eslint-disable-next-line @typescript-eslint/no-unused-vars -- left out
-            const { uniformArtwork, ...rest } = current;
+            const { uniformArtwork, uniformMode, ...rest } = current;
             return parseVenueSettings({ ...rest, uniforms: change.uniforms });
         }
-        case "uniformArtwork":
+        case "uniformArtwork": {
+            // another uniform starts in its default mode
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars -- left out
+            const { uniformMode, ...rest } = current;
+            return parseVenueSettings({
+                ...rest,
+                uniformArtwork: change.uniformArtwork,
+            });
+        }
+        case "uniformMode":
             return parseVenueSettings({
                 ...current,
-                uniformArtwork: change.uniformArtwork,
+                uniformMode: change.uniformMode,
             });
         case "guardUniforms":
             return parseVenueSettings({
@@ -120,6 +130,7 @@ export function venueChanged(a: VenueSettings, b: VenueSettings): boolean {
         a.crowd !== b.crowd ||
         uniformPresetOf(a.uniforms) !== uniformPresetOf(b.uniforms) ||
         (a.uniformArtwork ?? null) !== (b.uniformArtwork ?? null) ||
+        (a.uniformMode ?? null) !== (b.uniformMode ?? null) ||
         guardUniformPresetOf(a.guardUniforms) !==
             guardUniformPresetOf(b.guardUniforms) ||
         brassFinishOf(a.brassFinish) !== brassFinishOf(b.brassFinish) ||
