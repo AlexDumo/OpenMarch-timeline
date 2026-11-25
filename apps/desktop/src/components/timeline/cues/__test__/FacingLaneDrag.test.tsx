@@ -212,8 +212,9 @@ describe("the Facing lane (#993)", () => {
         ]);
         const turn = q(container, "facing-lane-turn");
         const hold = q(container, "facing-lane-hold");
-        // 6 counts at 16 px: "↻ 90° · 6 counts" doesn't fit, "↻ 90°" does
-        expect(turn.textContent).toBe("↻ 90°");
+        // 6 counts at 16 px: "↺ 90° · 6 counts" doesn't fit, "↺ 90°" does
+        expect(turn.textContent).toBe("↺ 90°");
+        expect(turn.getAttribute("title")).toBe("↺ 90° · 6 counts");
         expect(hold.textContent).toContain("Side 2 · 90°");
         expect(
             turn.querySelector('[data-testid="facing-lane-turn-start"]'),
@@ -283,18 +284,26 @@ describe("the Facing lane (#993)", () => {
         },
     );
 
-    it("labels a turn by its signed amount and counts, shorter where it's narrow", () => {
+    it("labels a turn by which way, how far and how long, shorter where it's narrow", () => {
         const words = {
-            full: (amount: string, counts: number) =>
-                `↻ ${amount} · ${counts} counts`,
-            short: (amount: string) => `↻ ${amount}`,
+            full: (icon: string, amount: string, counts: number) =>
+                `${icon} ${amount} · ${counts} counts`,
+            short: (icon: string, amount: string) => `${icon} ${amount}`,
         };
+        // A positive turn goes to the performers' left: anticlockwise, as the dial draws it
         const piece = { from: 6, to: 8, fromDegrees: 0, degrees: 180 };
-        expect(turnBarLabel(piece, 200, words)).toBe("↻ 180° · 2 counts");
-        expect(turnBarLabel(piece, 50, words)).toBe("↻ 180°");
-        expect(turnBarLabel(piece, 20, words)).toBe("↻");
+        expect(turnBarLabel(piece, 200, words)).toEqual({
+            label: "↺ 180° · 2 counts",
+            fullLabel: "↺ 180° · 2 counts",
+        });
+        expect(turnBarLabel(piece, 50, words).label).toBe("↺ 180°");
+        expect(turnBarLabel(piece, 20, words)).toEqual({
+            label: "↺",
+            fullLabel: "↺ 180° · 2 counts",
+        });
         expect(
-            turnBarLabel({ ...piece, fromDegrees: 90, degrees: 0 }, 200, words),
+            turnBarLabel({ ...piece, fromDegrees: 90, degrees: 0 }, 200, words)
+                .label,
         ).toBe("↻ −90° · 2 counts");
     });
 

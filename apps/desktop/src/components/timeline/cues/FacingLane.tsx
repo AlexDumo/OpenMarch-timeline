@@ -208,6 +208,12 @@ export function FacingLaneView({
         side1: sides?.verboseLeft ?? t("cues.facing.side1"),
         side2: sides?.verboseRight ?? t("cues.facing.side2"),
     };
+    const turnWords = {
+        full: (icon: string, amount: string, count: number) =>
+            t("cues.lane.turnLabel", { icon, amount, count }),
+        short: (icon: string, amount: string) =>
+            t("cues.lane.turnLabelShort", { icon, amount }),
+    };
     const [menu, setMenu] = useState<CueMenu | null>(null);
     const [drag, setDrag] = useState<LaneDrag | null>(null);
     const rootRef = useRef<HTMLDivElement>(null);
@@ -533,28 +539,16 @@ export function FacingLaneView({
                                 piece={piece}
                                 left={xOf(piece.from)}
                                 width={xOf(piece.to) - xOf(piece.from)}
-                                label={
-                                    piece.kind === "turn"
-                                        ? turnBarLabel(
-                                              piece,
-                                              xOf(piece.to) - xOf(piece.from),
-                                              {
-                                                  full: (amount, count) =>
-                                                      t("cues.lane.turnLabel", {
-                                                          amount,
-                                                          count,
-                                                      }),
-                                                  short: (amount) =>
-                                                      t(
-                                                          "cues.lane.turnLabelShort",
-                                                          {
-                                                              amount,
-                                                          },
-                                                      ),
-                                              },
-                                          )
-                                        : turnLabel(piece, names)
-                                }
+                                {...(piece.kind === "turn"
+                                    ? turnBarLabel(
+                                          piece,
+                                          xOf(piece.to) - xOf(piece.from),
+                                          turnWords,
+                                      )
+                                    : {
+                                          label: turnLabel(piece, names),
+                                          fullLabel: turnLabel(piece, names),
+                                      })}
                                 instant={
                                     !row.pieces.some(
                                         (p) =>
@@ -687,6 +681,7 @@ function FacingBar({
     left,
     width,
     label,
+    fullLabel,
     instant,
     dragging,
     picked,
@@ -699,6 +694,8 @@ function FacingBar({
     left: number;
     width: number;
     label: string;
+    /** The whole label, for the tooltip, where `label` is cut short to fit */
+    fullLabel: string;
     /** A result whose cue has no turn: its diamond shows the tab that pulls one out */
     instant: boolean;
     dragging: boolean;
@@ -732,7 +729,7 @@ function FacingBar({
             data-cue-id={piece.cueId ?? undefined}
             data-degrees={piece.degrees}
             data-timeline-interactive={isCue ? "" : undefined}
-            title={isCue ? (lockedReason ?? label) : label}
+            title={isCue ? (lockedReason ?? fullLabel) : fullLabel}
             className={clsx(
                 "text-micro rounded-4 absolute top-2 flex items-center leading-none whitespace-nowrap",
                 isCue
@@ -855,24 +852,28 @@ function FacingBar({
 }
 
 /**
- * A turn's words for its bar: the signed turn amount (To minus From) and its counts, "↻ 180° · 2
- * counts", then "↻ 180°", then the icon alone, whichever fits `width` px.
+ * A turn's words for its bar: which way and how far it turns (To minus From, signed) and its
+ * counts, "↺ 180° · 2 counts", then "↺ 180°", then the icon alone, whichever fits `width` px;
+ * and the whole words, for its tooltip. A positive angle turns to the performers' own left, which
+ * is anticlockwise as the dial draws it (front at the bottom, side 2 to the right): ↺. Negative is ↻.
  */
 export function turnBarLabel(
     piece: Pick<FacingPiece, "fromDegrees" | "degrees" | "from" | "to">,
     width: number,
     words: {
-        full: (amount: string, counts: number) => string;
-        short: (amount: string) => string;
+        full: (icon: string, amount: string, counts: number) => string;
+        short: (icon: string, amount: string) => string;
     },
-): string {
-    const amount = formatDegrees(piece.degrees - piece.fromDegrees);
+): { label: string; fullLabel: string } {
+    const turned = piece.degrees - piece.fromDegrees;
+    const icon = turned < 0 ? "↻" : "↺";
+    const amount = formatDegrees(turned);
     const counts = Math.round(piece.to - piece.from);
     const fits = (text: string) => text.length * LABEL_CHAR_PX + 8 <= width;
-    const full = words.full(amount, counts);
-    if (fits(full)) return full;
-    const short = words.short(amount);
-    return fits(short) ? short : "↻";
+    const full = words.full(icon, amount, counts);
+    if (fits(full)) return { label: full, fullLabel: full };
+    const short = words.short(icon, amount);
+    return { label: fits(short) ? short : icon, fullLabel: full };
 }
 
 /** A turn's mark in the folded lane: a diamond. Click picks, right-click or long press opens its menu */

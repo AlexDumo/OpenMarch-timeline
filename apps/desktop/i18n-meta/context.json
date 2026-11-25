@@ -4288,8 +4288,8 @@
     "cues.turn.instant": "Shown in the turn panel's Counts field when the turn takes no counts (it happens on its count).",
     "field.menu.facing": "Submenu in the field's right-click menu with ways to set where the selected performers face (Front, Back, sides, 45° turns, an angle).",
     "cues.lane.dragTurnStart": "Tooltip of the grip at the start of a turn, or of the facing bar after it, in the timeline's Facing lane: dragging it left makes the performers start turning earlier, so the turn takes more counts and still ends on the same count.",
-    "cues.lane.turnLabel": "Label on a turn in the timeline's Facing lane: how far the performers turn ({amount}, a signed angle such as '180°' or '−90°'; negative turns the other way) and how many counts the turn takes. Keep the ↻ icon first. Short: it has to fit a narrow bar.",
-    "cues.lane.turnLabelShort": "Shorter label on a narrow turn in the timeline's Facing lane: how far the performers turn ({amount}, such as '180°'). Keep the ↻ icon first.",
+    "cues.lane.turnLabel": "Label on a turn in the timeline's Facing lane: {icon} is an arrow showing which way they turn (↺ or ↻), {amount} how far (a signed angle such as '180°' or '−90°'), then how many counts the turn takes. Keep {icon} first. Short: it has to fit a narrow bar.",
+    "cues.lane.turnLabelShort": "Shorter label on a narrow turn in the timeline's Facing lane: {icon} is an arrow showing which way they turn (↺ or ↻), {amount} how far (such as '180°'). Keep {icon} first.",
     "cues.lane.dragCue": "Tooltip of the diamond that marks a facing change on its count in the timeline's Facing lane (and of its bar): dragging it moves the facing change, with its turn, to another count.",
     "cues.lane.dragToTurn": "Tooltip of the small tab beside an instant facing change's diamond in the timeline's Facing lane: dragging it left makes the performers turn over the counts before, instead of all at once."
 }
