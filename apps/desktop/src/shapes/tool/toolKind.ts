@@ -803,6 +803,11 @@ export interface ToolKind<P> {
     emptySpots?(params: P, n: number, stepPx?: number): readonly XY[];
     /** The params as placing saves them, when the open shape holds more than a recipe keeps */
     forPlacing?(params: P): P;
+    /**
+     * Its params without the spots at `slots`, for a kind whose spots are its own (`asIs`, a
+     * group): what Remove from shape keeps (ADR 0006 §9.1). Other kinds deal their spots again.
+     */
+    withoutSpots?(params: P, slots: readonly number[]): P;
     /** Its Rows menu (spec #1190); absent for a kind without */
     readonly rows?: ToolRows<P>;
     /**

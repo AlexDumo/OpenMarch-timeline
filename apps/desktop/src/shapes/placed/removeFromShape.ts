@@ -13,7 +13,7 @@ import { closedUpParams, type PlacedBox, type StoredParams } from "./placedBox";
  * open out of a placed shape, spots and all. The shape deals its spots again for the members
  * left, as placing it with that many marchers does: a closed kind in its mode and settings (as
  * Close up has it), an open one (a line, an arc) with its spots spread again along it, each
- * member by least travel. Members on their spots move to their new ones; members still away keep
+ * member by least travel; a group, whose spots are its own, just loses those spots. Members on their spots move to their new ones; members still away keep
  * their own timing and are only listed on theirs. One undo step.
  */
 
@@ -40,7 +40,13 @@ export function removedFromShape(
     const left = box.recipe.members.filter((m) => !gone.has(m.marcherId));
     if (left.length === 0) return null;
     const n = left.length;
-    const params = closedUpParams(box, n, env) ?? box.params;
+    // A kind whose spots are its own (a group) drops theirs; the others lay out for who's left
+    const params = box.kind.withoutSpots
+        ? box.kind.withoutSpots(
+              box.params,
+              removed.map((o) => o.slot),
+          )
+        : (closedUpParams(box, n, env) ?? box.params);
     const fewer: PlacedBox = {
         ...box,
         spots: n,
