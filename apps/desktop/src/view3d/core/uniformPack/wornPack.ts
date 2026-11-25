@@ -2,8 +2,8 @@
  * Why the band wears its preset although the venue names an imported uniform (fork #1257; ADR
  * 0010, "Removal"): the show doesn't have that uniform (an undo after Remove unused…), or it has
  * it but its file doesn't read: the manifest, or an image whose data won't decode (the read
- * decodes them all, and a 3D View whose art fails to compose marks the read the same way,
- * `noteUniformPackDamaged`). The Assets view, the uniform picker and the 3D View settings all
+ * decodes them all, except in the 3D View, whose composing decodes them, and whose compose
+ * failure reads them again decoded, `recheckUniformPack`). The Assets view, the uniform picker and the 3D View settings all
  * ask this, so they agree.
  *
  * Pure: no React, no database.

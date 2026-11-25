@@ -40,7 +40,7 @@ import { performersMoved, setPerformerSource } from "../camera/performerTrack";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { noteUniformPackDamaged } from "@/hooks/queries/useUniformPack";
+import { recheckUniformPack } from "@/hooks/queries/useUniformPack";
 import type {
     CueHoldStyle,
     CueSection,
@@ -203,11 +203,12 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         flatsBodies,
         flatsDpi(quality),
     );
-    // a saved pack whose art the worker refused to draw: the settings, the picker and Assets
-    // say it can't be read
+    // a saved pack whose art the worker refused to draw: this window reads it again with every
+    // image decoded, and if that's refused twice too, its settings and picker say it can't be
+    // read (the editor's Assets view decodes on its own read; nothing here reaches it)
     const onUniformArtDamaged = useCallback(
         (pack: UniformPackValue, error: unknown) => {
-            noteUniformPackDamaged(queryClient, pack, error);
+            recheckUniformPack(queryClient, pack, error);
         },
         [queryClient],
     );

@@ -1,9 +1,7 @@
 import {
     mutationOptions,
     queryOptions,
-    useMutation,
     useQueries,
-    useQueryClient,
     type QueryClient,
     type UseQueryResult,
 } from "@tanstack/react-query";
@@ -99,29 +97,10 @@ export const useVenueSettings = (): UseVenueSettingsReturn => {
 };
 
 /**
- * Validates and stores venue settings with history, so undo covers it, then
- * invalidates `["view3d_venue"]`. Rejects settings that don't match the schema.
- */
-export const updateVenueSettingsMutationOptions = (qc: QueryClient) =>
-    mutationOptions({
-        mutationFn: (settings: VenueSettings) =>
-            updateVenueSettings({ db, settings }),
-        onSuccess: async () => {
-            await qc.invalidateQueries({ queryKey: venueSettingsKeys.all() });
-        },
-        onError: (error, settings) => {
-            conToastError(
-                tolgee.t("view3d.venue.updateFailed"),
-                error,
-                settings,
-            );
-        },
-    });
-
-/**
- * A 3D View venue pick: like {@link updateVenueSettingsMutationOptions}, but rebased on the venue
- * stored now, in the write's transaction, when the window sent the uniform it was made against
- * (`pickOnStoredUniform`)
+ * A 3D View venue pick, validated and stored with history (so undo covers it), then
+ * `["view3d_venue"]` invalidated. Rebased on the venue stored now, in the write's transaction,
+ * when the window sent the uniform it was made against (`pickOnStoredUniform`). Rejects settings
+ * that don't match the schema.
  */
 export const venuePickMutationOptions = (qc: QueryClient) =>
     mutationOptions({
@@ -150,8 +129,3 @@ export const venuePickMutationOptions = (qc: QueryClient) =>
             );
         },
     });
-
-export const useUpdateVenueSettings = () => {
-    const queryClient = useQueryClient();
-    return useMutation(updateVenueSettingsMutationOptions(queryClient));
-};

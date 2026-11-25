@@ -45,7 +45,7 @@ export function useMarcherFlats(
     looks: readonly MarcherSlotLook[] | null,
     quality: MarcherQuality,
     /**
-     * A saved pack's art didn't compose (`noteUniformPackDamaged` decides whether the failure
+     * A saved pack's art didn't compose (`recheckUniformPack` decides whether the failure
      * was the pack's own, so the settings and picker say its art is damaged)
      */
     onDamaged?: (pack: UniformPackValue, error: unknown) => void,
