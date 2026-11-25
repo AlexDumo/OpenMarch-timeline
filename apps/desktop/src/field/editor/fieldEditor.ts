@@ -209,8 +209,15 @@ export type FieldEditorPorts = {
      * and moved. A right-click on it offers to unlock it ({@link LOCKED_ITEM_MENU}).
      */
     isLocked?(id: number): boolean;
-    /** The topmost item whose Outline holds `point` among those `accept` takes, or null. */
-    itemAt?(point: FieldPoint, accept?: (id: number) => boolean): number | null;
+    /**
+     * The topmost item under `point` among those `accept` takes, or null. `reach` (field units)
+     * is how far outside a model's silhouette a press still lands on it.
+     */
+    itemAt?(
+        point: FieldPoint,
+        accept?: (id: number) => boolean,
+        reach?: number,
+    ): number | null;
     /**
      * Whether item `id`'s resize and turn handles are shown: only once asked for (its right-click
      * menu's Resize and turn), since a prop is usually drawn at its real size and a click on it
@@ -2554,10 +2561,15 @@ export class FieldEditor {
     }
 
     /** The topmost locked item drawn under `pointer` that can be selected, or null */
-    private lockedItemAt({ field }: FieldPointer): number | null {
+    private lockedItemAt({ field, kind }: FieldPointer): number | null {
         const isLocked = this.ports.isLocked;
         if (!isLocked) return null;
-        const item = this.ports.itemAt?.(field, isLocked) ?? null;
+        const item =
+            this.ports.itemAt?.(
+                field,
+                isLocked,
+                hitRadius(this.ports.zoom(), kind),
+            ) ?? null;
         return item !== null && this.ports.canSelect(item) ? item : null;
     }
 
@@ -2607,15 +2619,17 @@ export class FieldEditor {
     private marcherAt({ field: point, kind }: FieldPointer) {
         const isItem = this.ports.isItem ?? (() => false);
         const hidden = this.ports.marcherHidden ?? (() => false);
+        const reach = hitRadius(this.ports.zoom(), kind);
         const performer = marcherAt(
             this.ports.marchers(),
             point,
-            hitRadius(this.ports.zoom(), kind),
+            reach,
             (id) => !isItem(id) && !hidden(id) && this.ports.canSelect(id),
         );
         if (performer !== null) return performer;
         const isLocked = this.ports.isLocked ?? (() => false);
-        const item = this.ports.itemAt?.(point, (id) => !isLocked(id)) ?? null;
+        const item =
+            this.ports.itemAt?.(point, (id) => !isLocked(id), reach) ?? null;
         return item !== null && this.ports.canSelect(item) ? item : null;
     }
 

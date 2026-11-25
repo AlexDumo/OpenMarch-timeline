@@ -447,3 +447,34 @@ export function insideOutline(points: readonly Pt[], point: Pt): boolean {
     }
     return inside;
 }
+
+/** Whether `point` is within `reach` of an edge of the closed polygon `points`. */
+export function nearOutline(
+    points: readonly Pt[],
+    point: Pt,
+    reach: number,
+): boolean {
+    const reachSquared = reach * reach;
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+        const a = points[j];
+        const b = points[i];
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const lengthSquared = dx * dx + dy * dy;
+        const t =
+            lengthSquared === 0
+                ? 0
+                : Math.max(
+                      0,
+                      Math.min(
+                          1,
+                          ((point.x - a.x) * dx + (point.y - a.y) * dy) /
+                              lengthSquared,
+                      ),
+                  );
+        const ex = a.x + t * dx - point.x;
+        const ey = a.y + t * dy - point.y;
+        if (ex * ex + ey * ey <= reachSquared) return true;
+    }
+    return false;
+}

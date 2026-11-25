@@ -572,11 +572,12 @@ function ThreeFieldView() {
                         ),
                     reachesInside: canReachInside,
                     doubleClickMarcher: enterBox,
-                    // C2.1: items are hit anywhere inside their Outline
+                    // C2.1: items are hit inside their Outline, or a model's silhouette
                     isItem: (id) => items.isItem(id),
                     // Locked items (the pit's equipment): no click, drag or marquee takes them
                     isLocked: (id) => items.isLocked(id),
-                    itemAt: (point, accept) => items.itemAt(point, accept),
+                    itemAt: (point, accept, reach) =>
+                        items.itemAt(point, accept, reach),
                     // Shown once asked for, with an item's Resize and turn (props epic step 2)
                     itemHandlesShown,
                     lockedItemClicked: (id, at) =>
