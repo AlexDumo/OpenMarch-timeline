@@ -42,6 +42,7 @@ import {
 } from "@/view3d/core/uniformPack/format";
 import { draftOrigin } from "@/view3d/window/uniformPack/itemDrafts";
 import {
+    composeFromNewest,
     packPageKey,
     packPagePlan,
     type PageLayers,
@@ -377,15 +378,11 @@ async function composeAtlas(
                 return Promise.resolve();
             });
         };
-        const from = draftOrigin(pack);
-        try {
-            return await withPackPage(from, dpi, which, draw);
-        } catch (error) {
-            // a burst's save removed that version while this composed: read the newest
-            const now = draftOrigin(pack);
-            if (!draft || now === from) throw error;
-            return await withPackPage(now, dpi, which, draw);
-        }
+        return await composeFromNewest(
+            () => draftOrigin(pack),
+            !!draft,
+            (from) => withPackPage(from, dpi, which, draw),
+        );
     }
     return await composeBuiltIn(id, body, dpi);
 }
