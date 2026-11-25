@@ -47,7 +47,13 @@ import {
     useSavingBoxStore,
 } from "./boxSelectionStore";
 import { outlineGapAt } from "../distribute/outlineGap";
-import { openHandleMenu } from "../field/handleMenu";
+import { closeHandleMenu, openHandleMenu } from "../field/handleMenu";
+import {
+    splitCheck,
+    splitSection,
+    splitShape,
+    SPLIT_VALUE,
+} from "./splitShape";
 import { groupDrawing } from "../field/groupDrawing";
 import { stepDrawing } from "../field/stepDrawing";
 import { rowsGapDrawing } from "../field/rowsGapDrawing";
@@ -440,14 +446,32 @@ export class LiveBoxMode implements FieldMode {
             toolEnvFor(field, undefined, { kind: pointer.kind }),
             this.live.selected,
         );
+        // A placed line splits where it's right-clicked (#1336): the host's entry, after the kind's
+        const at = pointer.field;
+        const splitAt = (params: unknown) =>
+            splitCheck({ ...this.live.box, params }, at);
         return openHandleMenu(
             kind,
             this.live.params,
             spots,
             target,
             pointer.screen,
-            (key, value) => this.pickMenu(key, value),
+            (key, value) =>
+                value === SPLIT_VALUE
+                    ? this.split(splitAt(this.live.params))
+                    : this.pickMenu(key, value),
+            (params) => {
+                const check = splitAt(params);
+                return check ? [splitSection(check)] : [];
+            },
         );
+    }
+
+    /** Split here picked: the shape split in two where the menu was opened, the menu closed */
+    private split(check: ReturnType<typeof splitCheck>): null {
+        closeHandleMenu();
+        if (check?.ok) void splitShape(check.box, check.k, this.queryClient);
+        return null;
     }
 
     /**
