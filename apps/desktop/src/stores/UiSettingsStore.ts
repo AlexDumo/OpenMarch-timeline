@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { EquipmentIconPlace, EquipmentIcons } from "@/cues/equipmentIcons";
+import type { FacingMarks } from "@/cues/facingMarks";
 import { parseTimelineHeight } from "@/components/timeline/timelineSplit";
 import { syncFromStorage } from "@/stores/syncFromStorage";
 import {
@@ -113,6 +114,11 @@ export interface UiSettings {
     /** Where those icons go: after the drill number, in place of the dot, or of the number */
     equipmentIconPlace?: EquipmentIconPlace;
     /**
+     * Who is drawn pointed the way they face on the field (fork #1316): performers not facing
+     * front (the default), everyone, or nobody
+     */
+    facingMarks?: FacingMarks;
+    /**
      * Whether an open shape shows its walks and start rings (#403): the floating editor's
      * Pathways toggle. Off by default.
      */
@@ -149,7 +155,7 @@ export interface UiSettings {
 export type MarcherLabelForm = "auto" | "names" | "numbers" | "off";
 export type MarcherLabelSize = "small" | "normal" | "large";
 export type ShapeOutlines = "selected" | "always" | "off";
-export type { EquipmentIconPlace, EquipmentIcons };
+export type { EquipmentIconPlace, EquipmentIcons, FacingMarks };
 
 export const FIELD_VENUE_LOOKS = [
     "off",
@@ -217,6 +223,7 @@ export const defaultSettings: UiSettings = {
     lineOrder: "off",
     equipmentIcons: "changed",
     equipmentIconPlace: "beside",
+    facingMarks: "turned",
     shapeWalks: false,
     followTheLeader: false,
     fieldVenue: "off",
@@ -289,6 +296,7 @@ export const parseSettings = (raw: string): UiSettings => {
         recentEquipment: stringList(parsed.recentEquipment).slice(0, 4),
         equipmentIcons: parseEquipmentIcons(parsed.equipmentIcons),
         equipmentIconPlace: parseEquipmentIconPlace(parsed.equipmentIconPlace),
+        facingMarks: parseFacingMarks(parsed.facingMarks),
         startFlagPositions: parseStartFlagPositions(parsed.startFlagPositions),
         fieldVenue: oneOf(FIELD_VENUE_LOOKS, parsed.fieldVenue, "off"),
         fieldVenueLast: oneOf(
@@ -318,6 +326,10 @@ const parseEquipmentIcons = (value: unknown): EquipmentIcons =>
 /** A stored Equipment icons place, or the default for anything else. */
 const parseEquipmentIconPlace = (value: unknown): EquipmentIconPlace =>
     value === "dot" || value === "label" ? value : "beside";
+
+/** A stored Facing choice, or the default for anything else. */
+const parseFacingMarks = (value: unknown): FacingMarks =>
+    value === "off" || value === "everyone" ? value : "turned";
 
 // Helper function to load settings from localStorage
 const loadSettings = (): UiSettings => {

@@ -35,6 +35,8 @@ export type ThreeFieldState = {
     labels(): ReadonlyMap<number, string>;
     /** Each marcher's equipment icon at the beat shown, for those that have one */
     equipmentIcons(): ReadonlyMap<number, string>;
+    /** Which way a marcher is drawn facing at the beat shown, or null for a plain dot (fork #1316) */
+    facing(id: number): number | null;
     view(): FieldViewState;
     /** The element the field draws into, or null before it mounts. */
     element(): HTMLElement | null;
@@ -105,6 +107,7 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
                     id,
                     label: labels.get(id) ?? "",
                     equipmentIcon: icons.get(id) ?? "",
+                    facing: field.facing(id),
                     x,
                     y,
                     screen,

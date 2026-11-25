@@ -155,6 +155,7 @@ import MarchersLayer from "./layers/MarchersLayer";
 import ItemsLayer from "./layers/ItemsLayer";
 import LabelsLayer, { type LabelStyle } from "./layers/LabelsLayer";
 import { useEquipmentIcons } from "@/cues/useEquipmentIcons";
+import { useFieldFacing } from "@/cues/useFieldFacing";
 import OverlayLayer from "./layers/OverlayLayer";
 import StartFlagLayers from "./StartFlagLayers";
 import { ModeMarchers } from "./ModeMarchers";
@@ -355,6 +356,8 @@ function ThreeFieldView() {
     const numbersOnly = labelForm === "numbers";
     // What a performer holds, by their drill number, when it isn't their section's usual (#992)
     const equipmentIcons = useEquipmentIcons();
+    // Which way each performer faces at the playhead, as a point on their dot (#1316)
+    const facing = useFieldFacing();
     const equipmentIconPlace = useUiSettingsStore(
         (s) => s.uiSettings.equipmentIconPlace ?? "beside",
     );
@@ -492,6 +495,7 @@ function ThreeFieldView() {
         theme: fieldProperties?.theme,
         fieldProperties,
         equipmentIcons,
+        facing,
     });
     latest.current = {
         saveItem,
@@ -505,6 +509,7 @@ function ThreeFieldView() {
         moveMarchers,
         fieldProperties,
         equipmentIcons,
+        facing,
     };
     // #315: where a right-click opens the field's menu (`useFieldMenu`, below
     // the editor), and the press that closes it, which does nothing more
@@ -687,6 +692,13 @@ function ThreeFieldView() {
                 equipmentIcons: () =>
                     latest.current.equipmentIcons?.at(marchers.drawnBeat)
                         .icons ?? new Map(),
+                facing: (id) => {
+                    const beat = marchers.drawnBeat;
+                    const source = latest.current.facing;
+                    return beat === null || !source
+                        ? null
+                        : source.degreesAt(id, beat);
+                },
                 view: () => useFieldViewStore.getState(),
                 element: () => element.current,
                 pageId: () => latest.current.pageId,
@@ -895,6 +907,7 @@ function ThreeFieldView() {
                             theme={fieldProperties.theme}
                             icons={equipmentIcons}
                             iconPlace={equipmentIconPlace}
+                            facing={facing}
                         />
                         <LabelsLayer
                             marchers={marchers}

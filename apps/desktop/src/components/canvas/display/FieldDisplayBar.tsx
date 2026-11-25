@@ -4,6 +4,7 @@ import { TooltipClassName } from "@openmarch/ui";
 import { useFieldLayerRef } from "@/components/canvas/fieldLayers";
 import {
     BoundingBoxIcon,
+    CompassIcon,
     HandGrabbingIcon,
     ListNumbersIcon,
     QuestionIcon,
@@ -21,6 +22,7 @@ import {
     useUiSettingsStore,
     type EquipmentIconPlace,
     type EquipmentIcons,
+    type FacingMarks,
     type MarcherLabelForm,
     type ShapeOutlines,
     type UiSettings,
@@ -66,6 +68,13 @@ const EQUIPMENT_PLACE_CHOICES: readonly Choice<EquipmentIconPlace>[] = [
     { value: "label", key: "toolbar.view.equipmentOnNumber" },
 ];
 
+/** Who is drawn pointed the way they face (fork #1316); the palette's names */
+const FACING_CHOICES: readonly Choice<FacingMarks>[] = [
+    { value: "turned", key: "toolbar.view.facingTurned" },
+    { value: "everyone", key: "toolbar.view.facingEveryone" },
+    { value: "off", key: "toolbar.view.facingOff" },
+];
+
 const ORDER_CHOICES: readonly Choice<ShapeOutlines>[] = [
     { value: "selected", key: "toolbar.view.orderSelected" },
     { value: "always", key: "toolbar.view.orderAlways" },
@@ -75,7 +84,7 @@ const ORDER_CHOICES: readonly Choice<ShapeOutlines>[] = [
 /**
  * How the field is displayed, apart from the timeline: a small bar at the field's top right (the
  * zoom controls hold the bottom right). It replaced the toolbar's View tab. Path overlays, marcher
- * labels, equipment icons (fork #992), placed shapes' outlines, the venue under the field (#1207)
+ * labels, equipment icons (fork #992), which way performers face (fork #1316), placed shapes' outlines, the venue under the field (#1207)
  * and a line's order (pathways step 4g). The Select tool's Box
  * and Lasso sit above it in a bar of their own, outside the touch layout (whose pill has its own
  * drag modes).
@@ -122,6 +131,15 @@ export default function FieldDisplayBar() {
                         keepOpen
                         more={<EquipmentPlaceChoices />}
                     />
+                    {/* Which way performers face, as a point on their dots (fork #1316) */}
+                    <ChoiceButton
+                        setting="facingMarks"
+                        fallback="turned"
+                        choices={FACING_CHOICES}
+                        icon={CompassIcon}
+                        labelKey="toolbar.view.facing"
+                        testId="field-display-facing"
+                    />
                     {/* Placed boxes' outlines (docs/timeline/research/shapes/07-placed-boxes.md) */}
                     <ChoiceButton
                         setting="shapes"
@@ -163,7 +181,12 @@ interface Choice<T extends string> {
  * them, as the View tab's select did.
  */
 function ChoiceButton<
-    K extends "marcherLabels" | "shapes" | "lineOrder" | "equipmentIcons",
+    K extends
+        | "marcherLabels"
+        | "shapes"
+        | "lineOrder"
+        | "equipmentIcons"
+        | "facingMarks",
 >({
     setting,
     fallback,

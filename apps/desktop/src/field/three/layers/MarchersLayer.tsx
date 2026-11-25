@@ -23,6 +23,17 @@ import { dotSizes, SELECTION_RGBA01 } from "../selectionRing";
 import type { LabelIcons } from "@/cues/useEquipmentIcons";
 import type { EquipmentIconPlace } from "@/cues/equipmentIcons";
 import { useIconAtlas } from "../iconBatch";
+import type { FieldFacing } from "@/cues/useFieldFacing";
+
+/**
+ * Facing (fork #1316): a dot facing somewhere is drawn to a point that way, in field units from
+ * its center (the dot's radius is 5). The tip reaches 9.5, a little under half the 2-step interval
+ * of a block (22.5), so points stay clear of the next dot. A circle tapers to it from its whole
+ * width, a teardrop; the other shapes grow a narrower point from inside them.
+ */
+const NOSE_TIP = 9.5;
+const NOSE_TIP_RADIUS = 0.75;
+const NOSE_BASE = 2.5;
 
 /**
  * Every marcher's dot in one instanced draw, shaded in the fragment shader so
@@ -38,6 +49,10 @@ import { useIconAtlas } from "../iconBatch";
  *
  * A selected marcher (#193) gets a ring a little outside its shape's edge, in
  * the same draw.
+ *
+ * A performer facing somewhere other than front (fork #1316, `facingMarks.ts`)
+ * is drawn pointed that way: the shape's own fill and outline, and its ring,
+ * follow the point, so it reads in every theme and look the dot does.
  */
 const VERTEX = /* glsl */ `
 attribute vec2 aPos;
@@ -47,6 +62,7 @@ attribute float aShape;
 attribute float aOpacity;
 attribute float aNotDefined;
 attribute float aSelected;
+attribute vec2 aFacing;
 uniform float uScale;
 uniform float uMargin;
 uniform float uRingOuter;
@@ -57,8 +73,10 @@ varying float vShape;
 varying float vOpacity;
 varying float vNotDefined;
 varying float vSelected;
+varying vec2 vFacing;
 void main() {
     vSelected = aSelected;
+    vFacing = aFacing;
     vNotDefined = aNotDefined;
     vFill = aFill;
     vOutline = aOutline;
@@ -69,8 +87,10 @@ void main() {
         gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
         return;
     }
-    // The largest shape (the X's line ends) and its ring, plus a margin for the antialiased edge
-    vLocal = position.xy * (7.0 + aSelected * uRingOuter + uMargin);
+    // The largest shape (the X's line ends, or a facing point's tip) and its ring, plus a margin
+    // for the antialiased edge
+    float reach = dot(aFacing, aFacing) > 0.0 ? ${NOSE_TIP.toFixed(3)} : 7.0;
+    vLocal = position.xy * (reach + aSelected * uRingOuter + uMargin);
     gl_Position = projectionMatrix * viewMatrix * vec4(aPos + vLocal * uScale, 0.0, 1.0);
 }`;
 
@@ -78,6 +98,9 @@ const L = NOT_DEFINED_LOOK;
 const FRAGMENT = /* glsl */ `
 #define DOT_R 5.0
 #define PI 3.14159265
+#define NOSE_TIP ${NOSE_TIP.toFixed(3)}
+#define NOSE_TIP_R ${NOSE_TIP_RADIUS.toFixed(3)}
+#define NOSE_BASE ${NOSE_BASE.toFixed(3)}
 #define NOT_DEFINED_FILL ${L.fillOpacity.toFixed(3)}
 #define EDGE_WIDTH ${L.edgeWidth.toFixed(3)}
 #define MIN_EDGE_PX ${L.minEdgePx.toFixed(3)}
@@ -95,6 +118,7 @@ varying float vShape;
 varying float vOpacity;
 varying float vNotDefined;
 varying float vSelected;
+varying vec2 vFacing;
 uniform vec4 uRing;
 uniform float uRingInner;
 uniform float uRingOuter;
@@ -165,12 +189,38 @@ float dashed(vec2 p, float shape, float amount) {
     return smoothstep(gapHalf - 0.5 * fw, gapHalf + 0.5 * fw, off);
 }
 
+/**
+ * A rounded cone from a circle of radius r1 at the origin to one of radius r2 at h along +y, the
+ * sides tangent to both (the classic 2D uneven capsule distance): with r2 small, a teardrop.
+ */
+float roundCone(vec2 p, float r1, float r2, float h) {
+    p.x = abs(p.x);
+    float b = (r1 - r2) / h;
+    float a = sqrt(1.0 - b * b);
+    float k = dot(p, vec2(-b, a));
+    if (k < 0.0) return length(p) - r1;
+    if (k > a * h) return length(p - vec2(0.0, h)) - r2;
+    return dot(p, vec2(a, b)) - r1;
+}
+
+/**
+ * Facing (fork #1316): the shape drawn to a point toward 'dir' (a unit vector, field units, y
+ * down). A circle becomes a teardrop; the other shapes grow a narrower point from inside them.
+ */
+float facingPoint(vec2 p, vec2 dir, float shape) {
+    // Into the point's frame: +y along the facing
+    vec2 q = vec2(p.x * dir.y - p.y * dir.x, dot(p, dir));
+    float base = shape < 0.5 ? DOT_R : NOSE_BASE;
+    return roundCone(q, base, NOSE_TIP_R, NOSE_TIP - NOSE_TIP_R);
+}
+
 void main() {
     float d;
     if (vShape < 0.5) d = length(vLocal) - DOT_R;
     else if (vShape < 1.5) d = square(vLocal);
     else if (vShape < 2.5) d = triangle(vLocal);
     else d = xMark(vLocal);
+    if (dot(vFacing, vFacing) > 0.0) d = min(d, facingPoint(vLocal, vFacing, vShape));
     float aa = 0.5 * fwidth(d);
     float fill = 1.0 - smoothstep(-aa, aa, d);
     float fillA = vFill.a * fill;
@@ -226,6 +276,9 @@ type Drawn = {
     theme: FieldTheme | null;
     /** Who has an icon in place of their dot, as `LabelIcons` keys it ("" for nobody) */
     iconDotsKey: string;
+    /** The facing source the directions were written from, and whether any is shown */
+    facing: FieldFacing | null;
+    facingShown: boolean;
 };
 
 /** The marchers' dots, each in its appearance at the beat drawn, with a ring on each selected one. */
@@ -236,6 +289,7 @@ export default function MarchersLayer({
     theme,
     icons = null,
     iconPlace = "beside",
+    facing = null,
 }: {
     marchers: FieldMarchers;
     /** Marchers drawn dimmed (#201). */
@@ -247,6 +301,8 @@ export default function MarchersLayer({
     icons?: LabelIcons | null;
     /** In place of the dot, a performer with an icon has only its selection ring drawn here */
     iconPlace?: EquipmentIconPlace;
+    /** Which way each performer faces at the beat drawn (fork #1316); null draws plain dots */
+    facing?: FieldFacing | null;
 }) {
     const invalidate = useThree((s) => s.invalidate);
     // In place of the dot: the icons' atlas, which the dots wait for
@@ -261,6 +317,8 @@ export default function MarchersLayer({
         selectionVersion: -1,
         theme: null,
         iconDotsKey: "",
+        facing: null,
+        facingShown: false,
     });
 
     const mesh = useMemo(() => {
@@ -298,7 +356,7 @@ export default function MarchersLayer({
     }, []);
 
     // A new theme restyles the dots on the next frame
-    useEffect(() => invalidate(), [theme, iconAtlas, invalidate]);
+    useEffect(() => invalidate(), [theme, iconAtlas, facing, invalidate]);
     // New dimming redraws them on the next frame
     useEffect(() => dimming.subscribe(invalidate), [dimming, invalidate]);
     useEffect(() => look.subscribe(invalidate), [look, invalidate]);
@@ -341,11 +399,13 @@ export default function MarchersLayer({
             look.version !== last.lookVersion;
         const reselected =
             resized || marchers.selectionVersion !== last.selectionVersion;
+        const refaced = facing !== last.facing;
         if (
             !resized &&
             !restyled &&
             !dimChanged &&
             !reselected &&
+            !refaced &&
             marchers.version === last.version
         )
             return;
@@ -372,6 +432,10 @@ export default function MarchersLayer({
                 dynamic(new Float32Array(n), 1),
             );
             geometry.setAttribute("aSelected", dynamic(new Float32Array(n), 1));
+            geometry.setAttribute(
+                "aFacing",
+                dynamic(new Float32Array(n * 2), 2),
+            );
             geometry.instanceCount = n;
         }
         const instanced = (name: string) =>
@@ -424,6 +488,22 @@ export default function MarchersLayer({
         const positions = instanced("aPos");
         (positions.array as Float32Array).set(marchers.positions);
         positions.needsUpdate = true;
+        // Facing turns with the beat: written on every fill while any shows, cleared once after
+        let facingShown = false;
+        if (facing && marchers.drawnBeat !== null) {
+            const directions = instanced("aFacing");
+            facingShown = facing.write(
+                marchers.ids,
+                marchers.drawnBeat,
+                directions.array as Float32Array,
+            );
+            if (facingShown || last.facingShown || resized || refaced)
+                directions.needsUpdate = true;
+        } else if (last.facingShown || refaced) {
+            const directions = instanced("aFacing");
+            (directions.array as Float32Array).fill(0);
+            directions.needsUpdate = true;
+        }
         drawn.current = {
             version: marchers.version,
             idsVersion: marchers.idsVersion,
@@ -433,6 +513,8 @@ export default function MarchersLayer({
             selectionVersion: marchers.selectionVersion,
             theme,
             iconDotsKey,
+            facing,
+            facingShown,
         };
     });
 

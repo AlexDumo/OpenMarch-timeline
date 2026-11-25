@@ -58,6 +58,7 @@ beforeEach(() => {
         nextPaths: false,
         equipmentIcons: "changed",
         equipmentIconPlace: "beside",
+        facingMarks: "turned",
     });
 });
 afterEach(() => {
@@ -206,6 +207,19 @@ describe("FieldDisplayBar", () => {
                 .getByTestId("field-display-equipment-place-dot")
                 .getAttribute("aria-checked"),
         ).toBe("true");
+    });
+
+    it("Facing: Not front by default, then Everyone or Off, and the popup closes (#1316)", () => {
+        open();
+        const button = screen.getByTestId("field-display-facing");
+        expect(button.getAttribute("aria-label")).toBe("Facing: Not front");
+        fireEvent.click(button);
+        fireEvent.click(screen.getByTestId("field-display-facing-everyone"));
+        expect(settings().facingMarks).toBe("everyone");
+        expect(screen.queryByTestId("field-display-facing-off")).toBeNull();
+        fireEvent.click(screen.getByTestId("field-display-facing"));
+        fireEvent.click(screen.getByTestId("field-display-facing-off"));
+        expect(settings().facingMarks).toBe("off");
     });
 
     it("greys Where out while the icons are off, with its reason, and a press changes nothing (#992)", () => {

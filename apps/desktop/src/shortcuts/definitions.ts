@@ -732,6 +732,32 @@ const STATIC_ACTIONS = {
         defaultBindings: [],
         args: { shown: "everyone" },
     },
+    // Who is drawn pointed the way they face on the field (fork #1316): the field display bar's
+    // Facing choice. Unbound
+    facingMarksOff: {
+        labelKey: "actions.cues.facingMarksOff",
+        keywordsKey: "actions.cues.facingMarksKeywords",
+        category: "field",
+        scope: "canvas",
+        defaultBindings: [],
+        args: { shown: "off" },
+    },
+    facingMarksTurned: {
+        labelKey: "actions.cues.facingMarksTurned",
+        keywordsKey: "actions.cues.facingMarksKeywords",
+        category: "field",
+        scope: "canvas",
+        defaultBindings: [],
+        args: { shown: "turned" },
+    },
+    facingMarksEveryone: {
+        labelKey: "actions.cues.facingMarksEveryone",
+        keywordsKey: "actions.cues.facingMarksKeywords",
+        category: "field",
+        scope: "canvas",
+        defaultBindings: [],
+        args: { shown: "everyone" },
+    },
     // Where those icons go: the popup's Where choice. Unbound
     equipmentIconsBeside: {
         labelKey: "actions.cues.equipmentIconsBeside",

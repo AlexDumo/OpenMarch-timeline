@@ -25,6 +25,11 @@ export type FieldTestMarcher = {
      * Equipment icons setting shows one (#992); "" for none.
      */
     equipmentIcon: string;
+    /**
+     * Which way the field draws them facing (fork #1316), in unwrapped degrees (0 front, 90 side
+     * 2), or null for a plain dot
+     */
+    facing: number | null;
     /** Where the dot is drawn, in field units. */
     x: number;
     y: number;

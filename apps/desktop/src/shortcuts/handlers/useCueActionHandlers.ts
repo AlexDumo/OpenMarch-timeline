@@ -4,6 +4,7 @@ import tolgee from "@/global/singletons/Tolgee";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import type { EquipmentIconPlace, EquipmentIcons } from "@/cues/equipmentIcons";
+import type { FacingMarks } from "@/cues/facingMarks";
 import { useCueCommands, type CueCommands } from "@/cues/useCueCommands";
 import { useCueCarryNotices } from "@/cues/useCueCarryNotices";
 import { itemValueId } from "@/cues/equipmentItems";
@@ -204,6 +205,29 @@ function useEquipmentPlaceChoice(place: EquipmentIconPlace) {
     );
 }
 
+/** The Facing choices' actions (fork #1316), by who is drawn pointed the way they face. */
+export const FACING_MARKS_ACTIONS: Readonly<Record<FacingMarks, ActionId>> = {
+    off: "facingMarksOff",
+    turned: "facingMarksTurned",
+    everyone: "facingMarksEveryone",
+};
+
+/** One Facing choice: checked while it's the one in effect (saved with the UI settings). */
+function useFacingMarksChoice(shown: FacingMarks) {
+    const current = useUiSettingsStore(
+        (s) => s.uiSettings.facingMarks ?? "turned",
+    );
+    useActionHandler(
+        FACING_MARKS_ACTIONS[shown],
+        () => {
+            const { uiSettings, setUiSettings } = useUiSettingsStore.getState();
+            if (uiSettings.facingMarks !== shown)
+                setUiSettings({ ...uiSettings, facingMarks: shown });
+        },
+        { checked: current === shown },
+    );
+}
+
 /** One Equipment icons choice: checked while it's the one in effect. */
 function useEquipmentIconsChoice(shown: EquipmentIcons) {
     const current = useUiSettingsStore(
@@ -370,6 +394,9 @@ export function useCueActionHandlers() {
     useEquipmentIconsChoice("off");
     useEquipmentIconsChoice("changed");
     useEquipmentIconsChoice("everyone");
+    useFacingMarksChoice("off");
+    useFacingMarksChoice("turned");
+    useFacingMarksChoice("everyone");
     useEquipmentPlaceChoice("beside");
     useEquipmentPlaceChoice("dot");
     useEquipmentPlaceChoice("label");
