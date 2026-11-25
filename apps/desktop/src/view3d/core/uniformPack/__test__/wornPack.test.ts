@@ -33,12 +33,11 @@ describe("wornPackProblem", () => {
         expect(wornPackProblem(VALUE, true, PACK, true)).toBeNull();
     });
 
-    it("says loadFailed when the read or the list failed with nothing read, apart from a damaged file", () => {
-        // the read failed after its retries
+    it("says loadFailed when the read failed with nothing read, apart from a damaged file", () => {
         expect(wornPackProblem(VALUE, true, undefined, false, true)).toBe(
             "loadFailed",
         );
-        // the list of the show's uniforms failed
+        // the list failed too: still the read's failure
         expect(wornPackProblem(VALUE, undefined, undefined, false, true)).toBe(
             "loadFailed",
         );
@@ -51,10 +50,16 @@ describe("wornPackProblem", () => {
         );
         expect(wornPackProblem(VALUE, true, null, true, true)).toBe("newer");
         expect(wornPackProblem(VALUE, true, PACK, false, true)).toBeNull();
-        // nothing to say for a preset
         expect(
             wornPackProblem(null, undefined, undefined, false, true),
         ).toBeNull();
+    });
+
+    it("has nothing to say about the band's uniform when only the list failed", () => {
+        // the list is unknown (failed), the uniform reads: the band wears it
+        expect(wornPackProblem(VALUE, undefined, PACK)).toBeNull();
+        // and while it's still being read
+        expect(wornPackProblem(VALUE, undefined, undefined)).toBeNull();
     });
 
     it("waits for the read, and is quiet once the pack reads", () => {

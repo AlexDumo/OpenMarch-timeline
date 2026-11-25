@@ -38,6 +38,7 @@ import {
 } from "@/db-functions/view3dVenue";
 import { tableNamesToQueryKeys } from "@/hooks/queries/utils";
 import { uniformPackQueryOptions } from "@/hooks/queries/useUniformPack";
+import { showAssetKeys } from "@/hooks/queries/useShowAssets";
 import { useCustomUniformsStore } from "@/view3d/window/uniformArtworkPreview";
 import { strToU8, zipSync } from "fflate";
 import {
@@ -721,7 +722,7 @@ describeDbTests("Assets view", (it) => {
                     expect(
                         screen.getByTestId("assets-load-failed-uniform-note"),
                     ).toHaveTextContent(
-                        "The band's custom uniform couldn't be loaded just now, so the band wears its preset for now. Its file may be fine.",
+                        "The band's custom uniform couldn't be loaded just now. Its file may be fine. Until it loads, the band wears its preset.",
                     ),
                 // the read is retried, with the usual waits, before it fails
                 { timeout: 15000 },
@@ -733,7 +734,21 @@ describeDbTests("Assets view", (it) => {
             ).toBeNull();
 
             worker.passingFailures = 0;
+            // an invalidation, which the editor relays to the 3D View window, never a refetch
+            // only this window would see
+            const invalidate = vi.spyOn(
+                harnessQueryClient()!,
+                "invalidateQueries",
+            );
             fireEvent.click(screen.getByTestId("assets-uniform-try-again"));
+            // the note stays while it runs, its button disabled
+            const busy = screen.getByTestId("assets-uniform-try-again");
+            expect(busy).toHaveTextContent("Loading…");
+            expect(busy).toBeDisabled();
+            expect(invalidate).toHaveBeenCalledWith({
+                queryKey: uniformPackQueryOptions(value).queryKey,
+                exact: true,
+            });
             await waitFor(() =>
                 expect(
                     harnessQueryClient()!.getQueryData(
@@ -768,7 +783,12 @@ describeDbTests("Assets view", (it) => {
         expect(screen.queryAllByTestId("asset-row")).toHaveLength(0);
 
         await db.run(sql`ALTER TABLE show_assets_away RENAME TO show_assets`);
+        const invalidate = vi.spyOn(harnessQueryClient()!, "invalidateQueries");
         fireEvent.click(screen.getByTestId("assets-try-again"));
+        // the assets' key: their list, sizes and uniform reads, relayed to the 3D View too
+        expect(invalidate).toHaveBeenCalledWith({
+            queryKey: showAssetKeys.all(),
+        });
         await waitFor(() =>
             expect(screen.getAllByTestId("asset-row")).toHaveLength(1),
         );

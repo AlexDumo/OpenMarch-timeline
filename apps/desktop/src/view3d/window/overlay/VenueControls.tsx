@@ -306,15 +306,9 @@ export function UniformPicker() {
     // a read that failed after its retries with nothing read: not a damaged file (Try again)
     const packsFailed = packsQuery.isError && packs === undefined;
     const packFailed = packQuery.isError && pack === undefined;
-    // while Try again runs, the button waits instead of starting it over
-    const retrying =
-        (packsFailed && packsQuery.isFetching) ||
-        (packFailed && packQuery.isFetching);
-    const tryAgain = () => {
-        if (retrying) return;
-        if (packsFailed) void packsQuery.refetch();
-        if (packFailed) void packQuery.refetch();
-    };
+    // the note Try again was pressed on, kept while it runs: a query with nothing read goes
+    // back to pending when it fetches again, which would otherwise hide the note and its button
+    const [retrying, setRetrying] = useState<"load" | "list" | null>(null);
     // the uniform whose version the band wears (editing items adds versions, fork #1258)
     const wornEntry = namedPack ? uniformEntryOf(packs, namedPack) : undefined;
     // a uniform the show no longer has (an undo after Remove unused…), or one whose file
@@ -332,6 +326,17 @@ export function UniformPicker() {
     // note of its own, with the setting on (the list is the picker's choices) or while the band
     // wears a custom uniform
     const listFailed = packsFailed && !problem && (flats || namedPack !== null);
+    const failedNote =
+        retrying ??
+        (problem === "loadFailed" ? "load" : listFailed ? "list" : null);
+    const tryAgain = () => {
+        if (retrying || !failedNote) return;
+        setRetrying(failedNote);
+        void Promise.allSettled([
+            packsFailed ? packsQuery.refetch() : null,
+            packFailed ? packQuery.refetch() : null,
+        ]).finally(() => setRetrying(null));
+    };
     type Value = UniformPresetId | typeof FLATS_SAMPLE | UniformPackValue;
     const sampleOption = {
         value: FLATS_SAMPLE as Value,
@@ -395,18 +400,18 @@ export function UniformPicker() {
                 testId="view3d-uniform-picker"
                 className="grid! grid-cols-2 [&>*]:justify-start"
             />
-            {(problem === "loadFailed" || listFailed) && (
+            {failedNote && (
                 <div
                     className="flex flex-col items-start gap-6"
                     role="status"
                     data-testid={
-                        listFailed
+                        failedNote === "list"
                             ? "view3d-uniform-list-failed"
                             : "view3d-uniform-loadFailed"
                     }
                 >
                     <p className="text-sub text-yellow">
-                        {listFailed
+                        {failedNote === "list"
                             ? t("view3d.uniformImport.listFailed")
                             : t("view3d.uniformImport.loadFailed")}
                     </p>
@@ -414,7 +419,7 @@ export function UniformPicker() {
                         variant="secondary"
                         size="compact"
                         onClick={tryAgain}
-                        disabled={retrying}
+                        disabled={retrying !== null}
                         data-testid="view3d-uniform-try-again"
                     >
                         {retrying

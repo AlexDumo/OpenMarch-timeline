@@ -16,6 +16,14 @@ const SILK_ARTWORK = path.join(
     "silk-artwork.png",
 );
 
+/** Neutral test art for an imported uniform: teal front and back with a gold band, no marks. */
+const PRACTICE_UNIFORM = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "assets",
+    "Practice uniform.png",
+);
+
 /**
  * Opens 3D View settings › Performers, picks the Standard silk and imports
  * the demo Artwork; leaves the panel open and returns it.
@@ -971,15 +979,23 @@ const shots = [
         id: "3d-custom-uniforms-off",
         kind: "still",
         covers: ["apps/desktop/src/view3d/window/overlay/VenueControls.tsx"],
-        // A show whose band wears a custom uniform, with Custom uniforms (preview) off: the
-        // picker lists it, picked, with the note and Turn on custom uniforms
+        // A show whose band wears an imported custom uniform, with Custom uniforms (preview) off:
+        // the picker lists it, picked, with the note and Turn on custom uniforms
         async setup(ctx) {
             await seekInPage(ctx.page, 3, 0.5);
             const view = await customUniformsOn(ctx);
+            // a uniform imported into the show (neutral test art), as a colleague's show has
+            await view
+                .getByTestId("view3d-uniform-import-file")
+                .setInputFiles(PRACTICE_UNIFORM);
             await view
                 .getByTestId("view3d-uniform-picker")
-                .locator('[data-value="flats:sample"]')
-                .click();
+                .locator('[data-value^="library:"][aria-checked="true"]')
+                .waitFor({ timeout: 60000 });
+            await view
+                .getByTestId("view3d-uniform-preview-note-dismiss")
+                .click({ timeout: 3000 })
+                .catch(() => {});
             await ctx.wait(2500);
             await view.getByTestId("view3d-settings-tab-preferences").click();
             const toggle = view.getByTestId("view3d-custom-uniforms-toggle");

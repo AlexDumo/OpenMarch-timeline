@@ -38,7 +38,9 @@ const NAME = "Colleague's uniform";
 const venue = { current: defaultVenueForKit("hs") as object };
 /** What the worker does with a read, and whether listing the show's assets fails */
 const show = vi.hoisted(() => ({
-    job: "ok" as "ok" | "newer" | "timedOut",
+    job: "ok" as "ok" | "newer" | "timedOut" | "held",
+    /** While `job` is "held", a read waits for this, then reads fine */
+    release: null as null | (() => void),
     listFails: false,
     jobs: 0,
 }));
@@ -98,6 +100,8 @@ vi.mock("@/view3d/uniformPack/runUniformPackJob", async () => {
     return {
         runUniformPackJob: async () => {
             show.jobs++;
+            if (show.job === "held")
+                await new Promise<void>((resolve) => (show.release = resolve));
             if (show.job === "newer")
                 throw new UniformPackJobError("newer", "a later format");
             if (show.job === "timedOut")
@@ -145,6 +149,7 @@ afterEach(() => {
     show.job = "ok";
     show.listFails = false;
     show.jobs = 0;
+    show.release = null;
 });
 
 describe("the uniform picker's notes, through the real read", () => {
@@ -203,14 +208,52 @@ describe("the uniform picker's notes, through the real read", () => {
         ).toContain(NAME);
     });
 
-    it("says the uniform couldn't be loaded when the list of the show's uniforms fails, with the setting off", async () => {
+    it("says only the list failed when the band's uniform still reads, and keeps it picked, with the setting off", async () => {
         show.listFails = true;
         wearing();
         setPreview(false);
         render(<UniformPicker />, { wrapper });
-        await screen.findByTestId("view3d-uniform-loadFailed");
+        const note = await screen.findByTestId("view3d-uniform-list-failed");
+        expect(note.textContent).toContain(
+            "The list of the show's custom uniforms couldn't be loaded just now",
+        );
+        // the band wears it: no load failure, and the picker shows it, picked
+        expect(screen.queryByTestId("view3d-uniform-loadFailed")).toBeNull();
+        await screen.findByTestId("view3d-uniform-preview-worn");
+        const picker = screen.getByTestId("view3d-uniform-picker");
+        expect(
+            picker
+                .querySelector(`[data-value="${PACK}"]`)
+                ?.getAttribute("aria-checked"),
+        ).toBe("true");
         show.listFails = false;
         fireEvent.click(screen.getByTestId("view3d-uniform-try-again"));
+        await vi.waitFor(() =>
+            expect(
+                screen.queryByTestId("view3d-uniform-list-failed"),
+            ).toBeNull(),
+        );
+    });
+
+    it("shows Loading…, disabled, while Try again runs, and a second click doesn't start it over", async () => {
+        show.job = "timedOut";
+        wearing();
+        setPreview(false);
+        render(<UniformPicker />, { wrapper });
+        await screen.findByTestId("view3d-uniform-loadFailed");
+        show.job = "held";
+        const button = screen.getByTestId("view3d-uniform-try-again");
+        fireEvent.click(button);
+        await vi.waitFor(() => expect(show.release).not.toBeNull());
+        expect(button.textContent).toBe("Loading…");
+        expect((button as HTMLButtonElement).disabled).toBe(true);
+        const jobs = show.jobs;
+        fireEvent.click(button);
+        await act(async () => {});
+        expect(show.jobs).toBe(jobs);
+        // the read finishes: the band wears it
+        show.job = "ok";
+        act(() => show.release!());
         await screen.findByTestId("view3d-uniform-preview-worn");
         expect(screen.queryByTestId("view3d-uniform-loadFailed")).toBeNull();
     });
@@ -221,7 +264,7 @@ describe("the uniform picker's notes, through the real read", () => {
         render(<UniformPicker />, { wrapper });
         const note = await screen.findByTestId("view3d-uniform-list-failed");
         expect(note.textContent).toContain(
-            "The show's custom uniforms couldn't be loaded just now",
+            "The list of the show's custom uniforms couldn't be loaded just now",
         );
         show.listFails = false;
         fireEvent.click(screen.getByTestId("view3d-uniform-try-again"));

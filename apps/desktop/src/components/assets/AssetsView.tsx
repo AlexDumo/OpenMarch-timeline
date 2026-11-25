@@ -81,9 +81,9 @@ export function useSizeText() {
  * list of assets couldn't be loaded (`listFailed`); and Try again, which reads again whatever
  * failed: the list, or the band's uniform ("loadFailed"), and whether it's running (`retrying`).
  *
- * Try again invalidates rather than fetching again itself: the editor relays every invalidation to the 3D
- * View window (`relayInvalidations`), whose own read of the uniform is what dresses the band, so
- * one Try again here reads it again there too.
+ * Try again invalidates rather than fetching again itself: the editor relays every invalidation
+ * to the 3D View window (`relayInvalidations`), whose own read of the uniform is what dresses the
+ * band, so one Try again here reads it again there too.
  */
 function useAssetUse() {
     const queryClient = useQueryClient();
@@ -122,22 +122,22 @@ function useAssetUse() {
     const assetsFailed = assetsQuery.isError && assets === undefined;
     const sizesFailed = sizesQuery.isError && sizes === undefined;
     const wornFailed = wornPackQuery.isError && wornPack === undefined;
-    const retrying =
-        (assetsFailed && assetsQuery.isFetching) ||
-        (sizesFailed && sizesQuery.isFetching) ||
-        (wornFailed && wornPackQuery.isFetching);
+    // the note Try again was pressed on, kept while it runs: a query with nothing read goes
+    // back to pending when it fetches again, which would otherwise hide the note and its button
+    const [retrying, setRetrying] = useState<"list" | "uniform" | null>(null);
     const tryAgain = () => {
         if (retrying) return;
+        const list = assetsFailed || sizesFailed;
+        if (!list && !wornFailed) return;
+        setRetrying(list ? "list" : "uniform");
         // the assets' key covers their sizes and every uniform read
-        if (assetsFailed || sizesFailed)
-            void queryClient.invalidateQueries({
-                queryKey: showAssetKeys.all(),
-            });
-        else if (wornFailed)
-            void queryClient.invalidateQueries({
-                queryKey: uniformPackQueryOptions(worn).queryKey,
-                exact: true,
-            });
+        const refreshed = list
+            ? queryClient.invalidateQueries({ queryKey: showAssetKeys.all() })
+            : queryClient.invalidateQueries({
+                  queryKey: uniformPackQueryOptions(worn).queryKey,
+                  exact: true,
+              });
+        void refreshed.finally(() => setRetrying(null));
     };
     const use = useMemo(() => {
         // `venue` is null with no venue row, undefined while it loads
@@ -178,7 +178,7 @@ function useAssetUse() {
                 ),
             wornPack,
             uniformPackIsNewer(worn),
-            wornFailed,
+            wornFailed || retrying === "uniform",
         );
         return {
             ...use,
@@ -200,12 +200,13 @@ function useAssetUse() {
         historyFailed,
         wornPack,
         wornFailed,
+        retrying,
     ]);
     return {
         use,
-        listFailed: assetsFailed || sizesFailed,
+        listFailed: assetsFailed || sizesFailed || retrying === "list",
         tryAgain,
-        retrying,
+        retrying: retrying !== null,
     };
 }
 
