@@ -150,9 +150,10 @@ async function startTake({
     if (selection.playback) stopTimelinePlayback(setIsPlaying);
     await timelinePositionsSettled();
     const beat = selection.playheadBeat;
-    // The move that starts at the playhead's flag, else the one it's inside or arrives at
-    let move = await groupMoveAt(db, ids, beat + 1e-6);
-    if (move.kind !== "move") move = await groupMoveAt(db, ids, beat);
+    // The move the playhead is inside or arrives at (a page's own flag, as everywhere), else
+    // the one starting there (the playhead at the show's start)
+    let move = await groupMoveAt(db, ids, beat);
+    if (move.kind !== "move") move = await groupMoveAt(db, ids, beat + 1e-6);
     if (move.kind === "twoMoves") {
         toast.info(
             t(

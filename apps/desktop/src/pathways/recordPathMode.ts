@@ -48,7 +48,20 @@ class RecordPathMode implements FieldMode {
         return "grab";
     }
 
+    /** The drawing for the store's frame it was made on: the same object until something moves */
+    private last: { frame: number; drawing: FieldModeDrawing | null } | null =
+        null;
+
     drawing(): FieldModeDrawing | null {
+        const { frame, phase } = useRecordPathStore.getState();
+        const key = phase === "idle" || phase === "saving" ? -1 : frame;
+        if (this.last?.frame === key) return this.last.drawing;
+        const drawing = this.makeDrawing();
+        this.last = { frame: key, drawing };
+        return drawing;
+    }
+
+    private makeDrawing(): FieldModeDrawing | null {
         const drawn = recordDrawing();
         if (!drawn || drawn.ids.length === 0) return null;
         return {

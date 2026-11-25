@@ -51,8 +51,8 @@ async function evenSpeed(): Promise<void> {
     const ids = [...(activeFieldEditor()?.selected() ?? [])];
     if (ids.length === 0) return;
     const beat = useTimelineSelectionStore.getState().playheadBeat;
-    let move = await groupMoveAt(db, ids, beat + 1e-6);
-    if (move.kind !== "move") move = await groupMoveAt(db, ids, beat);
+    let move = await groupMoveAt(db, ids, beat);
+    if (move.kind !== "move") move = await groupMoveAt(db, ids, beat + 1e-6);
     const notRecorded = () =>
         toast.info(
             tolgee.t(
@@ -112,7 +112,7 @@ export function RecordPathCounter() {
     if (phase !== "countIn" && phase !== "recording") return null;
     return (
         <div
-            className="pointer-events-none absolute inset-x-0 top-12 z-20 flex justify-center"
+            className="pointer-events-none absolute top-12 left-80 z-20 flex"
             data-testid="record-path-counter"
         >
             <div className="bg-bg-1/90 border-stroke rounded-6 flex flex-col items-center border px-16 py-8 shadow-md">
