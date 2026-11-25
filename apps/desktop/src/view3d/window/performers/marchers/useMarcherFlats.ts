@@ -7,15 +7,21 @@
  * When the art changes (an item moved, fork #1258), the last set stays on
  * the marchers until the new one is composed, so editing never flashes the
  * palette; its atlases are let go of only then.
+ *
+ * A set whose atlases are composed already is drawn in the render that asks
+ * for it (`peekFlatsResources`), before anything holds it for the marchers.
+ * The hold is taken in a layout effect, in that same commit, so a dispose
+ * timer from an earlier release (an A → none → A switch, which
+ * `useSettledFlatsWear` passes straight through) can't free it mid-draw
+ * before a passive effect would have run.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
     flatsDpi,
     isUniformPackValue,
     type FlatsArtworkKey,
+    type UniformPackValue,
 } from "@/view3d/core/marchers/uniformArtwork";
-import { noteUniformPackDamaged } from "@/hooks/queries/useUniformPack";
 import { packPagePlan } from "@/view3d/window/uniformPack/packPage";
 import type { BodyType } from "@/view3d/core/marchers/looks";
 import {
@@ -38,8 +44,14 @@ const NONE: FlatsResources = new Map();
 export function useMarcherFlats(
     looks: readonly MarcherSlotLook[] | null,
     quality: MarcherQuality,
+    /**
+     * A saved pack's art didn't compose (`noteUniformPackDamaged` decides whether the failure
+     * was the pack's own, so the settings and picker say its art is damaged)
+     */
+    onDamaged?: (pack: UniformPackValue, error: unknown) => void,
 ): FlatsResources {
-    const qc = useQueryClient();
+    const onDamagedRef = useRef(onDamaged);
+    onDamagedRef.current = onDamaged;
     const wantedKey = useMemo(() => {
         const out = new Set<string>();
         for (const l of looks ?? []) {
@@ -58,9 +70,8 @@ export function useMarcherFlats(
     } | null>(null);
     /** Every acquired set not yet let go of: the one shown, and any being composed */
     const held = useRef(new Map<string, () => void>());
-    /** The set on the marchers now, `<wantedKey>#<dpi>` */
+    /** The set on the marchers now, `<wantedKey>#<dpi>` (set below, as rendered) */
     const shownKey = useRef<string | null>(null);
-    shownKey.current = ready ? `${ready.key}#${flatsDpi(ready.quality)}` : null;
     useEffect(() => {
         const sets = held.current;
         return () => {
@@ -68,7 +79,8 @@ export function useMarcherFlats(
             sets.clear();
         };
     }, []);
-    useEffect(() => {
+    // a layout effect: the hold on a set drawn from `composed` starts in the commit that draws it
+    useLayoutEffect(() => {
         if (!wantedKey) {
             // back to presets: let go of the last set (its atlases free once unused)
             setReady(null);
@@ -98,7 +110,7 @@ export function useMarcherFlats(
                         if (isUniformPackValue(id)) {
                             const plan = packPagePlan(id);
                             if (!plan.draft)
-                                noteUniformPackDamaged(qc, plan.pack, error);
+                                onDamagedRef.current?.(plan.pack, error);
                         }
                         throw error;
                     }),
@@ -143,7 +155,7 @@ export function useMarcherFlats(
                 held.current.delete(setKey);
             }
         };
-    }, [wantedKey, quality, qc]);
+    }, [wantedKey, quality]);
     const transition = useMemo(
         () =>
             ready && ready.quality === quality && ready.key !== wantedKey
@@ -168,11 +180,22 @@ export function useMarcherFlats(
         }
         return out as FlatsResources;
     }, [wantedKey, quality, ready]);
-    if (!wantedKey) return NONE;
-    if (ready && ready.key === wantedKey && ready.quality === quality)
+    const dpi = flatsDpi(quality);
+    if (!wantedKey) {
+        shownKey.current = null;
+        return NONE;
+    }
+    if (ready && ready.key === wantedKey && ready.quality === quality) {
+        shownKey.current = `${wantedKey}#${dpi}`;
         return ready.map;
-    if (composed) return composed;
+    }
+    if (composed) {
+        // drawn now: its hold lasts until a successor is on the marchers
+        shownKey.current = `${wantedKey}#${dpi}`;
+        return composed;
+    }
     // composing a change: the previous art stays until the new one is ready
+    shownKey.current = ready ? `${ready.key}#${flatsDpi(ready.quality)}` : null;
     return transition ?? NONE;
 }
 

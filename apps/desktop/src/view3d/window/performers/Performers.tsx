@@ -37,9 +37,10 @@ import { pickMarchers } from "../camera/inputMath";
 import { pickPerformerIndex } from "../camera/followMath";
 import { useFollowStore } from "../camera/followStore";
 import { performersMoved, setPerformerSource } from "../camera/performerTrack";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { noteUniformPackDamaged } from "@/hooks/queries/useUniformPack";
 import type {
     CueHoldStyle,
     CueSection,
@@ -134,7 +135,10 @@ import {
 import { useMarcherFlats } from "./marchers/useMarcherFlats";
 import { useFlatsWear } from "@/view3d/window/uniformPack/useFlatsWear";
 import { clipsToLoad, flatsBody } from "./marchers/marcherBodies";
-import { flatsDpi } from "@/view3d/core/marchers/uniformArtwork";
+import {
+    flatsDpi,
+    type UniformPackValue,
+} from "@/view3d/core/marchers/uniformArtwork";
 import { useSettledFlatsWear } from "@/view3d/window/uniformPack/useSettledFlatsWear";
 import { hornRowsOf } from "./marchers/hornRows";
 import { sectionCueCarry } from "@/view3d/core/marchers/hornChannel";
@@ -198,6 +202,14 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         wantedArtwork,
         flatsBodies,
         flatsDpi(quality),
+    );
+    // a saved pack whose art the worker refused to draw: the settings, the picker and Assets
+    // say it can't be read
+    const onUniformArtDamaged = useCallback(
+        (pack: UniformPackValue, error: unknown) => {
+            noteUniformPackDamaged(queryClient, pack, error);
+        },
+        [queryClient],
     );
     const guardUniformPreset = guardUniformPresetOf(venue?.guardUniforms);
     // the brass line's finish and the tubas' horn, from the same settings
@@ -469,7 +481,11 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             if (h) for (const r of hornRowsOf(h.events, h.family)) out.add(r);
         return [...out];
     }, [hornSlots]);
-    const marcherFlats = useMarcherFlats(marcherLooks, quality);
+    const marcherFlats = useMarcherFlats(
+        marcherLooks,
+        quality,
+        onUniformArtDamaged,
+    );
     useEffect(() => {
         const bodies = new Set<string>();
         for (const look of marcherLooks ?? [])
