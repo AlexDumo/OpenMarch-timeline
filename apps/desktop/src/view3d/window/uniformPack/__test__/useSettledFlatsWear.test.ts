@@ -64,9 +64,16 @@ describe("useSettledFlatsWear", () => {
         await act(async () => pending.get(`${sash.key}|average`)!());
         expect(result.current).toBe(plain);
         await act(async () => pending.get(`${sash.key}|tall`)!());
-        // both ready: art and colors switch together, and the hold lets go
+        // both ready: art and colors switch together
         expect(result.current).toBe(sash);
-        expect([...held.values()].every((n) => n === 0)).toBe(true);
+        // still held, so no gap where nobody holds them before the marchers take them (a dispose
+        // timer from an earlier switch freed them in that gap, PR #1298)
+        expect(held.get(`${sash.key}|average`)).toBe(1);
+        expect(held.get(`${sash.key}|tall`)).toBe(1);
+        // the next change lets go of them
+        rerender({ w: plain });
+        expect(held.get(`${sash.key}|average`)).toBe(0);
+        expect(held.get(`${sash.key}|tall`)).toBe(0);
     });
 
     it("passes the first wear, no wear, and wears nobody has on straight through", () => {

@@ -5,10 +5,12 @@
  * the old art, or the bare palette.
  *
  * It composes (acquires) the wanted wear's atlases for the body types that wear flats now, then
- * hands the wear on and lets go: `useMarcherFlats` acquires the same atlases at once, and the
- * atlas cache keeps a released atlas a moment, so nothing composes twice. The first wear, a
- * change to no wear, and a change with nobody wearing flats pass straight through. A compose that
- * fails hands the wear on anyway, so the colors never get stuck.
+ * hands the wear on, and holds them until the wear changes again. By then `useMarcherFlats` has
+ * taken them too. Letting go as it handed the wear on left a gap with nobody holding them, and a
+ * dispose timer from an earlier switch could free them in it: the marchers then showed the new
+ * colors on the old art while the atlas was composed again (GPU recording, PR #1298). The first
+ * wear, a change to no wear, and a change with nobody wearing flats pass straight through. A
+ * compose that fails hands the wear on anyway, so the colors never get stuck.
  */
 import { useEffect, useState } from "react";
 import type {
@@ -49,25 +51,17 @@ export function useSettledFlatsWear(
             return;
         }
         let live = true;
-        let held = true;
-        const letGo = () => {
-            if (!held) return;
-            held = false;
-            for (const body of list) cache.release(wanted.key, body, dpi);
-        };
         const done = list.map((body) => cache.acquire(wanted.key, body, dpi));
         void Promise.allSettled(done).then(() => {
-            if (!live) return;
-            setSettled(wanted);
-            // the marchers acquire the same atlases as they take the wear; the cache keeps a
-            // released atlas a moment, so it's still there
-            letGo();
+            if (live) setSettled(wanted);
         });
         return () => {
             live = false;
-            letGo();
+            // held until the wear changes again (or the view closes): the marchers have taken
+            // these atlases by then
+            for (const body of list) cache.release(wanted.key, body, dpi);
         };
-        // `settled` changes only to `wanted`, which ends the hold
+        // `settled` changes only to `wanted`; the hold lasts until `wanted` changes
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [wanted, bodies, dpi, cache]);
     return settled;
