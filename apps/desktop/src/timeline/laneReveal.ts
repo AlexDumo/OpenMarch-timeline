@@ -13,6 +13,9 @@ import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { maxTimelineHeight } from "@/components/timeline/timelineSplit";
 import type { TimelineLaneId } from "./timelineLanes";
 
+/** Room left under a revealed lane, in px */
+const BOTTOM_ROOM_PX = 12;
+
 /** A request older than this is dropped: its lane was hidden, so the user didn't see it go */
 const REQUEST_MS = 3000;
 
@@ -93,7 +96,8 @@ export function revealLane(lane: HTMLElement): void {
     const available = pane?.parentElement?.clientHeight ?? 0;
     const plan = laneRevealPlan({
         laneTop: box.top,
-        laneBottom: box.bottom,
+        // A little room under it, clear of the scrollbar drawn over the view's bottom edge
+        laneBottom: box.bottom + BOTTOM_ROOM_PX,
         viewTop: viewBox.top + view.clientTop + pinned,
         viewBottom: viewBox.top + view.clientTop + view.clientHeight,
         // A pane fitted to its tracks has nothing to open; one in Basic has no divider

@@ -465,6 +465,14 @@ describe("one row of keyframes (#1315)", () => {
         expect(written).toEqual([]);
     });
 
+    it("selects from the keyboard too: Enter or Space on a focused keyframe", async () => {
+        const { container } = renderLane(shared(), { selectedIds: [] });
+        await act(async () => {
+            fireEvent.click(keyAt(container, 12), { detail: 0 });
+        });
+        expect(select).toHaveBeenLastCalledWith([1, 2]);
+    });
+
     it("moves every cue on a keyframe's count when it's dragged, each keeping its turn", async () => {
         const { container } = renderLane(shared(), { selectedIds: [] });
         await dragBy(keyAt(container, 12), 32);

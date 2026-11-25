@@ -522,10 +522,14 @@ export function FacingLaneView({
             });
             return equipmentSetIsEmpty(moved) ? null : moved;
         };
-        follow(e, key.cueIds, isPlaying ? null : plan, () => {
-            pick(key.cueIds.length === 1 ? key.cueIds[0]! : null);
-            selectPerformers(selectionAfterKeyClick(selectedIds, key, add));
-        });
+        follow(e, key.cueIds, isPlaying ? null : plan, () =>
+            activateKey(key, add),
+        );
+    };
+    /** A keyframe's click: selects who changes there, and picks its cue when it has one */
+    const activateKey = (key: FacingKey, add: boolean) => {
+        pick(key.cueIds.length === 1 ? key.cueIds[0]! : null);
+        selectPerformers(selectionAfterKeyClick(selectedIds, key, add));
     };
 
     const nameMenu = useLaneNameMenu("facing");
@@ -646,6 +650,7 @@ export function FacingLaneView({
                                         : "cues.lane.keyHint",
                                 )}
                                 onPress={(e) => pressKey(e, key)}
+                                onActivate={(add) => activateKey(key, add)}
                                 onMenu={(x, y) => openKeyMenu(key, x, y)}
                                 onOpen={() =>
                                     key.cueIds.length === 1 &&
@@ -1064,6 +1069,7 @@ function KeyMark({
     label,
     hint,
     onPress,
+    onActivate,
     onMenu,
     onOpen,
 }: {
@@ -1076,6 +1082,8 @@ function KeyMark({
     /** What a click and a drag do, under `label` in the tooltip */
     hint: string;
     onPress: (e: ReactPointerEvent<HTMLElement>) => void;
+    /** Enter or Space on the focused diamond: what a click does */
+    onActivate: (add: boolean) => void;
     onMenu: (clientX: number, clientY: number) => void;
     onOpen: () => void;
 }) {
@@ -1095,6 +1103,10 @@ function KeyMark({
             style={{ left }}
             {...longPress.handlers}
             onDoubleClick={onOpen}
+            // A click from the keyboard (no pointer press came first)
+            onClick={(e) => {
+                if (e.detail === 0) onActivate(e.shiftKey);
+            }}
             onPointerDown={(e) => {
                 e.stopPropagation();
                 onPress(e);
