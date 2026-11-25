@@ -66,6 +66,7 @@ import {
 import { linkDragTip, type LinkTip } from "./linkTip";
 import { clearLinkDrag, useLinkDragStore } from "./linkDragStore";
 import { openJointMenu } from "./detachLinks";
+import { doubleClickMember } from "./selectLinkedShapes";
 import { openHandleMenu } from "../field/handleMenu";
 import { groupDrawing } from "../field/groupDrawing";
 import { stepDrawing } from "../field/stepDrawing";
@@ -233,7 +234,7 @@ export const clearLiveBoxSelection = (): boolean =>
  * A selected placed shape of any kind, edited in place (07-placed-boxes.md), as a field editor
  * mode: it claims presses on its handles and inside it. Its handles resize it (a box's stretch it),
  * a drag inside moves it, and each gesture is saved when it ends, as one undo step. A double click
- * on a member goes inside the box. A press that reaches inside ($mod on a member, away from the
+ * on a member goes inside the box; on a linked shape it selects the shape's whole figure (#1236). A press that reaches inside ($mod on a member, away from the
  * box's controls) and other presses go through the editor's rules as usual. The selection box's own handles (#198) are off while it's on.
  */
 export class LiveBoxMode implements FieldMode {
@@ -545,7 +546,7 @@ export class LiveBoxMode implements FieldMode {
         }
         this.catchUp();
         this.emit();
-        if (!out.changed && out.enter) this.enterAt(pointer);
+        if (!out.changed && out.enter) this.enterAt(pointer, !!click?.double);
     }
 
     /**
@@ -737,15 +738,20 @@ export class LiveBoxMode implements FieldMode {
         return hit?.marcherId ?? null;
     }
 
-    /** Goes inside the box at the member nearest `pointer` */
-    private enterAt(pointer: FieldPointer): void {
+    /**
+     * Goes inside the box at the member nearest `pointer`; for a double-click, a linked shape's
+     * whole figure is selected instead (#1236), unless it's selected already
+     */
+    private enterAt(pointer: FieldPointer, double: boolean): void {
         const at = pointer.field;
         let best: { id: number; d: number } | null = null;
         for (const m of this.live.box.recipe.members) {
             const d = Math.hypot(m.x - at.x, m.y - at.y);
             if (!best || d < best.d) best = { id: m.marcherId, d };
         }
-        if (best) enterBox(best.id);
+        if (!best) return;
+        if (double) doubleClickMember(best.id);
+        else enterBox(best.id);
     }
 
     private emit(): void {

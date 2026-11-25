@@ -550,3 +550,27 @@ export function linkAt(
     }
     return best?.link ?? null;
 }
+
+/**
+ * The connected figure `box` is in (#1236): `box` and every shape linked to it, following the
+ * links through each shape in turn (a J with a tail is three shapes), each once, in recipe id
+ * order. Only live links count (`links`, from {@link liveLinks}), so a dead attachment (a shape
+ * on another move, a later page, an end off its joint) joins nothing. Just `box` when it's in no
+ * link.
+ */
+export function linkedFigure(
+    box: PlacedBox,
+    links: readonly ShapeLink[],
+): PlacedBox[] {
+    const found = new Map<number, PlacedBox>([[box.recipe.id, box]]);
+    const queue: PlacedBox[] = [box];
+    for (let next = queue.pop(); next; next = queue.pop()) {
+        for (const link of linksOf(next, links)) {
+            const { other } = sideOf(next, link);
+            if (found.has(other.recipe.id)) continue;
+            found.set(other.recipe.id, other);
+            queue.push(other);
+        }
+    }
+    return [...found.values()].sort((a, b) => a.recipe.id - b.recipe.id);
+}

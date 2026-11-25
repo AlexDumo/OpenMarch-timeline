@@ -19,6 +19,7 @@ import { useShapePaletteSource } from "../command/useShapePaletteSource";
 import { GROUP_MIN, groupMarchers } from "../placed/groupMarchers";
 import { useBoxSelectionStore } from "../placed/boxSelectionStore";
 import { useDetachLinks } from "../placed/useDetachLinks";
+import { useSelectLinkedShapes } from "../placed/selectLinkedShapes";
 import {
     closeShapeTool,
     isShapeHidden,
@@ -118,6 +119,8 @@ export function useShapeToolActions(): void {
         [selectedPerformers],
     );
     useDetachLinks(ready && !shown, selectedIds);
+    // A linked shape's whole figure selected together (#1236)
+    useSelectLinkedShapes(ready && !shown, selectedIds);
     useActionHandler(
         "applyShape",
         () => {

@@ -1008,6 +1008,18 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
+    // Select linked shapes (#1236): every placed line, curve or arc linked to a selected one,
+    // through the links of each in turn, selected whole together. What a double-click on a linked
+    // shape does; the joint's menu says the same (shapes/placed/selectLinkedShapes)
+    shapeSelectLinked: {
+        labelKey: "actions.shape.selectLinked",
+        keywordsKey: "actions.shape.selectLinkedKeywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        ignoreRepeat: true,
+    },
+
     // Pathways step 1 (ADR 0016): the Path pen draws a cornered path for one selected marcher's
     // move at the playhead. P as in design tools' pen. While it draws, Enter (applyShape) finishes,
     // Backspace (shapeRemoveLastPoint) takes the last corner back and Escape

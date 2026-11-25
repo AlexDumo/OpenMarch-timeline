@@ -73,8 +73,8 @@ import { useShapeFieldModes } from "@/shapes/field/useShapeFieldModes";
 import {
     boxPressSelection,
     canReachInside,
-    enterBox,
 } from "@/shapes/placed/boxSelection";
+import { doubleClickMember } from "@/shapes/placed/selectLinkedShapes";
 import {
     drawnPlacedBoxes,
     drawnShapeJoints,
@@ -517,7 +517,8 @@ function ThreeFieldView() {
                             reachInside,
                         ),
                     reachesInside: canReachInside,
-                    doubleClickMarcher: enterBox,
+                    // #1236: on a linked shape, its whole figure; else inside the box
+                    doubleClickMarcher: doubleClickMember,
                     // C2.1: items are hit anywhere inside their Outline
                     isItem: (id) => items.isItem(id),
                     // The pit's locked equipment: no marquee or lasso takes it

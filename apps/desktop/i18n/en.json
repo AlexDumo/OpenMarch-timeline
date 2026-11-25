@@ -210,6 +210,8 @@
             "ungroupKeywords": "ungroup shape break apart release separate",
             "detach": "Detach linked shape",
             "detachKeywords": "detach unlink linked joint joined separate line curve arc shape",
+            "selectLinked": "Select linked shapes",
+            "selectLinkedKeywords": "select linked shapes figure joined connected chain all line curve arc",
             "enterBox": "Select only this marcher",
             "centerPivot": "Shape: Move the pivot back to the center",
             "centerPivotKeywords": "pivot center centre reset turn flip around",
@@ -2604,6 +2606,7 @@
         "links": {
             "jointMenu": "Joint marcher: {shape}'s",
             "detachNeedsLink": "Select a linked line, curve or arc to detach it",
+            "selectLinkedNeedsLink": "Select a linked line, curve or arc first",
             "detachFrom": "Detach from {shape}",
             "detachCount": "Detach {count} linked shapes",
             "releaseTip": "Release to link to {shape}",

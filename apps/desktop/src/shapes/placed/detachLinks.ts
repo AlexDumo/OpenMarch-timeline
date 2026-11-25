@@ -7,6 +7,7 @@ import { withAttach } from "../line/lineLinks";
 import type { LineParams } from "../line/lineGeometry";
 import { commitBox, type LinkedEdit } from "./commitBox";
 import type { PlacedBox } from "./placedBox";
+import { selectFigureOf, selectLinkedLabel } from "./selectLinkedShapes";
 import { sideOf, type ShapeLink } from "./shapeLinks";
 
 /**
@@ -83,7 +84,8 @@ export function detachLinks(
 
 /**
  * The joint's menu (#1235), at `at` in the field's element: a right-click, a Mac's Ctrl-click or
- * a long press on the joint of the selected shape. Headed by which shape holds the joint's marcher.
+ * a long press on the joint of the selected shape. Headed by which shape holds the joint's marcher;
+ * Detach, then Select linked shapes (#1236).
  */
 export function openJointMenu(
     link: ShapeLink,
@@ -104,12 +106,15 @@ export function openJointMenu(
                     ),
                     items: [
                         { value: "detach", label: detachLabel([link], from) },
+                        { value: "selectLinked", label: selectLinkedLabel() },
                     ],
                 },
             ],
             pick(value) {
                 closeHandleMenu();
                 if (value === "detach") void detachLinks([link], queryClient);
+                if (value === "selectLinked")
+                    selectFigureOf(link.owner.recipe.id);
             },
         },
     });

@@ -161,7 +161,13 @@ const GROUPS: readonly (readonly ActionId[])[] = [
         "pasteFormationInPlace",
         "pasteMirrored",
     ],
-    ["shapeGroup", "shapeUngroup", "shapeDetach", "shapeEnterBox"],
+    [
+        "shapeGroup",
+        "shapeUngroup",
+        "shapeDetach",
+        "shapeSelectLinked",
+        "shapeEnterBox",
+    ],
     PATH,
     PATH_END,
     STATE_GROUP,
@@ -211,6 +217,7 @@ const WHILE_AVAILABLE: ReadonlySet<ActionId> = new Set([
     "shapeGroup",
     "shapeUngroup",
     "shapeDetach",
+    "shapeSelectLinked",
     "shapeEnterBox",
     "timelineHoldOverWindow",
 ]);
