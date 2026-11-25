@@ -1,4 +1,9 @@
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import {
+    useEffect,
+    useLayoutEffect,
+    useRef,
+    useSyncExternalStore,
+} from "react";
 import clsx from "clsx";
 import tolgee from "@/global/singletons/Tolgee";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
@@ -151,7 +156,10 @@ export function createRowLens(): RowLens {
             if (input !== "pointer") return;
             stopLeaving();
             // Moving from one row's strip to the next isn't leaving
-            leaving = setTimeout(reset, 80);
+            leaving = setTimeout(() => {
+                leaving = null;
+                if (input === "pointer") reset();
+            }, 80);
         },
         touchStart(at, x, clientX) {
             press = {
@@ -181,7 +189,9 @@ export function createRowLens(): RowLens {
             return tap;
         },
         focusRow(at) {
-            if (input === "pointer" || input === "touch") return;
+            // A click focuses the strip too: the pointer keeps the lens while it's over the rows
+            if (input === "touch" || (input === "pointer" && !leaving)) return;
+            stopLeaving();
             const r = rows[at];
             if (!r) return;
             if (input !== "key" || row === null)
@@ -207,6 +217,7 @@ export function createRowLens(): RowLens {
         key(at, key, shift) {
             const r = rows[at];
             if (!r) return false;
+            stopLeaving();
             if (input !== "key" || row !== at) {
                 input = "key";
                 row = at;
@@ -347,7 +358,7 @@ export function RowSpots({
             role="group"
             tabIndex={0}
             aria-label={label}
-            data-row-lens=""
+            data-row-lens={v.lens ? (v.open >= 0.98 ? "open" : "opening") : ""}
             data-testid={testId}
             className={clsx(
                 "rounded-4 focus-visible:outline-accent relative h-24 min-w-0 cursor-pointer touch-none outline-offset-0 focus-visible:outline-2",
@@ -417,13 +428,22 @@ export function RowSpots({
 /** How many spots are each side of the one pointed at, over its column above the rows */
 export function RowSpotsCount({ lens }: { lens: RowLens }) {
     useLens(lens);
+    const label = useRef<HTMLSpanElement | null>(null);
     const hot = lens.hovered();
     const v = lens.view();
     const row = hot ? v.rows[hot.row] : null;
+    const x = row && hot ? v.X(spotAt(row, hot.spot)) : 0;
+    // Over its spot, but kept inside the dots' column so it never covers the headings beside it
+    useLayoutEffect(() => {
+        const el = label.current;
+        if (!el) return;
+        const half = el.offsetWidth / 2;
+        el.style.left = `${Math.max(half, Math.min(v.width - half, x))}px`;
+    });
     if (!hot || !row) return null;
-    const x = Math.max(0, Math.min(v.width, v.X(spotAt(row, hot.spot))));
     return (
         <span
+            ref={label}
             className="rounded-6 border-stroke bg-modal text-sub shadow-modal pointer-events-none absolute bottom-0 z-10 -translate-x-1/2 border px-4 whitespace-nowrap tabular-nums"
             style={{ left: x }}
             data-testid="shape-rows-spot-count"
