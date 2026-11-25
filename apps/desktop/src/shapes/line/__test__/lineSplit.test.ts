@@ -89,14 +89,23 @@ describe("splitLine", () => {
         splitKeeps(arc, 9, 4, 1e-3);
     });
 
-    it("keeps a curve's spots nearly", () => {
+    it("keeps a curve's spots, taking a point or two to hold its bend", () => {
         const curve = fit([
             pt(0, 0, { tension: 1 }),
             pt(50, 30, { tension: 1 }),
             pt(100, 0, { tension: 1 }),
         ]);
-        splitKeeps(curve, 11, 5, 0.1);
-        splitKeeps(curve, 11, 2, 0.1);
+        // A gentle curve keeps its spots within a hair
+        for (const k of [1, 2, 5, 8, 10]) splitKeeps(curve, 11, k, 0.1);
+        // A tight S-curve can't be matched exactly by its pieces' own points: its marchers
+        // settle onto them, a little way at most
+        const s = fit([
+            pt(0, 0, { tension: 1 }),
+            pt(40, 40, { tension: 1 }),
+            pt(80, -20, { tension: 1.5 }),
+            pt(130, 10, { tension: 1 }),
+        ]);
+        for (const k of [3, 7, 12]) splitKeeps(s, 16, k, 2.5);
     });
 
     it("keeps the interval in Keep interval and on the path", () => {

@@ -14,9 +14,11 @@ import {
 
 /**
  * **Split here** (#1336, epic #1335): an open Line, Curve or Arc cut in two in the gap between two
- * of its marchers. Nobody moves: the first piece ends on the last marcher before the cut and the
- * second starts on the first marcher after it. Each piece keeps its stretches' types (an arc's
- * piece is an arc with its share of the sweep) and the line's settings. Everything here is pure.
+ * of its marchers: the first piece ends on the last marcher before the cut and the second starts
+ * on the first marcher after it. Each piece keeps its stretches' types (an arc's piece is an arc
+ * with its share of the sweep) and the line's settings, and its spots stay where they were: exactly
+ * on straight stretches, corners and arcs, very nearly on a curve, whose pieces can't bend exactly
+ * as the whole did ({@link keptClose}). Everything here is pure.
  */
 
 /** Spots closer than this along the line are one, in field units */
@@ -249,26 +251,8 @@ function drift(spots: readonly XY[], want: readonly XY[]): number {
     );
 }
 
-/**
- * The piece with the roundness of its new end (point `index`, cut inside a curve) the one that
- * keeps its spots nearest where they were: a curve's new end can't bend exactly as the whole
- * curve did there, so it's tuned to come closest
- */
-function tunedEnd(
-    piece: LineParams,
-    index: number,
-    want: readonly XY[],
-): LineParams {
-    const q = piece.points[index]!;
-    if (q.tension === 0) return piece;
-    const withT = (tension: number): LineParams => ({
-        ...piece,
-        points: piece.points.map((r, i) =>
-            i === index ? { ...r, tension } : r,
-        ),
-    });
-    const cost = (t: number) => drift(lineSpots(withT(t), want.length), want);
-    // Golden-section search over the roundness, from a corner to the roundest
+/** The roundness in [0, MAX_TENSION] where `cost` is least, by golden-section search */
+function leastAt(cost: (t: number) => number): number {
     let lo = 0;
     let hi = MAX_TENSION;
     const g = (Math.sqrt(5) - 1) / 2;
@@ -276,7 +260,7 @@ function tunedEnd(
     let x2 = lo + g * (hi - lo);
     let f1 = cost(x1);
     let f2 = cost(x2);
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 24; i++) {
         if (f1 < f2) {
             hi = x2;
             x2 = x1;
@@ -291,8 +275,100 @@ function tunedEnd(
             f2 = cost(x2);
         }
     }
-    const best = (lo + hi) / 2;
-    return cost(best) < cost(q.tension) ? withT(best) : piece;
+    return (lo + hi) / 2;
+}
+
+/** The piece with each smooth point's roundness the one that keeps its spots nearest `want` */
+function tuned(piece: LineParams, want: readonly XY[]): LineParams {
+    const smooth = piece.points.flatMap((q, i) => (q.tension > 0 ? [i] : []));
+    if (smooth.length === 0) return piece;
+    const withT = (p: LineParams, i: number, tension: number): LineParams => ({
+        ...p,
+        points: p.points.map((r, j) => (j === i ? { ...r, tension } : r)),
+    });
+    const cost = (p: LineParams) => drift(lineSpots(p, want.length), want);
+    let best = piece;
+    let bestCost = cost(piece);
+    // A few rounds, each point in turn
+    for (let round = 0; round < 3; round++)
+        for (const i of smooth) {
+            const from = best;
+            const t = leastAt((x) => cost(withT(from, i, x)));
+            const tried = withT(from, i, t);
+            const c = cost(tried);
+            if (c < bestCost) {
+                best = tried;
+                bestCost = c;
+            }
+        }
+    return best;
+}
+
+/** How far a cut curve's spots may stray from where they were before it takes another point */
+const CURVE_DRIFT = 0.01;
+/** The most points a cut curve takes to keep its shape */
+const MOST_KEEPERS = 3;
+
+/**
+ * A piece cut from a curve, kept close to it: a curve's new end can't bend exactly as the whole
+ * curve did there (an open line's end points along to its neighbor), so its smooth points' roundness
+ * is tuned, and while a spot still strays more than {@link CURVE_DRIFT} the piece takes a smooth
+ * point holding no marcher on the spot that strays most, up to {@link MOST_KEEPERS}. A piece with
+ * no curve is exact already and comes back as it is.
+ */
+function keptClose(
+    piece: LineParams,
+    want: readonly XY[],
+    along: (q: XY) => number,
+): LineParams {
+    const cost = (p: LineParams) => drift(lineSpots(p, want.length), want);
+    if (cost(piece) <= CURVE_DRIFT) return piece;
+    let best = tuned(piece, want);
+    /** `p` with a keeper on spot `j`, in its place along the line; null where one can't go */
+    const withKeeper = (p: LineParams, j: number): LineParams | null => {
+        const at = want[j]!;
+        const s = along(at);
+        const index = p.points.findIndex((q) => along(q) > s);
+        if (index <= 0) return null;
+        const near = (q: XY) => Math.hypot(q.x - at.x, q.y - at.y) < 1e-6;
+        if (near(p.points[index - 1]!) || near(p.points[index]!)) return null;
+        const keeper: LinePoint = {
+            x: at.x,
+            y: at.y,
+            tension: Math.max(
+                p.points[index - 1]!.tension,
+                p.points[index]!.tension,
+                1,
+            ),
+            marcher: false,
+        };
+        return {
+            ...p,
+            points: [
+                ...p.points.slice(0, index),
+                keeper,
+                ...p.points.slice(index),
+            ],
+        };
+    };
+    // Each round takes the keeper that helps most as it is, then tunes; the closest round wins
+    let current = best;
+    for (let i = 0; i < MOST_KEEPERS && cost(best) > CURVE_DRIFT; i++) {
+        let pick: LineParams | null = null;
+        let pickCost = Infinity;
+        for (let j = 1; j < want.length - 1; j++) {
+            const tried = withKeeper(current, j);
+            const c = tried ? cost(tried) : Infinity;
+            if (c < pickCost) {
+                pick = tried;
+                pickCost = c;
+            }
+        }
+        if (!pick) break;
+        current = tuned(pick, want);
+        if (cost(current) < cost(best)) best = current;
+    }
+    return best;
 }
 
 /**
@@ -309,6 +385,8 @@ export function splitLine(
     const spots = spotsAlong(p, n);
     const total = makePath(lineSegments(p)).length;
     const onPath = p.spacing.mode === "path";
+    const line = makePath(lineSegments(p));
+    const along = (q: XY) => line.project(q);
     const piece = (
         from: number,
         to: number,
@@ -322,8 +400,7 @@ export function splitLine(
             spacing: pieceSpacing(p.spacing, n, first, count, isFirst),
         };
         const want = spots.slice(first, first + count);
-        const index = isFirst ? cut.points.length - 1 : 0;
-        return { spots: count, params: tunedEnd(cut, index, want) };
+        return { spots: count, params: keptClose(cut, want, along) };
     };
     return [
         piece(onPath ? 0 : spots[0]!.s!, spots[k - 1]!.s!, 0, k, true),

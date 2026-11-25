@@ -29,7 +29,7 @@ import { placedBoxesRead } from "./placedBoxStore";
 /**
  * **Split here** on a placed Line, Curve or Arc (#1336, epic #1335): the shape becomes two of its
  * kind, cut in the gap between two marchers where it was right-clicked, as one undo step. Nobody
- * moves (`splitLine`).
+ * moves, except a hair on a cut curve (`splitLine`).
  */
 
 /** The menu entry's value, the host's rather than the kind's */
@@ -113,7 +113,7 @@ const LOOSE: ShapeRecipeRecord = {
 /**
  * What splitting `box` after its first `k` spots along it saves: each piece of two or more spots a
  * recipe of the shape's kind, with the shape's who-goes-where, its members on the same spots of it
- * (renumbered), standing where they stand. A piece of one spot is no line: its marcher, if it has
+ * (renumbered). A piece of one spot is no line: its marcher, if it has
  * one, is marked as in no shape (`UNGROUPED_KIND`), so no earlier shape takes it back.
  */
 export function splitPlacement(
@@ -139,7 +139,8 @@ export function splitPlacement(
         if (!piece.params)
             return members.length > 0 ? { recipe: LOOSE, members } : null;
         // Its own spots in order along it, so a member's renumbered place is its spot there
-        const order = lineSpots(piece.params, piece.spots)
+        const spots = lineSpots(piece.params, piece.spots);
+        const order = spots
             .map((spot, index) => ({ index, s: spot.s ?? 0 }))
             .sort((a, b) => a.s - b.s || a.index - b.index)
             .map((entry) => entry.index);
@@ -151,7 +152,13 @@ export function splitPlacement(
                 orderMode: box.recipe.orderMode,
                 reverse: box.recipe.reverse,
             },
-            members: members.map((m) => ({ ...m, slot: order[m.slot]! })),
+            // On its own spot: where it stands, except on a cut curve, which its piece can only
+            // nearly follow (`splitLine`), so its marchers settle onto it
+            members: members.map((m) => {
+                const slot = order[m.slot]!;
+                const spot = spots[slot]!;
+                return { ...m, slot, x: spot.x, y: spot.y };
+            }),
         };
     });
     const [first, ...rest] = placed;
