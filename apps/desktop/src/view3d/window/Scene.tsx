@@ -104,6 +104,7 @@ import { allMarcherRowsQueryOptions } from "@/hooks/queries/useMarchers";
 import { hidesVenuePodium } from "@/view3d/core/pit/pitModels";
 import { useView3dSyncStore } from "@/view3d/sync/view3dSyncStore";
 import { maxPixelRatio } from "./renderPrefs";
+import { FigureBakeApiInstaller } from "./figureBake/FigureBakeApi";
 
 /** Default vertical field of view, as in the reference demo. */
 export const DEFAULT_FOV_DEG = 45;
@@ -212,6 +213,7 @@ export default function Scene() {
                 )}
                 {ready && <CameraRig />}
                 {ready && <CameraPosePublisher />}
+                {ready && <FigureBakeApiInstaller />}
                 <DrawWhenNeeded />
             </Canvas>
         </div>

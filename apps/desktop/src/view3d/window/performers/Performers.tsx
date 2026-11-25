@@ -137,6 +137,7 @@ import {
 } from "./marchers/useMarcherBodies";
 import { clipsToLoad } from "./marchers/marcherBodies";
 import { hornRowsOf } from "./marchers/hornRows";
+import { bakeDressed, useFigureBakeStore } from "../figureBake/figureBakeStore";
 import { sectionCueCarry } from "@/view3d/core/marchers/hornChannel";
 import { DEFAULT_HOLD, windowHornEvents } from "./windowHorn";
 import type { Carry } from "@/view3d/core/instruments/catalog";
@@ -199,6 +200,9 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     // and the Artwork they're painted with, once it's decoded
     const silkArtwork = useSilkArtworkTexture(venue?.silkArtwork, silkShape);
     // om-pose marchers (ADR 0010 D-7); the cylinders stand in until they load.
+    // the figure bake (fork #1319) dresses everyone alike while it runs
+    const bakeBody = useFigureBakeStore((s) => s.body);
+    const bakeLook = useFigureBakeStore((s) => s.look);
     const { data: sectionAppearances } = useQuery(
         allSectionAppearancesQueryOptions(),
     );
@@ -234,7 +238,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         );
         return (i: number, carry?: Carry | null) => {
             const [, section, fill] = rows[i];
-            return sectionUniform(
+            const look = sectionUniform(
                 section,
                 DEFAULT_HOLD,
                 options[i],
@@ -250,8 +254,10 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                     ...(carry !== undefined ? { carry } : {}),
                 },
             );
+            return bakeDressed(look, bakeLook);
         };
     }, [
+        bakeLook,
         looksKey,
         uniformPreset,
         guardUniformPreset,
@@ -265,12 +271,14 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         const ids = (JSON.parse(looksKey) as [number][]).map((r) => r[0]);
         return ids.map((id, i) => ({
             // varied heights at high quality; one height (one bake class) at low
-            body: defaultPerformerBody(id, { varyHeight: quality === "high" }),
+            body:
+                bakeBody ??
+                defaultPerformerBody(id, { varyHeight: quality === "high" }),
             uniform: uniformOf(i),
             // no Silk cues yet: the silks take the uniform's carry (the
             // section's 2D fill, else the preset's color and pattern)
         }));
-    }, [looksKey, quality, uniformOf]);
+    }, [looksKey, quality, uniformOf, bakeBody]);
     const heightClasses = useMemo(
         () => [...new Set((marcherLooks ?? []).map((l) => l.body.heightClass))],
         [marcherLooks],
