@@ -5,7 +5,7 @@ import { mapDbErrors, refuse, TimelineWriteError } from "./timelineErrors";
 import { deleteTimelineTransitionsInTransaction } from "./timelineTransitions";
 import { moveInSentence } from "@/timeline/timelineRangeWords";
 import { readPageGrid, type GridPage, type PageGrid } from "./timelinePageGrid";
-import { rippleOrderMarksInTransaction } from "./shapeRecipes";
+import { rippleShapeRecipesInTransaction } from "./shapeRecipes";
 import {
     readHeldMarkArrivals,
     type HeldMarkArrival,
@@ -687,11 +687,11 @@ export async function rippleTimelineToPageGridInTransaction({
                 .where(eq(H.id, m.id));
         }
     });
-    // 7b. Order marks set by hand (pathways step 4g) keep their own beat: it follows the page
-    // flag or count it was set on, as a Held mark's edge does, and a mark set on a page that went
-    // away goes with it
+    // 7b. Shape recipes and order marks stand at a count (ADR 0006 revision of 2026-11-22): it
+    // follows the page flag or count it was set on, as a Held mark's edge does, and a recipe set
+    // on a page that went away goes with it
     await mapDbErrors(() =>
-        rippleOrderMarksInTransaction(tx, orderMarkPlace(before, after)),
+        rippleShapeRecipesInTransaction(tx, orderMarkPlace(before, after)),
     );
     // 8. Empty timelines off their page's box (the others went with their transitions in 1)
     if (emptied.size > 0)

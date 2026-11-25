@@ -8,11 +8,12 @@ import {
     shapeBackedTransitionIds,
     shiftSlotDestinations,
     type SlotShift,
+    type AfterWrite,
     type TimelineEditTarget,
     type TimelineMarcherMove,
     type TimelineMoveResult,
 } from "@/db-functions/timelineMoves";
-import type { DbConnection, DbTransaction } from "@/db-functions/types";
+import type { DbConnection } from "@/db-functions/types";
 import {
     useTimelineSelectionStore,
     type PageBox,
@@ -35,7 +36,6 @@ import { toastPassThrough } from "./timelinePassThrough";
 import { offerOnlyThisPage, ownMovers } from "./timelineOnlyThisPage";
 import { boxMembershipEdit } from "@/shapes/placed/boxMembership";
 import { showLeftBoxToast } from "@/shapes/placed/leftBoxToast";
-import { showDroppedAtFlagToast } from "@/shapes/placed/leftOutToast";
 import { invalidatePlacedBoxes } from "@/shapes/placed/placedBoxStore";
 import { editingPositionAt } from "./timelineIsolationPlan";
 import {
@@ -329,10 +329,7 @@ export async function moveMarchersAndOfferFollowUp({
      */
     setAll?: boolean;
     /** App data written in the same edit (`moveMarchersInTarget`) */
-    afterWrite?: (
-        tx: DbTransaction,
-        timelineId: number | null,
-    ) => Promise<void | boolean>;
+    afterWrite?: AfterWrite;
     /**
      * The edit saves shape recipes itself (the Shape tool's Place, filling a box), so placed
      * boxes aren't kept up to date around it
@@ -365,11 +362,11 @@ export async function moveMarchersAndOfferFollowUp({
         keepLaterPages,
         keepUnchanged,
         afterWrite: membership
-            ? async (tx, timelineId) => {
+            ? async (tx, beat) => {
                   const own = afterWrite
-                      ? (await afterWrite(tx, timelineId)) !== false
+                      ? (await afterWrite(tx, beat)) !== false
                       : false;
-                  const boxes = await membership.afterWrite(tx, timelineId);
+                  const boxes = await membership.afterWrite(tx, beat);
                   return own || boxes;
               }
             : afterWrite,
@@ -385,9 +382,6 @@ export async function moveMarchersAndOfferFollowUp({
     // A drag back left shape and follow-the-leader members in their move: say who and why (a
     // warning, since the rest was written)
     if (result.skipped) toastTimelineError(result.skipped);
-    // A mid-page position that left members of the flag's shape in another move
-    if (result.droppedFromShapes)
-        showDroppedAtFlagToast(result.droppedFromShapes);
     // The resolver's change re-reads them (`PlacedBoxesOverlay`), except where nobody moves (#455)
     if (writesShapes) invalidatePlacedBoxes();
     if (membership && membership.leaves.length > 0)

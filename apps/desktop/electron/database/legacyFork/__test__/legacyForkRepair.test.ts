@@ -107,7 +107,10 @@ async function convertOnOpen(
     }
 }
 
-/** `after` has every row of `before` (by rowid), each with the values it had; new columns aside. */
+/**
+ * `after` has every row of `before` (by rowid), each with the values it had; new columns aside, and
+ * a recipe's move, which 0029 turns into its count (checked on its own)
+ */
 function expectRowsKept(
     after: Record<string, unknown>[] | null,
     before: Record<string, unknown>[] | null,
@@ -120,7 +123,11 @@ function expectRowsKept(
         for (const column of Object.keys(was))
             if (
                 column !== "library_item_id" &&
-                column !== "library_version_hash"
+                column !== "library_version_hash" &&
+                !(
+                    table === "timeline_shape_recipes" &&
+                    column === "timeline_id"
+                )
             )
                 expect(row[column], `${table}.${column}`).toEqual(was[column]);
     });
@@ -228,6 +235,19 @@ describe.each([20, 24, 28, 32])(
                     );
             expect(after.rows.timelines).toHaveLength(1);
             expect(after.rows.timeline_assignments).toHaveLength(2);
+            // Repaired to 0017, then 0029: the shape placed in move 1 stands where it ends
+            if (level >= 27) {
+                expect(
+                    after.rows.timeline_shape_recipes!.map((r) => ({
+                        id: r.id,
+                        beat: r.beat,
+                        shape_key: r.shape_key,
+                    })),
+                ).toEqual([{ id: 1, beat: 8, shape_key: 1 }]);
+                expect(after.rows.timeline_shape_recipe_marchers).toHaveLength(
+                    2,
+                );
+            }
         });
 
         it("keeps every item without its Library columns", async () => {

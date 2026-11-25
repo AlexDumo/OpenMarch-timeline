@@ -59,7 +59,8 @@ export interface ClearPageSkips {
     /** The shape recipes and their members (`usePlacedBoxStore`) */
     readonly recipes?: readonly {
         readonly kind?: string;
-        readonly timelineId: number | null;
+        /** Its count (0: the starting spots) */
+        readonly beat: number;
         readonly members: readonly { readonly marcherId: number }[];
     }[];
     /** The stored moves and who is in them (`storedTimelines`), to place the recipes */
@@ -76,7 +77,10 @@ export function clearPageSkipsNow(): ClearPageSkips {
     };
 }
 
-/** Whether `marcherId` is in a shape recipe of a move that `over` says yes to. */
+/**
+ * Whether `marcherId` is in a shape recipe at the end of a move it is in that `over` says yes to:
+ * the move brings it to the shape.
+ */
 const inShapeOf = (
     skips: ClearPageSkips,
     marcherId: number,
@@ -84,13 +88,13 @@ const inShapeOf = (
 ): boolean =>
     (skips.recipes ?? []).some(
         (r) =>
-            r.timelineId !== null &&
+            r.beat > 0 &&
             // An order set by hand (pathways step 4g) is no shape: the clear doesn't leave its marchers
             !(r.kind !== undefined && isOrderMarkKind(r.kind)) &&
             r.members.some((m) => m.marcherId === marcherId) &&
             (skips.timelines ?? []).some(
                 (t) =>
-                    t.id === r.timelineId &&
+                    Math.abs(t.end - r.beat) < 1e-9 &&
                     t.marcherIds.has(marcherId) &&
                     over(t),
             ),

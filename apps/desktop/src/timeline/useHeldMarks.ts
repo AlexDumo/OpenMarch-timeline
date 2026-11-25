@@ -104,7 +104,6 @@ export function useSelectionHolds(
         s.pageBoxes.reduce((end, box) => Math.max(end, box.end), 0),
     );
     const recipes = usePlacedBoxStore((s) => s.recipes);
-    const ends = usePlacedBoxStore((s) => s.ends);
     const editing = useFieldEditing();
     const dragBeat = useTimelineSelectionStore((s) =>
         !editing
@@ -139,7 +138,6 @@ export function useSelectionHolds(
                 marcherHolds(spansOf(id), showEnd),
             ),
             recipes,
-            moveEndOf: (id) => ends.get(id),
             spansOf,
             positionAt: (id, beat) => {
                 try {
@@ -155,7 +153,7 @@ export function useSelectionHolds(
                 }
             },
         });
-    }, [resolver, version, marcherIds, recipes, ends, showEnd, isolation]);
+    }, [resolver, version, marcherIds, recipes, showEnd, isolation]);
     return useMemo(() => {
         void version; // a new version means new spans
         if (!resolver || marcherIds.length === 0) return NO_HOLDS;

@@ -1,9 +1,10 @@
 import {
+    type AfterWrite,
     type TimelineEditTarget,
     type TimelineMarcherMove,
     type TimelineMovePage,
 } from "@/db-functions/timelineMoves";
-import type { DbConnection, DbTransaction } from "@/db-functions/types";
+import type { DbConnection } from "@/db-functions/types";
 import { withTimelineWriteLock } from "@/db-functions/history";
 import {
     useTimelineSelectionStore,
@@ -283,10 +284,7 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
      */
     keepPlayhead?: boolean;
     /** App data written in the same edit, such as a shape recipe (ADR 0006) */
-    afterWrite?: (
-        tx: DbTransaction,
-        timelineId: number | null,
-    ) => Promise<void | boolean>;
+    afterWrite?: AfterWrite;
     /** `afterWrite` saves shape recipes itself, so placed boxes aren't kept up to date around it */
     writesShapes?: boolean;
     /**

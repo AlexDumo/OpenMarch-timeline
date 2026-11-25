@@ -277,11 +277,7 @@ function useFieldDecidedLook(
                     safely(true);
             }),
             usePlacedBoxStore.subscribe((state, previous) => {
-                if (
-                    state.recipes !== previous.recipes ||
-                    state.ends !== previous.ends
-                )
-                    safely(false);
+                if (state.recipes !== previous.recipes) safely(false);
             }),
             useTimelineSelectionStore.subscribe((state, previous) => {
                 if (fieldBeat(state) !== fieldBeat(previous)) safely(false);

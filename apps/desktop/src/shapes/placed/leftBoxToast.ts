@@ -4,12 +4,13 @@ import {
     saveShapeRecipeInTransaction,
     type ShapeRecipeMember,
 } from "@/db-functions/shapeRecipes";
-import type { DbTransaction } from "@/db-functions/types";
+import type { AfterWrite } from "@/db-functions/timelineMoves";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import { toolEnvFor } from "../tool/toolEnv";
 import type { BoxLeave } from "./boxMembership";
 import { nameOf } from "./leftOutToast";
+import { sameCount } from "./recipeCount";
 import { closeUp, isPlacedBox, resplit, type BoxRecipe } from "./placedBox";
 import { closedOf } from "../distribute/modes";
 
@@ -20,7 +21,7 @@ const LEFT_BOX_TOAST_MS = 8000;
 /** Writes `moves` at the edit's moment, saving a recipe beside them in the same undo step */
 export type BoxRewrite = (
     moves: readonly { marcherId: number; x: number; y: number }[],
-    afterWrite: (tx: DbTransaction, timelineId: number | null) => Promise<void>,
+    afterWrite: AfterWrite,
 ) => Promise<unknown>;
 
 /** The box's remaining members filled in again by `fill`, as one edit */
@@ -50,17 +51,16 @@ async function refill(
                 x: m.x,
                 y: m.y,
             })),
-            async (tx, timelineId) => {
+            async (tx, beat) => {
                 // No keepOrderMarks: Close up and Re-split lay the shape out again, so it redefines the line's order there, as any later shape does (pathways step 4g)
                 await saveShapeRecipeInTransaction({
                     tx,
-                    timelineId,
+                    beat,
                     recipe: { ...leave.box.recipe, params: out.params },
                     members: out.members,
-                    replaces:
-                        timelineId === leave.timelineId
-                            ? leave.recipeId
-                            : undefined,
+                    ...(sameCount(beat, leave.beat)
+                        ? { replaces: leave.recipeId }
+                        : { shapeKey: leave.box.recipe.shapeKey }),
                 });
             },
         );

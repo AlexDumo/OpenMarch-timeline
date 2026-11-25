@@ -16,13 +16,19 @@ import {
     DrizzleMigrationService,
     readTaggedMigrations,
 } from "../../services/DrizzleMigrationService";
-import { LANE_MODEL_USER_VERSION, readUserVersion } from "../../fileVersion";
+import {
+    readUserVersion,
+    SHAPE_AT_COUNT_USER_VERSION,
+} from "../../fileVersion";
 import {
     createNewTimelineShow,
     migrationsFolder,
     withDb,
 } from "../../__test__/convertOnOpenFixtures";
-import { migrationAt } from "../../__test__/migrationRollback";
+import {
+    migrationAt,
+    rollBackMigrationsFrom,
+} from "../../__test__/migrationRollback";
 
 const SOURCES_MIGRATION = migrationAt(28);
 
@@ -67,6 +73,8 @@ const timelineRows = (db: DatabaseSync) =>
 /** A new show put back to before 0028: two group lanes on one route, version 11, no table */
 async function fileBefore0028(file: string) {
     await createNewTimelineShow(file);
+    // 0029 too (it only runs once on a file), so opening runs both again
+    rollBackMigrationsFrom(file, 29);
     withDb(file, (db) => {
         db.exec("DROP TABLE timeline_route_sources");
         db.prepare(
@@ -122,7 +130,8 @@ describe(`Migration ${SOURCES_MIGRATION.tag}`, () => {
         await open(file);
         withDb(file, (db) => {
             expect(timelineRows(db)).toEqual(before);
-            expect(readUserVersion(db)).toBe(LANE_MODEL_USER_VERSION);
+            // 0028 leaves it at 11; 0029 writes every file as 19
+            expect(readUserVersion(db)).toBe(SHAPE_AT_COUNT_USER_VERSION);
             expect(
                 db.prepare("SELECT * FROM timeline_route_sources").all(),
             ).toEqual([]);

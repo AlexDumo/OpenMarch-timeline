@@ -59,7 +59,8 @@ const DEPENDENT_TABLE_COPY_ORDER = [
     // Items after the marchers that back them, Outline changes after their item (ADR 0010 D-10)
     "items",
     "item_geometry",
-    // Shape recipes after their moves, then their members (ADR 0006)
+    // Shape recipes, then their members (ADR 0006). A recipe from before 0029 reads its count
+    // from its move (`recipeCountsFromMoves`), so it comes after the moves
     "timeline_shape_recipes",
     "timeline_shape_recipe_marchers",
     // Cues after the beats and marchers they name, then their performers (ADR 0015 D-9)
@@ -172,6 +173,19 @@ const copyTablesFromAttachedOriginal = (
                 continue;
             }
 
+            // A recipe from before 0029 stood in a move: its count comes from there, when the
+            // repaired file stores counts (a page-era repair stops before 0029)
+            if (
+                tableName === "timeline_shape_recipes" &&
+                originalColumns.some((c) => c.name === "timeline_id") &&
+                !originalColumns.some((c) => c.name === "beat") &&
+                newColumns.some((c) => c.name === "beat")
+            ) {
+                newDb.prepare(recipeCountsFromMoves(attachName)).run();
+                console.log(`Copied data from table: ${tableName}`);
+                continue;
+            }
+
             // Build INSERT INTO ... SELECT statement
             const columnsStr = commonColumns.map((c) => `"${c}"`).join(", ");
 
@@ -190,6 +204,18 @@ const copyTablesFromAttachedOriginal = (
         newDb.prepare(`DETACH DATABASE ${attachName}`).run();
     }
 };
+
+/**
+ * Copies the shape recipes of a file from before migration 0029 (`attachName`), giving each the
+ * count and shape key 0029 would: an order mark's own beat, else its move's end, else 0, and its
+ * own id (ADR 0006 revision of 2026-11-22, §1.6). A recipe whose move is gone is left out, as 0029
+ * leaves it out.
+ */
+const recipeCountsFromMoves = (attachName: string) =>
+    `INSERT INTO "timeline_shape_recipes" ("id", "beat", "shape_key", "kind", "kind_version", "params", "order_mode", "reverse", "created_at") ` +
+    `SELECT r."id", CASE WHEN r."kind" IN ('order', 'orderClear') AND json_type(r."params", '$.beat') IN ('integer', 'real') THEN max(0.0, json_extract(r."params", '$.beat')) WHEN r."timeline_id" IS NULL THEN 0.0 ELSE CAST(t."end_beat" AS REAL) END, r."id", r."kind", r."kind_version", ` +
+    `CASE WHEN r."kind" IN ('order', 'orderClear') AND json_type(r."params", '$.beat') IS NOT NULL THEN json_remove(r."params", '$.beat') ELSE r."params" END, r."order_mode", r."reverse", r."created_at" ` +
+    `FROM ${attachName}."timeline_shape_recipes" r LEFT JOIN ${attachName}."timelines" t ON t."id" = r."timeline_id" WHERE r."timeline_id" IS NULL OR t."id" IS NOT NULL`;
 
 export const copyFieldPropertiesFromOriginalDatabase = (
     originalDb: DatabaseSync,

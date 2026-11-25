@@ -22,10 +22,11 @@ import {
 import {
     fileTooNewMessage,
     isSupportedUserVersion,
-    MAX_SUPPORTED_USER_VERSION,
+    isTooNewUserVersion,
     PAGE_MODEL_USER_VERSION,
     readUserVersion,
     markLaneModelIfLaned,
+    markShapeAtCountModel,
 } from "../fileVersion";
 
 /**
@@ -287,7 +288,7 @@ export class DrizzleMigrationService {
      */
     async applyPendingMigrations(migrationsFolder?: string): Promise<void> {
         const userVersion = readUserVersion(this.rawDb);
-        if (userVersion > MAX_SUPPORTED_USER_VERSION) {
+        if (isTooNewUserVersion(userVersion)) {
             throw new Error(fileTooNewMessage(userVersion));
         }
         if (!isSupportedUserVersion(userVersion)) {
@@ -344,6 +345,8 @@ export class DrizzleMigrationService {
             recreateChangeLogTriggers(this.rawDb);
             // A step-15 file whose paths 0025 moved to lanes is written as 11 (ADR 0017 §9)
             markLaneModelIfLaned(this.rawDb);
+            // Every file 0029 has run on is written as 19, so builds before it refuse it
+            markShapeAtCountModel(this.rawDb);
 
             console.log("Drizzle migrations applied successfully.");
         } catch (error) {

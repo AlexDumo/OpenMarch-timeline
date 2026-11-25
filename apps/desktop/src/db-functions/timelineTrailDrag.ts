@@ -681,9 +681,10 @@ export async function dragTrailInTransaction(
     });
     // Step 4c (DL-11): the spots as a shape the shape tools open, each member where it was written
     const { recipe, members } = trailShapeRecipe(plan, line);
+    // At the count the window's move ends at, where the spots are
     const recipeId = await saveShapeRecipeInTransaction({
         tx,
-        timelineId: move,
+        beat: window.end,
         recipe,
         members,
     });

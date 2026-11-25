@@ -15,7 +15,6 @@ import {
 } from "@/timeline/timelineCoordinateWrites";
 import { removePositionAtBeat } from "@/db-functions/timelinePointMoves";
 import type { DbTransaction } from "@/db-functions/types";
-import { showDroppedAtFlagToast } from "@/shapes/placed/leftOutToast";
 
 /**
  * Timeline mode's write for "set marchers to the previous or next page" (P7.6): one undoable edit
@@ -93,10 +92,6 @@ export const removePositionAtBeatMutationOptions = () => {
             box: { start: number; end: number };
             marcherIds: readonly number[];
         }) => removePositionAtBeat({ db, beat, box, marcherIds }),
-        onSuccess: (result) => {
-            if (result.droppedFromShapes)
-                showDroppedAtFlagToast(result.droppedFromShapes);
-        },
         onError: (e, variables) => {
             toastTimelineError(
                 e,

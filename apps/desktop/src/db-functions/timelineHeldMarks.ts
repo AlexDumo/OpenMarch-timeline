@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import * as schema from "@om-electron/database/migrations/schema";
 import type { DbTransaction } from "./types";
 import { shapeRecipesOnly } from "./shapeRecipes";
@@ -205,7 +205,8 @@ export function arrivalSkipReason(
 }
 
 /**
- * For each of `timelineIds` with a placed shape's recipe, the marchers it holds. An ungrouped mark
+ * For each of `timelineIds`, the marchers it brings to a placed shape at its end: members of a
+ * shape recipe at the move's end count with a row in the move. An ungrouped mark
  * (`shapeRecipesOnly`) holds nobody in a shape.
  */
 export async function marcherRecipeTimelines(
@@ -216,19 +217,23 @@ export async function marcherRecipeTimelines(
     if (timelineIds.length === 0) return out;
     const r = schema.timeline_shape_recipes;
     const m = schema.timeline_shape_recipe_marchers;
+    const l = schema.timelines;
+    const a = schema.timeline_assignments;
+    const t = schema.timeline_transitions;
     const rows = await tx
-        .select({ timelineId: r.timeline_id, marcherId: m.marcher_id })
+        .selectDistinct({ timelineId: l.id, marcherId: m.marcher_id })
         .from(m)
         .innerJoin(r, eq(r.id, m.recipe_id))
+        .innerJoin(l, sql`abs(${l.end_beat} - ${r.beat}) < 1e-9`)
         .where(
             and(
-                inArray(r.timeline_id, [...new Set(timelineIds)]),
+                inArray(l.id, [...new Set(timelineIds)]),
                 shapeRecipesOnly(),
+                sql`EXISTS (SELECT 1 FROM ${a} INNER JOIN ${t} ON ${t.id} = ${a.transition_id} WHERE ${a.marcher_id} = ${m.marcher_id} AND ${t.timeline_id} = ${l.id})`,
             ),
         )
         .all();
     for (const row of rows) {
-        if (row.timelineId === null) continue;
         const ids = out.get(row.timelineId) ?? new Set<number>();
         ids.add(row.marcherId);
         out.set(row.timelineId, ids);

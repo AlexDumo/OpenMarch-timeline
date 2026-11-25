@@ -14,12 +14,14 @@ import { queueHistoryStep } from "@/shortcuts/handlers/historyQueue";
 import { writePlacement } from "../tool/shapePlacement";
 import {
     displayedBeat,
+    isolatedTimeline,
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
 import { toast } from "sonner";
 import { carriedOnto, storedBox } from "./commitBox";
 import { UNGROUPED_KIND, type PlacedBox } from "./placedBox";
 import { invalidatePlacedBoxes, placedBoxesRead } from "./placedBoxStore";
+import { recipeCount, sameCount } from "./recipeCount";
 
 /** What an ungrouped mark stores: no shape, only who it claims */
 const UNGROUPED_RECIPE = {
@@ -53,7 +55,7 @@ export function ungroupShape(
 ): Promise<void> {
     const plan = planCanvasEdit();
     const beat = displayedBeat(useTimelineSelectionStore.getState());
-    const isolated = useTimelineSelectionStore.getState().isolation?.timelineId;
+    const isolated = isolatedTimeline(useTimelineSelectionStore.getState());
     return queueHistoryStep(async () => {
         try {
             if (!plan.ok) {
@@ -66,10 +68,7 @@ export function ungroupShape(
             const stored = storedBox(box, beat);
             if (carriedOnto(plan, stored))
                 await markUngrouped(stored, plan, queryClient);
-            else if (
-                isolated !== undefined &&
-                stored.recipe.timelineId !== isolated
-            )
+            else if (isolated && !inIsolatedMove(stored, isolated))
                 toast.error(
                     tolgee.t(
                         "shapes.placed.ungroupIsolated",
@@ -82,6 +81,17 @@ export function ungroupShape(
         }
     }, undefined);
 }
+
+/**
+ * Whether the isolated move holds `box`: it stands at the move's end and every member is in the
+ * move (ADR 0006 revision of 2026-11-22, §3)
+ */
+const inIsolatedMove = (
+    box: PlacedBox,
+    move: { readonly end: number; readonly marcherIds: ReadonlySet<number> },
+): boolean =>
+    sameCount(recipeCount(box.recipe), move.end) &&
+    box.recipe.members.every((m) => move.marcherIds.has(m.marcherId));
 
 const failure = () =>
     tolgee.t("shapes.placed.ungroupError", "Couldn't ungroup the shape");
@@ -116,7 +126,7 @@ async function ungroupInPlace(
         await transactionWithHistory(db, "ungroupShape", (tx) =>
             saveShapeRecipeInTransaction({
                 tx,
-                timelineId: box.recipe.timelineId,
+                beat: recipeCount(box.recipe),
                 recipe: UNGROUPED_RECIPE,
                 members: box.recipe.members,
                 replaces: box.recipe.id,

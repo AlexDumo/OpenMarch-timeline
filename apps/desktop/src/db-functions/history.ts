@@ -22,6 +22,10 @@ import {
     readHeldUpkeepBefore,
 } from "./timelineHeldUpkeep";
 import {
+    keepShapeRecipesTrueInTransaction,
+    readRecipeUpkeepBefore,
+} from "./shapeRecipeUpkeep";
+import {
     bumpTimelineDisplayVersion,
     historyStatementTable,
     touchesTimelineDisplayTables,
@@ -184,12 +188,18 @@ export const transactionWithHistory = async <T>(
                 // after the edit can tell a deleted arrival from a re-timed one (ADR 0012
                 // amendment 2026-10-30, Upkeep)
                 const heldBefore = await readHeldUpkeepBefore(tx);
+                // The rows that bring each shape's members to its count, so the step after the
+                // edit can delete a shape whose moves all went (ADR 0006 revision of 2026-11-22, §4)
+                const recipesBefore = await readRecipeUpkeepBefore(tx);
                 // Execute the function
                 result = await func(tx);
                 // Held marks follow a re-timed arrival, go with a deleted one and are trimmed
                 // where a re-timed row covers them, in the edit's undo step. Never in undo or
                 // redo replay
                 await keepHeldMarksTrueInTransaction(tx, heldBefore);
+                // Shapes whose members' arrivals all went with deleted moves go too, in the
+                // edit's undo step, in place of the old cascade from moves
+                await keepShapeRecipesTrueInTransaction(tx, recipesBefore);
 
                 const groupAfter =
                     (

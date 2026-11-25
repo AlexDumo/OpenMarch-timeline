@@ -1,9 +1,10 @@
 /**
  * Opens real `.dots` files at versions 7 to 10 through the same steps as the
  * main process's `setActiveDb` (setDbPath, version decision, migrations), and
- * checks that 7 and 8 open and keep their version, a parked fork-only floor
- * file (9) opens and is written as 8, and 10 is refused without a single byte
- * of the file changing (ADR 0012 §6).
+ * checks that 7 opens and keeps its version, 8 opens and is written as 19 once
+ * migration 0029 has run (ADR 0006 revision of 2026-11-22, §1.8), a parked
+ * fork-only floor file (9) opens as a timeline file and is written as 19 too, and
+ * a newer file is refused without a single byte of the file changing (ADR 0012 §6).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DatabaseSync } from "node:sqlite";
@@ -24,6 +25,7 @@ import {
 import {
     applyFileVersionDecision,
     FILE_TOO_NEW_STATUS,
+    SHAPE_AT_COUNT_USER_VERSION,
     readUserVersion,
 } from "../fileVersion";
 
@@ -97,24 +99,27 @@ describe("opening files by format version", () => {
         vi.restoreAllMocks();
     });
 
-    it.each([7, 8])("opens a file at %i and keeps its version", async (v) => {
+    it.each([
+        [7, 7],
+        [8, SHAPE_AT_COUNT_USER_VERSION],
+    ])("opens a file at %i and writes it as %i", async (v, written) => {
         const filePath = path.join(tempDir, `show-${v}.dots`);
         await createShowFile(filePath, v);
 
         expect(await openLikeSetActiveDb(filePath)).toBe(200);
-        expect(userVersionOf(filePath)).toBe(v);
+        expect(userVersionOf(filePath)).toBe(written);
 
         // Opening twice doesn't drift either.
         expect(await openLikeSetActiveDb(filePath)).toBe(200);
-        expect(userVersionOf(filePath)).toBe(v);
+        expect(userVersionOf(filePath)).toBe(written);
     });
 
-    it("opens a parked floor-model file (9) and writes it as 8", async () => {
+    it("opens a parked floor-model file (9) as a timeline file, written as 19 once 0029 has run", async () => {
         const filePath = path.join(tempDir, "show-9.dots");
         await createShowFile(filePath, 9);
 
         expect(await openLikeSetActiveDb(filePath)).toBe(200);
-        expect(userVersionOf(filePath)).toBe(8);
+        expect(userVersionOf(filePath)).toBe(SHAPE_AT_COUNT_USER_VERSION);
     });
 
     it("refuses a file at 15 and leaves its bytes unchanged", async () => {
@@ -141,16 +146,16 @@ describe("opening files by format version", () => {
         expect(sha256(filePath)).toBe(hashBefore);
     });
 
-    it("creates a new file at 8", async () => {
+    it("creates a new file at 19", async () => {
         const filePath = path.join(tempDir, "new.dots");
 
         expect(await openLikeSetActiveDb(filePath, true)).toBe(200);
-        expect(userVersionOf(filePath)).toBe(8);
+        expect(userVersionOf(filePath)).toBe(SHAPE_AT_COUNT_USER_VERSION);
     });
 
     describe("migration service", () => {
         it.each([7, 8])(
-            "runs migrations on a file at %i without changing its version",
+            "runs migrations on a file at %i, writing a timeline file as 19 once 0029 has run",
             async (v) => {
                 const db = new DatabaseSync(path.join(tempDir, `m-${v}.dots`));
                 try {
@@ -177,7 +182,9 @@ describe("opening files by format version", () => {
                         )
                         .get();
                     expect(!!marcherPages).toBe(v === 7);
-                    expect(readUserVersion(db)).toBe(v);
+                    expect(readUserVersion(db)).toBe(
+                        v === 7 ? 7 : SHAPE_AT_COUNT_USER_VERSION,
+                    );
                 } finally {
                     db.close();
                 }

@@ -817,18 +817,27 @@ export const timeline_held_marks = sqliteTable(
 
 /**
  * A placed shape's **recipe** (ADR 0006): the Shape tool kind and parameters that laid out its
- * marchers at the end of a move (`timeline_id`), or their homes (`NULL`), so the shape can be
- * reopened and edited. The positions themselves are ordinary destinations; this row only
- * remembers how they were made. App data: not in `timeline_change_log`, never read by the
- * resolver. Deleted with its move.
+ * marchers at count `beat` (0 for the starting spots), so the shape can be reopened and edited.
+ * A recipe stands at a count, not in a move (ADR 0006 revision of 2026-11-22, "a shape is a
+ * formation at a count"): its members arrive there however and whenever they do. The positions
+ * themselves are ordinary destinations; this row only remembers how they were made. App data:
+ * not in `timeline_change_log`, never read by the resolver.
  */
 export const timeline_shape_recipes = sqliteTable(
     "timeline_shape_recipes",
     {
         id: integer().primaryKey(),
-        timeline_id: integer().references(() => timelines.id, {
-            onDelete: "cascade",
-        }),
+        /**
+         * The count the formation is defined at, in the units of `timelines.end_beat`; 0 is the
+         * starting spots. A shape is always at a whole count; an order mark's can fall partway
+         * through one, so the column is `REAL`.
+         */
+        beat: real().notNull(),
+        /**
+         * Which shape this recipe is a mark of (§9.2): every mark of one shape carries the id of
+         * its first mark. Not a foreign key: the first mark can go while later ones stay.
+         */
+        shape_key: integer().notNull(),
         /** The Shape tool kind's id: line, arc, circle, curve, block, ... */
         kind: text().notNull(),
         /** The kind's generator version when placed */
@@ -842,8 +851,14 @@ export const timeline_shape_recipes = sqliteTable(
             .notNull()
             .default(sql`(CURRENT_TIMESTAMP)`),
     },
-    (_table) => [
+    (table) => [
         check("timeline_shape_recipes_params_check", sql`json_valid(params)`),
+        check(
+            "timeline_shape_recipes_beat_check",
+            sql`typeof(beat) IN ('integer', 'real') AND beat >= 0`,
+        ),
+        index("timeline_shape_recipes_beat").on(table.beat),
+        index("timeline_shape_recipes_shape_key").on(table.shape_key),
     ],
 );
 

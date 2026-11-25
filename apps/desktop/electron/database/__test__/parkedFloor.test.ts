@@ -193,6 +193,8 @@ describe("parked floor recovery (user_version 9)", () => {
     });
 
     it("never touches a timeline file (8) that names no floor", () => {
+        // As a build before migration 0029 wrote it (a new file is written as 19 now)
+        db.exec("PRAGMA user_version = 8");
         const before = fieldRow(db);
         applyFileVersionDecision(db, false);
         expect(readUserVersion(db)).toBe(8);

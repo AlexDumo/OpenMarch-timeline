@@ -63,6 +63,8 @@ import {
     withDb,
 } from "./convertOnOpenFixtures";
 import { rollBackRoutesSchema } from "./migrationRollback";
+import { migrateFile } from "../legacyFork/__test__/forkFileFixtures";
+import { SHAPE_AT_COUNT_USER_VERSION } from "../fileVersion";
 
 /** Where the backup and conversion run: on this thread, or in the app's worker (P9.8). */
 type Mode = "in-thread" | "worker";
@@ -434,6 +436,8 @@ describe.each(["in-thread", "worker"] as const)("convert on open (%s)", (m) => {
         const converted = path.join(tempDir, "converted.dots");
         await createBlankShow(converted);
         await openLikeSetActiveDb(converted);
+        // Then the migrations, as `setActiveDb` runs them after a conversion: they write it as 19
+        await migrateFile(converted);
 
         const fresh = path.join(tempDir, "fresh.dots");
         await createNewTimelineShow(fresh, fixedNow);
@@ -470,7 +474,7 @@ describe.each(["in-thread", "worker"] as const)("convert on open (%s)", (m) => {
         };
         expect(pick(converted)).toEqual(pick(fresh));
         expect(pick(fresh)).toMatchObject({
-            userVersion: 8,
+            userVersion: SHAPE_AT_COUNT_USER_VERSION,
             timelines: 0,
             marker: CONVERTED_AT,
             pageEraTables: [],

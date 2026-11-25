@@ -126,7 +126,6 @@ export function PlacedBoxesOverlay({
     const recipes = usePlacedBoxStore((s) => s.recipes);
     const version = useTimelineResolverStore((s) => s.version);
     const beat = usePlacedBoxBeat();
-    const ends = usePlacedBoxStore((s) => s.ends);
     const toolOpen = useShapeToolStore((s) => s.tool !== null);
     const editing = useBoxSelectionStore((s) => s.selected?.recipe.id ?? null);
     const selected = useSelectedMarchers()?.selectedMarchers;
@@ -175,7 +174,6 @@ export function PlacedBoxesOverlay({
         recipes,
         beat,
         version,
-        ends,
         editing,
         stepPx,
     ]);

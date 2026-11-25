@@ -22,13 +22,19 @@ import {
 } from "@openmarch/core";
 import { getOrm } from "../../db";
 import { DrizzleMigrationService } from "../../services/DrizzleMigrationService";
-import { LANE_MODEL_USER_VERSION, readUserVersion } from "../../fileVersion";
+import {
+    readUserVersion,
+    SHAPE_AT_COUNT_USER_VERSION,
+} from "../../fileVersion";
 import {
     createNewTimelineShow,
     migrationsFolder,
     withDb,
 } from "../../__test__/convertOnOpenFixtures";
-import { migrationAt } from "../../__test__/migrationRollback";
+import {
+    migrationAt,
+    rollBackMigrationsFrom,
+} from "../../__test__/migrationRollback";
 
 const LANES_MIGRATION = migrationAt(25);
 
@@ -56,6 +62,8 @@ const ROUTE_GROUP = {
  */
 async function stepFifteenFile(file: string) {
     await createNewTimelineShow(file);
+    // 0029 too (it only runs once on a file), so opening runs both again
+    rollBackMigrationsFrom(file, 29);
     withDb(file, (db) => {
         db.exec("PRAGMA foreign_keys = OFF");
         db.exec("DROP TABLE timeline_lanes");
@@ -152,13 +160,13 @@ describe(`Migration ${LANES_MIGRATION.tag} (QA-MIG-L1, QA-MIG-L2, QA-FV-L1)`, ()
         vi.restoreAllMocks();
     });
 
-    it("a new file has the lanes table, empty, and stays a timeline file (8)", async () => {
+    it("a new file has the lanes table, empty, and is written as 19 by 0029", async () => {
         await createNewTimelineShow(file);
         withDb(file, (db) => {
             expect(
                 db.prepare("SELECT count(*) AS n FROM timeline_lanes").get(),
             ).toEqual({ n: 0 });
-            expect(readUserVersion(db)).toBe(8);
+            expect(readUserVersion(db)).toBe(SHAPE_AT_COUNT_USER_VERSION);
         });
     });
 
@@ -216,7 +224,8 @@ describe(`Migration ${LANES_MIGRATION.tag} (QA-MIG-L1, QA-MIG-L2, QA-FV-L1)`, ()
                 expect(
                     db.prepare("SELECT count(*) AS n FROM history_undo").get(),
                 ).toEqual({ n: 0 });
-                expect(readUserVersion(db)).toBe(LANE_MODEL_USER_VERSION);
+                // 11 for its lanes, then 19 once 0029 has run (ADR 0006 revision of 2026-11-22)
+                expect(readUserVersion(db)).toBe(SHAPE_AT_COUNT_USER_VERSION);
                 // QA-FV-L1: past the newest version a step-15 build opens (10), so it refuses it
                 expect(readUserVersion(db)).toBeGreaterThan(10);
                 const { snapshot } = await readTimelineTables(

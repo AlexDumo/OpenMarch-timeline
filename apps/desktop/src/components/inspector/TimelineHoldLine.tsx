@@ -47,7 +47,6 @@ export function useSelectionHoldState(
     const marks = useHeldMarksStore((s) => s.marks);
     // Placed shapes are read from these, so a change to them is a new carried set
     const recipes = usePlacedBoxStore((s) => s.recipes);
-    const ends = usePlacedBoxStore((s) => s.ends);
     return useMemo(() => {
         void version; // a new version means new spans
         if (!resolver || !selectedPage || marcherIds.length === 0) return null;
@@ -58,7 +57,6 @@ export function useSelectionHoldState(
             beat: f.flag,
             name: f.page.name,
         }));
-        void ends; // placedBoxesAt reads the end beats from the store
         // Where the shape carried onto the flag with the marcher in it was placed or last laid out
         let carried: Map<number, number> | null = null;
         const carriedOnFlag = (id: number) => {
@@ -91,16 +89,7 @@ export function useSelectionHoldState(
                 ),
             ),
         );
-    }, [
-        resolver,
-        version,
-        pages,
-        selectedPage,
-        marcherIds,
-        marks,
-        recipes,
-        ends,
-    ]);
+    }, [resolver, version, pages, selectedPage, marcherIds, marks, recipes]);
 }
 
 const LINK_CLASS =

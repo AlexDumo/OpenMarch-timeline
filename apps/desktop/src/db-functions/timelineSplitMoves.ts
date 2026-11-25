@@ -33,10 +33,6 @@ import {
     type MemberRow,
 } from "./timelineMemberRows";
 import {
-    moveShapeRecipesInTransaction,
-    splitShapeRecipesInTransaction,
-} from "./shapeRecipes";
-import {
     moveNameOf,
     refuseLanedRows,
     refuseRoutesInMoves,
@@ -454,13 +450,8 @@ export const splitMarchersIntoNewMoveInTransaction = async ({
             })),
         });
     }
-    // The marchers' shapes (ADR 0006) follow them, as a merge's do
-    await splitShapeRecipesInTransaction({
-        tx,
-        from: timelineId,
-        to: timeline!.id,
-        marcherIds: [...chosen],
-    });
+    // Shape recipes stand at a count, not in a move: the marchers stay in their shapes (ADR 0006
+    // revision of 2026-11-22, §4)
     return {
         fromTimelineId: timelineId,
         timeline: timeline!,
@@ -593,9 +584,7 @@ export const mergeMovesInTransaction = async ({
         transitions.map((t) => t.id),
         targetId,
     );
-    // Its shapes (ADR 0006) come over too, rather than going with it. A fit keeps destinations,
-    // so their spots still hold at the target's end.
-    await moveShapeRecipesInTransaction({ tx, from: sourceId, to: targetId });
+    // Shape recipes stand at a count, not in a move, so deleting the source takes none
     await deleteTimelinesInTransaction({
         tx,
         timelineIds: new Set([sourceId]),
