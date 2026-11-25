@@ -320,7 +320,7 @@ describe("a placed line keeps its Measured setting", () => {
         const at = new Map(recipe.members.map((m) => [m.marcherId, m]));
         const [placed] = boxesAt({
             recipes: [recipe],
-            endBeatOf: () => 8,
+            moveEndOf: () => 8,
             beat: 8,
             positionOf: (id) => at.get(id),
         });

@@ -24,12 +24,11 @@ import { schema } from "@/global/database/db";
 import {
     ORDER_CLEAR_RECIPE_KIND,
     ORDER_RECIPE_KIND,
-    isOrderMarkKind,
-    orderMarkBeat,
     readShapeRecipesOf,
     UNGROUPED_RECIPE_KIND,
 } from "./shapeRecipes";
 import { readTimelineEndBeats } from "./timelines";
+import { recipeCount, recipeMoveIds } from "@/shapes/placed/recipeCount";
 import { readTrails, type MoveTrail } from "./timelineTrails";
 import type { DbConnection, DbTransaction } from "./types";
 
@@ -213,20 +212,14 @@ export async function readOrderForms(
     const recipes = await readShapeRecipesOf({ db, marcherIds });
     const trails = await trailsOf(db, want);
     const endBeats = await readTimelineEndBeats(db, [
-        ...recipes.flatMap((r) =>
-            r.timelineId === null ? [] : [r.timelineId],
-        ),
+        ...recipeMoveIds(recipes),
         ...trails.map((t) => t.timelineId),
     ]);
     const forms: OrderForm[] = [];
     for (const recipe of recipes) {
-        const moveEnd =
-            recipe.timelineId === null ? 0 : endBeats.get(recipe.timelineId);
-        if (moveEnd === undefined || recipe.members.length === 0) continue;
         // An order mark is made at its own beat; one saved before marks kept it, at its move's end
-        const endBeat = isOrderMarkKind(recipe.kind)
-            ? (orderMarkBeat(recipe.params) ?? moveEnd)
-            : moveEnd;
+        const endBeat = recipeCount(recipe, (id) => endBeats.get(id));
+        if (endBeat === undefined || recipe.members.length === 0) continue;
         if (recipe.kind === ORDER_CLEAR_RECIPE_KIND) {
             forms.push({
                 endBeat,

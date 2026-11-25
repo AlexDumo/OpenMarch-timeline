@@ -95,7 +95,7 @@ async function placedAtEnd(db: DbConnection) {
     const recipes = (await readAllShapeRecipes(db)) as PlacedRecipe[];
     return boxesAt({
         recipes,
-        endBeatOf: (id) =>
+        moveEndOf: (id) =>
             id === null ? 0 : timelines.find((t) => t.id === id)?.end_beat,
         beat: WINDOW.end,
         positionOf: (m) => {

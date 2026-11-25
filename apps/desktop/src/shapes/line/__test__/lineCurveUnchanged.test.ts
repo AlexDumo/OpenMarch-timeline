@@ -42,7 +42,7 @@ describe("a Curve saved before step 4c", () => {
                     y: 0,
                 })),
             })),
-            endBeatOf: () => 0,
+            moveEndOf: () => 0,
             beat: 0,
             positionOf: () => ({ x: 0, y: 0 }),
         });

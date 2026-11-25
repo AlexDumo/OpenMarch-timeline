@@ -283,7 +283,7 @@ describe("groups read back across pages", () => {
         [20, 16],
         [30, 24],
     ]);
-    const endBeatOf = (id: number | null) => ends.get(id);
+    const moveEndOf = (id: number | null) => ends.get(id);
 
     const group = (
         timelineId: number,
@@ -310,7 +310,7 @@ describe("groups read back across pages", () => {
     ) =>
         boxesAt({
             recipes,
-            endBeatOf,
+            moveEndOf,
             beat,
             positionOf: (id) => positions.get(id),
         });

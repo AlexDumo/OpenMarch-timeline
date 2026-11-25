@@ -79,7 +79,7 @@ function placedWithout(
     const at = new Map(recipe.members.map((m) => [m.marcherId, m] as const));
     const [box] = boxesAt({
         recipes: [recipe],
-        endBeatOf: () => 8,
+        moveEndOf: () => 8,
         beat: 8,
         positionOf: (id) => at.get(id),
         ...(kinds ? { kinds } : {}),

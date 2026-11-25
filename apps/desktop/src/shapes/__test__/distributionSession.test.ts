@@ -79,7 +79,7 @@ function reopened(t: ToolState) {
     const at = new Map(placement.members.map((m) => [m.marcherId, m]));
     const [box] = boxesAt({
         recipes: [recipe],
-        endBeatOf: () => 8,
+        moveEndOf: () => 8,
         beat: 8,
         positionOf: (id) => at.get(id),
     });
@@ -231,7 +231,7 @@ describe("the box's distribution", () => {
         } as unknown as PlacedRecipe;
         const [box] = boxesAt({
             recipes: [recipe],
-            endBeatOf: () => 8,
+            moveEndOf: () => 8,
             beat: 8,
             positionOf: (id) => today[id - 1],
         });

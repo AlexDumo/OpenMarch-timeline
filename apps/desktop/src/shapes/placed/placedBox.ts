@@ -21,6 +21,7 @@ import type { ShapeContext, XY } from "../types";
 import { frameToField, pivotPoint } from "../frame/frame";
 import { pivotOf } from "../frame/pivot";
 import { closedOf } from "../distribute/modes";
+import { recipeCount, type MoveEndOf } from "./recipeCount";
 
 /**
  * Placed shapes (docs/timeline/research/shapes/07-placed-boxes.md): a shape's recipe, read back.
@@ -48,7 +49,7 @@ export interface PlacedBox<P = unknown> {
     readonly params: P;
     /** Spots in the shape, holes included */
     readonly spots: number;
-    /** The beat the shape was placed at: its move's end (0 for homes) */
+    /** The beat the shape was placed at: its count (`recipeCount`) */
     readonly endBeat: number;
 }
 
@@ -128,26 +129,27 @@ export function placedOf(
  * marcher is in one shape at a time, the latest placed; one ungrouped since (`UNGROUPED_KIND`) is
  * in none.
  *
- * @param endBeatOf the end beat of a move (`null`: homes, beat 0), undefined for a move that's gone
+ * @param moveEndOf the end beat of a move, undefined for a move that's gone: what a recipe's count
+ *   (`recipeCount`) is read from
  * @param positionOf where a marcher stands at `beat`
  * @param kinds the kinds recipes are read back as: every kind the shape tool draws
  */
 export function boxesAt({
     recipes,
-    endBeatOf,
+    moveEndOf,
     beat,
     positionOf,
     kinds = PLACED_KINDS,
 }: {
     recipes: readonly PlacedRecipe[];
-    endBeatOf: (timelineId: number | null) => number | undefined;
+    moveEndOf: MoveEndOf;
     beat: number;
     positionOf: (marcherId: number) => XY | undefined;
     kinds?: readonly AnyToolKind[];
 }): PlacedBox[] {
     const candidates: (PlacedBox | Ungrouped)[] = [];
     for (const recipe of recipes) {
-        const endBeat = endBeatOf(recipe.timelineId);
+        const endBeat = recipeCount(recipe, moveEndOf);
         if (endBeat === undefined || endBeat > beat + 1e-9) continue;
         if (recipe.members.length === 0) continue;
         // Ungrouped stays ungrouped wherever its members go next, until a later shape takes them

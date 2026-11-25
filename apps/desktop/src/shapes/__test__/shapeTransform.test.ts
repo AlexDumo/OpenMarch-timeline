@@ -320,7 +320,7 @@ describe("a placed shape remembers its turn and flip", () => {
         );
         const [box] = boxesAt({
             recipes: [recipe],
-            endBeatOf: () => 8,
+            moveEndOf: () => 8,
             beat: 8,
             positionOf: (id) => at.get(id),
         });

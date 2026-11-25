@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { db } from "@/global/database/db";
 import { readAllShapeRecipes } from "@/db-functions/shapeRecipes";
-import { readTimelineEndBeats } from "@/db-functions/timelines";
 import { subscribeHistoryChanges } from "@/db-functions/history";
 import {
     displayedBeat,
@@ -10,6 +9,7 @@ import {
 import { editingPositionAt } from "@/timeline/timelineIsolationPlan";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { boxesAt, type PlacedBox, type PlacedRecipe } from "./placedBox";
+import { readRecipeMoveEnds } from "./recipeCount";
 
 /**
  * The show's shape recipes, read back for placed boxes
@@ -17,10 +17,10 @@ import { boxesAt, type PlacedBox, type PlacedRecipe } from "./placedBox";
  * whenever the resolver takes a change, and after every undoable edit, undo and redo
  * (`followPlacedBoxChanges`).
  *
- * `ends` is the end beat of each recipe's move, read with the recipes, so `placedBoxesRead` covers
- * both. `storedTimelines` has them too, but it's reloaded on its own after an edit: a copy saved
- * on a new move could be read back before its move, show nowhere for a moment, and be copied
- * again by the next save (#514).
+ * `ends` is the end beat of each recipe's move, which its count is read from (`recipeCount`), read
+ * with the recipes, so `placedBoxesRead` covers both. `storedTimelines` has them too, but it's
+ * reloaded on its own after an edit: a copy saved on a new move could be read back before its
+ * move, show nowhere for a moment, and be copied again by the next save (#514).
  */
 export const usePlacedBoxStore = create<{
     readonly recipes: readonly PlacedRecipe[];
@@ -43,10 +43,7 @@ const sameEnds = (
 /** The recipes, and the end beats of their moves */
 async function readPlacedRecipes() {
     const recipes = await readAllShapeRecipes(db);
-    const ends = await readTimelineEndBeats(
-        db,
-        recipes.flatMap((r) => (r.timelineId === null ? [] : [r.timelineId])),
-    );
+    const ends = await readRecipeMoveEnds(db, recipes);
     return { recipes, ends };
 }
 
@@ -102,7 +99,7 @@ export function placedBoxesAt(
     const { ends } = usePlacedBoxStore.getState();
     return boxesAt({
         recipes,
-        endBeatOf: (id) => (id === null ? 0 : ends.get(id)),
+        moveEndOf: (id) => ends.get(id),
         beat,
         positionOf: (id) => {
             try {
