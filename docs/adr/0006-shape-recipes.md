@@ -660,6 +660,23 @@ adds no table and changes no recipe: a paste is an ordinary placement.
 Verification: `copyPaste.test.ts` (what is copied, and what a paste opens for each kind and
 count) and the browser scenarios in `copy-paste.spec.mts`.
 
+## Amendment, 2026-11-25: more ways to say who goes where
+
+[09-who-goes-where.md](../timeline/research/shapes/09-who-goes-where.md) adds three answers to the
+floating editor's Who goes where on a kind with an order along it (a Line, an Arc, a Curve):
+Inside out, Zipper and Within sections. They are saved the way Least travel, Keep order and Reverse
+are, in `order_mode`, as `inside`, `zipper` and `sections` (`reverse` false). `order_mode` has no
+check constraint, so no migration is needed.
+
+- **Placed shapes keep their members' order.** The three answers are worked out from where the
+  marchers come from while the shape is open. Once placed, reshaping the shape keeps everyone's
+  slot, as Keep order does (`liveTargets`), and the placed shape's menu greys the three out.
+- **Hand picks and Swap aren't saved as such.** They change who stands on which slot before the
+  shape is placed, and the members' slots save the result. Recalculate or another answer picked on
+  the placed shape works it out again from the answer, as before.
+- **Older builds** read an unknown `order_mode` as Least travel (`orderChoiceOf`) the next time they
+  work the shape out; until then every member keeps its saved slot.
+
 ## Revision, 2026-11-22 (accepted 2026-11-25): a shape is a formation at a count
 
 _Accepted by the owner on 2026-11-25, with §9 (membership by listing, one identity per shape)

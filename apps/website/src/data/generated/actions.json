@@ -1595,6 +1595,62 @@
             }
         ]
     },
+    "shapePickByHand": {
+        "label": "Shape: Pick who goes where by hand",
+        "category": "shape",
+        "bindings": [
+            {
+                "mac": {
+                    "keys": [
+                        "W"
+                    ]
+                },
+                "other": {
+                    "keys": [
+                        "W"
+                    ]
+                }
+            }
+        ]
+    },
+    "shapeSwapTwo": {
+        "label": "Shape: Swap two marchers' spots",
+        "category": "shape",
+        "bindings": [
+            {
+                "mac": {
+                    "keys": [
+                        "⇧",
+                        "W"
+                    ]
+                },
+                "other": {
+                    "keys": [
+                        "Shift",
+                        "W"
+                    ]
+                }
+            }
+        ]
+    },
+    "shapePickSwitchSide": {
+        "label": "Shape: Switch between marchers and spots while picking",
+        "category": "shape",
+        "bindings": [
+            {
+                "mac": {
+                    "keys": [
+                        "Tab"
+                    ]
+                },
+                "other": {
+                    "keys": [
+                        "Tab"
+                    ]
+                }
+            }
+        ]
+    },
     "shapeHideMarchers": {
         "label": "Shape: Hide the marchers (hold to peek, tap to keep hidden)",
         "category": "shape",

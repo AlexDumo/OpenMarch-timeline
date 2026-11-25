@@ -1025,6 +1025,59 @@
                     ]
                 },
                 {
+                    "label": "Shape: Pick who goes where by hand",
+                    "other": [
+                        {
+                            "keys": [
+                                "W"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "W"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Shape: Swap two marchers' spots",
+                    "other": [
+                        {
+                            "keys": [
+                                "Shift",
+                                "W"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⇧",
+                                "W"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Shape: Switch between marchers and spots while picking",
+                    "other": [
+                        {
+                            "keys": [
+                                "Tab"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "Tab"
+                            ]
+                        }
+                    ]
+                },
+                {
                     "label": "Shape: Hide the marchers (hold to peek, tap to keep hidden)",
                     "other": [
                         {
@@ -2894,6 +2947,59 @@
                             "keys": [
                                 "⇧",
                                 "R"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Shape: Pick who goes where by hand",
+                    "other": [
+                        {
+                            "keys": [
+                                "W"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "W"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Shape: Swap two marchers' spots",
+                    "other": [
+                        {
+                            "keys": [
+                                "Shift",
+                                "W"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "⇧",
+                                "W"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "label": "Shape: Switch between marchers and spots while picking",
+                    "other": [
+                        {
+                            "keys": [
+                                "Tab"
+                            ]
+                        }
+                    ],
+                    "mac": [
+                        {
+                            "keys": [
+                                "Tab"
                             ]
                         }
                     ]
