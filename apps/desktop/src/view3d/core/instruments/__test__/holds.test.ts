@@ -135,14 +135,14 @@ describe("holds", () => {
         (family, id) => {
             const h = hold(family, "up");
             const bell = h.instrument.bellAxis;
-            // 15 degrees above level, whatever its turn (the trombones turn 5)
+            // 15 degrees above level
             expect(
                 (Math.asin(bell[1] / Math.hypot(...bell)) * 180) / Math.PI,
             ).toBeCloseTo(HORN_PITCH_DEG, 6);
             const horn = brassHorn(id, "low");
             // trombonists set the mouthpiece a little left of center
             const off =
-                family === "trombone" || family === "bassTrombone" ? 0.012 : 0;
+                family === "trombone" || family === "bassTrombone" ? 0.022 : 0;
             expect(dist(inBody(h, horn.rim), playingLips(h.head))).toBeLessThan(
                 off + 0.002,
             );
@@ -216,6 +216,15 @@ describe("holds", () => {
                     (Math.acos(Math.min(1, cos)) * 180) / Math.PI,
                 ).toBeLessThan(8);
             }
+        },
+    );
+
+    it.each(["trombone", "bassTrombone"] as const)(
+        "%s up: the slide points straight ahead, square to the shoulders",
+        (family) => {
+            // owner, 2026-11-25: no turn left or right, seen from above
+            const [x] = hold(family, "up").instrument.bellAxis;
+            expect(Math.abs(x)).toBeLessThan(1e-9);
         },
     );
 
