@@ -64,7 +64,7 @@ const { useMarcherFlats } = await import("../useMarcherFlats");
 const { useSettledFlatsWear } =
     await import("@/view3d/window/uniformPack/useSettledFlatsWear");
 
-const A = `library:cadets@${"a".repeat(64)}#home` as UniformPackValue;
+const A = `library:modes@${"a".repeat(64)}#home` as UniformPackValue;
 const wearA: FlatsWear = { key: A, look: SAMPLE_FLATS.look };
 const look = (artwork: string) =>
     ({

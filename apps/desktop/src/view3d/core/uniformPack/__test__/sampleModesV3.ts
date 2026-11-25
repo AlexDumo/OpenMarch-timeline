@@ -1,14 +1,14 @@
 // cspell:words omasset
 /**
- * Cadets 2019 as a version 3 pack (fork #1257 step 5): three layers, two items and the three
- * modes of docs/3d/uniform-artwork.md. `fixtures-files/cadets-2019-v3.omasset` holds these bytes
+ * A version 3 pack with modes (fork #1257 step 5): three layers, two items and the three
+ * modes of docs/3d/uniform-artwork.md. `fixtures-files/sample-modes-v3.omasset` holds these bytes
  * as this build first wrote them, so a change to how packs are written shows up as a test failure.
  */
 import { writeUniformPack } from "../format";
 import { fakePng, sampleManifest } from "./fixtures";
 
-export function cadetsV3(): Uint8Array {
-    const base = sampleManifest("Cadets 2019");
+export function sampleModesV3(): Uint8Array {
+    const base = sampleManifest("Sample modes");
     return writeUniformPack(
         {
             ...base,

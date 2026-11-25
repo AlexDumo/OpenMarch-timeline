@@ -53,7 +53,9 @@ Without `--out` the pack goes next to the folder, named after the pack.
 ## `uniform.json`
 
 A folder holds `uniform.json` and the SVG and PNG files it names, by paths inside the folder.
-`example/` is the app's built-in sample uniform as a pack folder.
+`example/` is the app's built-in sample uniform as a pack folder. Like the built-in sample, it takes the
+counsel-gate terms of `src/view3d/assets/uniform-flats` until the owner decides whether art drawn on
+those outlines can be CC0, so its credits name no license.
 
 ```jsonc
 {
@@ -183,7 +185,8 @@ SIGTERM.
 - Every run has its own Vite server on a free port, its own Vite cache in a temporary folder and
   its own browser. Runs into different output folders can go at once.
 - An output folder holds one run at a time: the lock is a directory, `.uniform-render.lock`, made
-  atomically; a lock whose process is gone is taken over.
+  atomically; a lock whose process is gone is taken over. It is taken after the GPU check, so a run
+  without a GPU never waits on it; such a run writes `report.json` only when the folder is free.
 - Ctrl+C or SIGTERM closes the browser and server, removes the cache and lets go of the lock.
   Caches are `uniform-tool-<pid>-…` in the system temporary folder; a run removes any whose
   process is gone.

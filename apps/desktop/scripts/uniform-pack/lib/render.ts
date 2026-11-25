@@ -3,9 +3,11 @@
  * uniform:render (README.md): renders a pack on the 7 body types with the 3D View's own
  * renderer, on the GPU, and writes the views, a contact sheet per mode and `report.json`.
  *
- * The GPU is checked first, before anything is loaded or drawn: no WebGL context, or a software
- * one, is refused with exit 3, and there is no CPU fallback. An output folder holds one run at a
- * time (a lock directory, taken atomically); runs into different folders share nothing.
+ * The GPU is checked first, before anything is loaded or drawn, and before the output folder is
+ * locked: no WebGL context, or a software one, is refused with exit 3, and there is no CPU
+ * fallback. Then the output folder is locked: it holds one run at a time (a lock directory, taken
+ * atomically); runs into different folders share nothing. A run refused for want of a GPU writes
+ * its `report.json` only when no other run holds the folder.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -262,8 +264,9 @@ async function renderMode(
 }
 
 /**
- * Runs a render; resolves with the exit code. Writes `report.json` whatever happens, and on
- * SIGINT or SIGTERM closes the browser, removes its cache and lets go of the lock before exiting.
+ * Runs a render; resolves with the exit code. Writes `report.json` whatever happens (unless
+ * another run holds the output folder), and on SIGINT or SIGTERM closes the browser, removes its
+ * cache and lets go of the lock before exiting.
  */
 export async function runRender(
     args: RenderArgs,
@@ -275,11 +278,8 @@ export async function runRender(
 ): Promise<number> {
     const t0 = Date.now();
     const { log } = deps;
-    const unlock = lockOut(args.out);
-    if (typeof unlock === "string") {
-        log(`refused: ${unlock}`);
-        return EXIT.refused;
-    }
+    // taken after the GPU check: a run that can't render never waits on, or holds, the folder
+    let unlock: (() => void) | null = null;
     const report: Report = {
         pack: args.pack,
         renderer: null,
@@ -297,13 +297,20 @@ export async function runRender(
         report.seconds = +((Date.now() - t0) / 1000).toFixed(1);
         if (page?.errors.length) report.pageErrors = page.errors;
         try {
-            fs.writeFileSync(
-                path.join(args.out, "report.json"),
-                `${JSON.stringify(report, null, 2)}\n`,
-            );
+            // stopped before the lock (no GPU, a signal): write the report only if the folder
+            // is free, never over another run's
+            if (!unlock) {
+                const taken = lockOut(args.out);
+                if (typeof taken !== "string") unlock = taken;
+            }
+            if (unlock)
+                fs.writeFileSync(
+                    path.join(args.out, "report.json"),
+                    `${JSON.stringify(report, null, 2)}\n`,
+                );
         } finally {
             await page?.close().catch(() => undefined);
-            unlock();
+            unlock?.();
         }
     };
     const onSignal = (signal: NodeJS.Signals) => {
@@ -319,6 +326,15 @@ export async function runRender(
         page = await deps.openPage({ gpu: true });
         const stop = await checkGpu(page, report, log);
         if (stop !== null) return (code = stop);
+        const taken = lockOut(args.out);
+        if (typeof taken === "string") {
+            log(`refused: ${taken}`);
+            // another run's folder: its report stays its own
+            finished = true;
+            await page.close().catch(() => undefined);
+            return (code = EXIT.refused);
+        }
+        unlock = taken;
         const init = await page.render<{ seconds: number }>("init");
         report.setupSeconds = +init.seconds.toFixed(1);
         const packFile = await packFileOf(args, page, report, log);

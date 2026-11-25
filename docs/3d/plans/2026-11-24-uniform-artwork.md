@@ -8,17 +8,30 @@
 
 ## What "shipped" means
 
-The integration pull request goes to `main` when all of these are true:
+The owner decided on 2026-11-24 that custom uniforms reach `main` as an **opt-in preview**, behind
+the **Custom uniforms (preview)** setting, off by default in releases, with a warning that the file
+format isn't final. A show that already wears a custom uniform still draws it with the setting
+off. The integration pull request goes to `main` when all of these are true:
 
 1. An artist downloads the uniform template, paints the front and back as a PNG, and uploads it.
    The band in the 3D View then wears it on all 7 body types.
 2. Logos and numbers are placed in the app and keep their shape on every body.
 3. A pack can hold modes, such as sash out, and a show can switch between them.
 4. An agent turns uniform photos into a pack with the skill and its headless render command.
-5. At least one real artist has finished a uniform on the template (#1259), and the pack format is
-   then frozen.
-6. The web build plays about 300 marchers in custom uniforms at an acceptable frame rate.
-7. Every CI check is green, one full independent review has been done, and the owner has approved.
+5. The feature is behind Custom uniforms (preview), off by default in releases, and the user guide
+   describes it as a preview.
+6. Every CI check is green, one full independent review has been done, and the owner has approved.
+
+These used to be ship conditions. With the opt-in decision they are gates for **leaving preview**
+(turning the setting on by default and dropping the label), tracked in #1310, not for merging into
+`main`:
+
+- At least one real artist has finished a uniform on the template (#1259), and the pack format is
+  then frozen.
+- The web build, and a computer with an integrated GPU, play about 300 marchers in custom uniforms
+  at an acceptable frame rate. Measured so far only on an RTX 3060 Ti: 385 marchers at the same
+  frame rate as palette uniforms.
+- PDF import, if uniform companies need it. Today PDFs are refused with a message.
 
 ## Not in this pull request
 
@@ -50,7 +63,7 @@ holds what doesn't change much.
 | ---- | ----- | -------------------------------------------------------------- | ----- |
 | 1    | #1256 | Download the uniform template from the 3D View settings        |       |
 | 2    | #1255 | A sample uniform in flats on the band, on all body types       |       |
-| 3    | #1257 | Import front/back PNG, SVG or PDF as the band's uniform        | 1, 2  |
+| 3    | #1257 | Import front/back PNG or SVG as the band's uniform             | 1, 2  |
 | 4    | #1258 | Place logos and numbers, and preview on all 7 bodies           | 3     |
 | 5    | #1257 | Modes (sash out, unzipped) and switching between them          | 3     |
 | 6    | #1260 | Agent skill: photos to a pack, plus headless render            | 3, 4  |
@@ -79,3 +92,8 @@ Anyone can pick up a step, with or without agents.
   requests.
 - 2026-11-24: the owner split asset preview and opening assets in OpenMarch into its own epic,
   #1262. The uniform pack is the first kind of portable file (comment on #1257).
+- 2026-11-24: the owner chose to merge into `main` with custom uniforms as an opt-in preview
+  (step 7, #1306): off by default in releases, with a warning that the format isn't final. The
+  artist test, the format freeze, the speed check on an integrated GPU and on the web, and PDF
+  import moved from "shipped" to the gates for leaving preview, #1310. Measured so far: 385
+  marchers on an RTX 3060 Ti at the same frame rate as palette uniforms.

@@ -32,8 +32,8 @@ export type UniformPackRequest =
      * A pack file: read and checked. With `regions`, its first layer is decoded too, for the
      * notes a picked page gets. With `decode`, every layer and item image is decoded and let go
      * of, so a pack whose headers read but whose image data doesn't is refused here rather than
-     * when the 3D View draws it; images whose sha256 is in `decoded` (they decoded before) are
-     * skipped.
+     * when the 3D View draws it; images whose verdict is in `decoded` (they decoded before, as
+     * the same kind: see {@link decodedImageKey}) are skipped.
      */
     | {
           type: "pack";
@@ -107,7 +107,8 @@ export type UniformPackResponse =
           notes: PageNote[];
           /** Each item image's size, from its PNG header, by file (fork #1258) */
           itemSizes: Record<string, { width: number; height: number }>;
-          /** With `decode`: the sha256 of every image in the pack, all of which decode */
+          /** With `decode`: the verdict of every image in the pack, all of which decode
+           * ({@link decodedImageKey}) */
           decoded?: string[];
       }
     | {
@@ -146,6 +147,14 @@ export class UniformPackJobError extends Error {
  * Whether `error` says nothing about the file: the worker ran out of time or died, so the same
  * job may well work next time. Anything else (a refusal) is the file's own.
  */
+/**
+ * What a "pack" job's `decoded` list holds for one image: its kind and its sha256. A layer and an
+ * item are checked against different size limits, so an image that decoded as a layer has still
+ * to be checked, and decoded, as an item (and the other way round).
+ */
+export const decodedImageKey = (kind: "layer" | "item", sha256: string) =>
+    `${kind}:${sha256}`;
+
 export const isPassingPackFailure = (error: unknown): boolean =>
     !(error instanceof UniformPackJobError) ||
     error.code === "timedOut" ||

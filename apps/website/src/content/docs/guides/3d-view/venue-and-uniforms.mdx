@@ -15,6 +15,12 @@ covers:
   - apps/desktop/src/view3d/core/sizes/silkShapes.ts
   - apps/desktop/src/view3d/core/artworkTemplates
   - apps/desktop/src/view3d/window/overlay/SilkArtworkControls.tsx
+  - apps/desktop/src/view3d/window/overlay/UniformPreview.tsx
+  - apps/desktop/src/view3d/window/overlay/UniformTemplateControls.tsx
+  - apps/desktop/src/view3d/window/overlay/UniformImportControls.tsx
+  - apps/desktop/src/view3d/window/overlay/UniformItemsControls.tsx
+  - apps/desktop/src/view3d/window/overlay/UniformModesControls.tsx
+  - apps/desktop/src/view3d/window/uniformPack
   - i18n:view3d.settings
   - i18n:view3d.kit
   - i18n:view3d.lighting
@@ -23,6 +29,11 @@ covers:
   - i18n:view3d.uniformPreset
   - i18n:view3d.silkShape
   - i18n:view3d.silkArtwork
+  - i18n:view3d.uniformTemplate
+  - i18n:view3d.uniformImport
+  - i18n:view3d.uniformItems
+  - i18n:view3d.uniformModes
+  - i18n:view3d.uniformPreview
 sidebar:
   order: 3
 ---
@@ -104,12 +115,67 @@ The video boards in the <Ui k="view3d.kit.bighs" plain />, <Ui k="view3d.kit.col
 
 ## Choose the uniforms
 
-On the <Ui k="view3d.settings.tabs.performers" plain /> tab, <Ui k="view3d.settings.uniforms" /> dresses the band and <Ui k="view3d.settings.guardUniforms" /> dresses the color guard. Choose one of the built-in uniforms for each, such as <Ui k="view3d.uniformPreset.westPoint" /> or <Ui k="view3d.uniformPreset.sash" />. Marchers in guard sections (Color Guard, Flag, Rifle and the other guard sections) wear the guard uniform; everyone else wears the band uniform. You can't design your own uniform in this version.
+On the <Ui k="view3d.settings.tabs.performers" plain /> tab, <Ui k="view3d.settings.uniforms" /> dresses the band and <Ui k="view3d.settings.guardUniforms" /> dresses the color guard. Choose one of the built-in uniforms for each, such as <Ui k="view3d.uniformPreset.westPoint" /> or <Ui k="view3d.uniformPreset.sash" />. Marchers in guard sections (Color Guard, Flag, Rifle and the other guard sections) wear the guard uniform; everyone else wears the band uniform. To make your own band uniform, turn on the custom uniforms preview ([Custom uniforms (preview)](#custom-uniforms-preview)).
 
 <Media
   id="3d-uniforms"
   alt="The band from the front row in the Night Watch uniform, with the color guard beside them in Ultraviolet Fade."
 />
+
+## Custom uniforms (preview)
+
+You can make your own band uniform: paint it on a template, import it, place logos and numbers on it, and give it modes such as sash out. This is a preview. Uniform files may change in a later version of OpenMarch, and a uniform you make now may need to be imported again, so keep your original artwork.
+
+### Turn on the preview
+
+On the <Ui k="view3d.settings.tabs.preferences" plain /> tab of <Ui k="view3d.settings.panelTitle" plain />, turn on <Ui k="view3d.settings.customUniforms" />. It's saved on this computer, not in the show. The <Ui k="view3d.settings.tabs.performers" plain /> tab then shows the uniform tools, each with a <Ui k="view3d.uniformPreview.badge" plain /> badge, and <Ui k="view3d.uniformPreset.flatsSample" /> joins the <Ui k="view3d.settings.uniforms" plain /> list, so you can see a drawn uniform on the band before you make one.
+
+<Media
+  id="3d-custom-uniforms"
+  alt="Band uniform on the Performers tab with the Preview badge and Sample flats chosen, then the uniform template's PNG, SVG, PDF and JSON buttons, Import uniform and Save uniform file, and the line warning that uniform files may change."
+  maxWidth={420}
+/>
+
+<Media
+  id="3d-custom-uniforms-band"
+  alt="The band from the front row in Sample flats: navy jackets with a white chevron on the chest and gold trim, drawn on every body type, with the color guard's flags among them."
+/>
+
+### Make a uniform
+
+<Steps>
+
+1. Under <Ui k="view3d.settings.uniforms" plain />, download the uniform template with its **PNG**, **SVG** or **PDF** button. It shows the front and back of a jacket and pants, and a cape, at real size in inches, drawn for a medium body. **JSON** holds the same shapes as numbers, for scripts.
+
+2. Paint the fabric over the template in any image editor: colors, stripes, sashes. Leave logos, numbers and crests off; you place those in the app. Hide the template layer, then export the page as a transparent PNG at the template's size, or as an SVG.
+
+3. Select <Ui k="view3d.uniformImport.import" /> and choose the file. The band wears it on every body type, and its name joins the <Ui k="view3d.settings.uniforms" plain /> list. A PNG at the wrong size is scaled to fit, with a note. Notes also say when the template looks like it's still showing, or when a logo seems to be painted on.
+
+</Steps>
+
+Importing a PDF isn't supported yet: export your design as PNG or SVG instead.
+
+<Ui k="view3d.uniformImport.save" /> writes the uniform the band wears to a file, so you can import it into another show or send it to someone. A saved uniform file imports with <Ui k="view3d.uniformImport.import" plain /> too.
+
+### Add logos and numbers
+
+Under <Ui k="view3d.uniformItems.title" plain />, select <Ui k="view3d.uniformItems.add" /> and choose an image. Place it with a spot such as <Ui k="view3d.uniformItems.preset.chest" plain /> or <Ui k="view3d.uniformItems.preset.backNumber" plain />, or set its <Ui k="view3d.uniformItems.panelLabel" plain />, <Ui k="view3d.uniformItems.x" plain />, <Ui k="view3d.uniformItems.y" plain /> and size in inches. <Ui k="view3d.uniformItems.grade" plain /> says how it changes on slimmer and fuller bodies: <Ui k="view3d.uniformItems.grades.proportional" plain />, <Ui k="view3d.uniformItems.grades.fixed" plain />, <Ui k="view3d.uniformItems.grades.stretch" plain />, <Ui k="view3d.uniformItems.grades.tile" plain /> or <Ui k="view3d.uniformItems.grades.line" plain />. A placed logo keeps its shape on every body, where a painted one widens on fuller builds.
+
+### Wear it another way: modes
+
+Under <Ui k="view3d.uniformModes.title" plain />, select <Ui k="view3d.uniformModes.add" /> to wear the uniform another way, such as with a sash or unzipped. A mode can add an overlay image, painted on the template like the uniform, or only change colors, parts and which logos show. The first mode is the default. <Ui k="view3d.uniformModes.wears" plain /> chooses the mode the band wears; for now it's one mode for the whole show.
+
+### Opening a show with a custom uniform
+
+The uniform is saved in the show, so everyone who opens it sees the band in it, even with <Ui k="view3d.settings.customUniforms" plain /> off. With the preview off, the <Ui k="view3d.settings.uniforms" plain /> list shows that one uniform, picked, says the band wears a custom uniform, and offers <Ui k="view3d.uniformPreview.turnOn" />. You can still choose a built-in uniform, and nothing is removed from the show.
+
+<Media
+  id="3d-custom-uniforms-off"
+  alt="The Band uniform list with Custom uniforms (preview) off: the built-in uniforms and an imported uniform, Practice uniform, picked, then the note that the show's band wears a custom uniform, a preview feature, and the Turn on custom uniforms button."
+  maxWidth={420}
+/>
+
+When the band can't wear its custom uniform, it wears the built-in uniform under it, and a note under the list says why: the uniform isn't in the show anymore, its file can't be read, it was made with a newer version of OpenMarch (update OpenMarch to see it), or it couldn't be loaded this time (select <Ui k="view3d.uniformImport.tryAgain" />). If only the list of the show's custom uniforms couldn't be loaded, the band still wears its uniform, and the note says the list may be missing some, with <Ui k="view3d.uniformImport.tryAgain" plain />. The show's assets list says the same ([The show's imported models](/guides/3d-view/props/#the-shows-imported-models)).
 
 ## Choose the flag silks
 

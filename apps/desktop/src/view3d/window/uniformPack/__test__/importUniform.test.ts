@@ -222,14 +222,14 @@ describe("importing a mode's overlay and a uniform with modes (#1257 step 5)", (
         // an overlay is meant to be mostly clear: no page notes about that
         expect(page.notes).toEqual(["scaled"]);
         await expect(
-            importLayerFile(fileOf("cadets.omasset", fakePng()), regions, {
+            importLayerFile(fileOf("modes.omasset", fakePng()), regions, {
                 runJob,
             }),
         ).rejects.toBeInstanceOf(UniformImportError);
     });
 
     it("keeps a uniform file with modes exactly as it is", async () => {
-        const base = sampleManifest("Cadets 2019");
+        const base = sampleManifest("Sample modes");
         const bytes = writeUniformPack(
             {
                 ...base,
@@ -251,7 +251,7 @@ describe("importing a mode's overlay and a uniform with modes (#1257 step 5)", (
             } as Exclude<UniformPackResponse, { type: "refused" }>;
         });
         const result = await importUniformFile(
-            fileOf("Cadets 2019.omasset", bytes),
+            fileOf("Sample modes.omasset", bytes),
             look,
             regions,
             { runJob },

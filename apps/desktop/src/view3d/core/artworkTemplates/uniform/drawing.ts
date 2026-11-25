@@ -994,7 +994,7 @@ export function uniformTemplateDrawing(
             s.panels.front.x,
             3.6,
             SIZE.body,
-            `${w} x ${h} in, ${px} at ${s.dpi} px per inch. Sized for the ${s.body} body. Template: CC0 1.0 (public domain).`,
+            `${w} x ${h} in, ${px} at ${s.dpi} px per inch. Sized for the ${s.body} body.`,
             COLORS.secondary,
         ),
         text(

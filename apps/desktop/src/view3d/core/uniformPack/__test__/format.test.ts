@@ -350,7 +350,7 @@ describe("uniform pack file", () => {
         expect(uniformPackFileName("  ")).toBe(
             `uniform${ASSET_FILE_EXTENSION}`,
         );
-        expect(uniformNameFromFile("Cadets 2019.png")).toBe("Cadets 2019");
+        expect(uniformNameFromFile("Sample modes.png")).toBe("Sample modes");
         expect(pngHeaderSize(fakePng(12, 34))).toEqual({
             width: 12,
             height: 34,

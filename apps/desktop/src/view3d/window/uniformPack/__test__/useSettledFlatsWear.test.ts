@@ -17,7 +17,7 @@ vi.mock("../../performers/marchers/flatsAtlas", () => ({
     releaseFlats: vi.fn(),
 }));
 
-const pack = `library:cadets@${"a".repeat(64)}` as UniformPackValue;
+const pack = `library:modes@${"a".repeat(64)}` as UniformPackValue;
 const wear = (mode: string, primary: number): FlatsWear => ({
     key: `${pack}#${mode}` as UniformPackValue,
     look: {

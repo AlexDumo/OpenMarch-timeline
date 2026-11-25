@@ -301,18 +301,31 @@ describe("runRender", () => {
         });
     });
 
-    it("refuses an output folder another live run holds", async () => {
+    it("refuses an output folder another live run holds, after the GPU check, and leaves its report alone", async () => {
         fs.mkdirSync(path.join(out, LOCK));
         fs.writeFileSync(path.join(out, LOCK, "pid"), String(process.pid));
-        const openPage = vi.fn();
-        const log: string[] = [];
-        const code = await runRender(args(out), {
-            openPage,
-            log: (l) => log.push(l),
-        });
-        expect(code).toBe(EXIT.refused);
-        expect(openPage).not.toHaveBeenCalled();
-        expect(log[0]).toMatch(/another render .* is writing to/);
+        const { page, calls } = fakePage({ gpu: () => ({ renderer: NVIDIA }) });
+        const r = run(page, out);
+        expect(await r.code).toBe(EXIT.refused);
+        // the GPU first, then the lock; nothing set up or drawn
+        expect(calls).toEqual(["gpu"]);
+        expect(page.close).toHaveBeenCalled();
+        expect(r.log.at(-1)).toMatch(
+            /^refused: another render .* is writing to/,
+        );
+        expect(fs.existsSync(path.join(out, "report.json"))).toBe(false);
+        expect(fs.existsSync(path.join(out, LOCK))).toBe(true);
+    });
+
+    it("says no GPU, without waiting on the lock, and writes no report into a folder another run holds", async () => {
+        fs.mkdirSync(path.join(out, LOCK));
+        fs.writeFileSync(path.join(out, LOCK, "pid"), String(process.pid));
+        const { page } = fakePage({ gpu: () => ({ renderer: "llvmpipe" }) });
+        const r = run(page, out);
+        expect(await r.code).toBe(EXIT.noGpu);
+        expect(fs.existsSync(path.join(out, "report.json"))).toBe(false);
+        // the other run's lock stays
+        expect(fs.existsSync(path.join(out, LOCK))).toBe(true);
     });
 
     it("takes over a lock a finished run left, and lets go of it", async () => {

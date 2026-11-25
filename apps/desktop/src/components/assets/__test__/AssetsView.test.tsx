@@ -38,6 +38,7 @@ import {
 } from "@/db-functions/view3dVenue";
 import { tableNamesToQueryKeys } from "@/hooks/queries/utils";
 import { uniformPackQueryOptions } from "@/hooks/queries/useUniformPack";
+import { showAssetKeys } from "@/hooks/queries/useShowAssets";
 import { useCustomUniformsStore } from "@/view3d/window/uniformArtworkPreview";
 import { strToU8, zipSync } from "fflate";
 import {
@@ -82,7 +83,7 @@ const UNDECODABLE = 0xdd;
 vi.mock("@/view3d/uniformPack/runUniformPackJob", async () => {
     const { readUniformPack, UniformPackError } =
         await import("@/view3d/core/uniformPack/format");
-    const { UniformPackJobError } =
+    const { UniformPackJobError, decodedImageKey } =
         await import("@/view3d/uniformPack/protocol");
     const { sha256Hex } = await import("@/showAssets/hash");
     return {
@@ -115,8 +116,12 @@ vi.mock("@/view3d/uniformPack/runUniformPackJob", async () => {
             if (request.decode) {
                 const before = new Set(request.decoded ?? []);
                 decoded = [];
-                for (const { png } of [...pack.layers, ...pack.itemFiles]) {
-                    const hash = await sha256Hex(png);
+                const images = [
+                    ...pack.layers.map(({ png }) => ({ png, kind: "layer" })),
+                    ...pack.itemFiles.map(({ png }) => ({ png, kind: "item" })),
+                ] as const;
+                for (const { png, kind } of images) {
+                    const hash = decodedImageKey(kind, await sha256Hex(png));
                     if (!before.has(hash)) {
                         worker.decodes++;
                         if (worker.refusalsLeft > 0) {
@@ -673,6 +678,121 @@ describeDbTests("Assets view", (it) => {
         expect(
             screen.queryByTestId("assets-unreadable-uniform-note"),
         ).toBeNull();
+    });
+
+    it("says with Custom uniforms (preview) off that the band's uniform can't be read, and only to pick another", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        await wearUniform(db, "Undecodable off", UNDECODABLE);
+        void act(() => useCustomUniformsStore.getState().setEnabled(false));
+        try {
+            await setUpFeature(<SidebarModal />, 1, []);
+            await act(async () => showAssetsView());
+            await waitFor(() =>
+                expect(
+                    screen.getByTestId("assets-unreadable-uniform-note"),
+                ).toHaveTextContent(
+                    "The band's custom uniform is in this show, but its file can't be read (it may be damaged), so the band wears its preset. Pick another uniform in the 3D View settings.",
+                ),
+            );
+            expect(
+                screen.queryByTestId("assets-load-failed-uniform-note"),
+            ).toBeNull();
+        } finally {
+            void act(() => useCustomUniformsStore.getState().setEnabled(true));
+        }
+    });
+
+    it("says the band's uniform couldn't be loaded, not that it's damaged, when every read fails, and Try again reads it", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        const value = await wearUniform(db, "Never loads", 16);
+        // every job fails as a dead worker does, however often it's retried
+        worker.passingFailures = 1000;
+        worker.jobs = 0;
+        try {
+            await setUpFeature(<SidebarModal />, 1, []);
+            await act(async () => showAssetsView());
+            await waitFor(
+                () =>
+                    expect(
+                        screen.getByTestId("assets-load-failed-uniform-note"),
+                    ).toHaveTextContent(
+                        "The band's custom uniform couldn't be loaded just now. Its file may be fine. Until it loads, the band wears its preset.",
+                    ),
+                // the read is retried, with the usual waits, before it fails
+                { timeout: 15000 },
+            );
+            // tried, and tried again, before saying so
+            expect(worker.jobs).toBeGreaterThan(1);
+            expect(
+                screen.queryByTestId("assets-unreadable-uniform-note"),
+            ).toBeNull();
+
+            worker.passingFailures = 0;
+            // an invalidation, which the editor relays to the 3D View window, never a refetch
+            // only this window would see
+            const invalidate = vi.spyOn(
+                harnessQueryClient()!,
+                "invalidateQueries",
+            );
+            fireEvent.click(screen.getByTestId("assets-uniform-try-again"));
+            // the note stays while it runs, its button disabled
+            const busy = screen.getByTestId("assets-uniform-try-again");
+            expect(busy).toHaveTextContent("Loading…");
+            expect(busy).toBeDisabled();
+            expect(invalidate).toHaveBeenCalledWith({
+                queryKey: uniformPackQueryOptions(value).queryKey,
+                exact: true,
+            });
+            await waitFor(() =>
+                expect(
+                    harnessQueryClient()!.getQueryData(
+                        uniformPackQueryOptions(value).queryKey,
+                    ),
+                ).toBeTruthy(),
+            );
+            await waitFor(() =>
+                expect(
+                    screen.queryByTestId("assets-load-failed-uniform-note"),
+                ).toBeNull(),
+            );
+        } finally {
+            worker.passingFailures = 0;
+        }
+    });
+
+    it("says when the show's assets couldn't be listed, and Try again lists them", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        await wearUniform(db, "Listed later", 17);
+        // the assets can't be read: their table isn't where the read looks
+        await db.run(sql`ALTER TABLE show_assets RENAME TO show_assets_away`);
+        await setUpFeature(<SidebarModal />, 1, []);
+        await act(async () => showAssetsView());
+        // the list is retried, with the usual waits, before it fails
+        await screen.findByTestId("assets-load-failed-note", undefined, {
+            timeout: 15000,
+        });
+        expect(screen.queryAllByTestId("asset-row")).toHaveLength(0);
+
+        await db.run(sql`ALTER TABLE show_assets_away RENAME TO show_assets`);
+        const invalidate = vi.spyOn(harnessQueryClient()!, "invalidateQueries");
+        fireEvent.click(screen.getByTestId("assets-try-again"));
+        // the assets' key: their list, sizes and uniform reads, relayed to the 3D View too
+        expect(invalidate).toHaveBeenCalledWith({
+            queryKey: showAssetKeys.all(),
+        });
+        await waitFor(() =>
+            expect(screen.getAllByTestId("asset-row")).toHaveLength(1),
+        );
+        expect(screen.queryByTestId("assets-load-failed-note")).toBeNull();
     });
 
     it("counts the version the band wears in place of a removed one as in use (#1287)", async ({

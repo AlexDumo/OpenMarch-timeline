@@ -101,7 +101,9 @@ export function uniformTemplatePdf(d: UniformTemplateDrawing): Uint8Array {
         "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
         "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
         `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
-        `<< /Title ${pdfString(d.title)} /Subject (Released under CC0 1.0) >>`,
+        // no license line: the outlines come from uniform-flats/regions.json, whose license the
+        // owner hasn't settled yet (the folder is under the counsel gate)
+        `<< /Title ${pdfString(d.title)} >>`,
     ];
 
     let out = "%PDF-1.4\n";

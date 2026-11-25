@@ -62,7 +62,7 @@ describe("one draft for items and modes (#1257 step 5)", () => {
 
     it("keeps mode and item edits in one draft, a new item showing in every mode", () => {
         vi.useFakeTimers();
-        const stored = contentsOf(sampleManifest("Cadets 2019"));
+        const stored = contentsOf(sampleManifest("Sample modes"));
         editPack(
             v(1),
             stored,

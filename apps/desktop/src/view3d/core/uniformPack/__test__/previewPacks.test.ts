@@ -15,7 +15,7 @@
  * - `preview-v2.omasset`: step 4's writer (the verbatim copy in `step4Format.ts`), the same
  *   manifest named "Preview v2" plus one proportional crest item, 6 in wide at the chest
  *   centre, with `fakePng(512, 512, 1)` as its image.
- * - `cadets-2019-v3.omasset`: step 5's writer, `cadetsV3()` (see `formatV3File.test.ts`).
+ * - `sample-modes-v3.omasset`: step 5's writer, `sampleModesV3()` (see `formatV3File.test.ts`).
  * Their images are PNG headers only (`fakePng`): the reader checks sizes, never decodes.
  */
 import { createHash } from "node:crypto";
@@ -70,7 +70,7 @@ describe("preview pack files (format versions 1 to 3)", () => {
     it.each([
         ["preview-v1.omasset", 1, "Preview v1"],
         ["preview-v2.omasset", 2, "Preview v2"],
-        ["cadets-2019-v3.omasset", 3, "Cadets 2019"],
+        ["sample-modes-v3.omasset", 3, "Sample modes"],
     ])("%s reads as version %i", (file, version, name) => {
         const { manifest, layers } = readUniformPack(fixture(file));
         expect(manifest.formatVersion).toBe(version);
@@ -83,7 +83,7 @@ describe("preview pack files (format versions 1 to 3)", () => {
     it.each([
         [1, "preview-v1.omasset"],
         [2, "preview-v2.omasset"],
-        [3, "cadets-2019-v3.omasset"],
+        [3, "sample-modes-v3.omasset"],
     ])(
         "the format version %i file draws what it drew when it was written",
         (_, file) => {

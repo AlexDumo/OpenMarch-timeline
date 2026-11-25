@@ -33,7 +33,8 @@ dress, The Cadets 2019, Carolina Crown 2015 and 2019, and five Fred J. Miller ca
 3. **Several ways in, one pack.** All of these become the same uniform pack:
    - an artist's PNG
    - an agent's SVG
-   - a PDF from a uniform company
+   - a PDF from a uniform company (not yet supported: import refuses PDFs with a message, tracked
+     in #1310)
 4. **Logos, numbers and crests are placed items,** not paint, so they keep their shape on every
    body type.
 5. **A mode is a list of layers,** such as Cadets' plain, sash out, and sash out with the jacket
@@ -275,7 +276,11 @@ Built in step 3 (fork #1257), with items added in step 4 (fork #1258) and modes 
 ### Opt-in preview
 
 Built in step 7 (owner decision, 2026-11-24). Making custom uniforms is a preview that each person
-turns on for themselves, because the pack format can still change.
+turns on for themselves, because the pack format can still change. The owner chose to merge it into
+`main` this way. The artist test (#1259), the format freeze, the speed check on an integrated GPU
+and on the web build, and PDF import are the gates for leaving preview, tracked in #1310, not for
+merging into `main`. Measured so far: 385 marchers on an RTX 3060 Ti at the same frame rate as
+palette uniforms.
 
 - **The setting.** _Custom uniforms (preview)_ is a switch in the 3D View settings' Preferences tab,
   saved on this computer. Its description says the feature is a preview and that uniform files may
@@ -314,13 +319,21 @@ turns on for themselves, because the pack format can still change.
   - Newer: "The band's uniform was made with a newer version of OpenMarch, so the band wears its
     preset. Update OpenMarch to see it.", with no button.
   - The Assets view says the same, in words for each state of the setting.
+- **A custom uniform that couldn't be loaded.** When reading the band's uniform still fails after
+  its retries (a worker that ran out of time or memory, an asset read that failed), or the list of
+  the show's uniforms can't be read, the band wears its preset for now, and the note under the
+  Band uniform picker says it couldn't be loaded, with **Try again**, whatever the setting. This
+  isn't the damaged-file note: the file may be fine. The Assets view says the same, with **Try
+  again**.
 - **Reading preview packs later.** A later build either reads a pack of format versions 1 to 3, or
   refuses it with a message that says why; it never draws one wrong. An older build refuses a
   newer pack with "That uniform file is from a newer version of OpenMarch. Update OpenMarch to
   import it." A show whose stored uniform was made by a newer OpenMarch says so in the 3D View
-  settings and the Assets view, and tells the person to update. `previewPacks.test.ts` pins this:
-  committed v1, v2 and v3 files, written by the builds that shipped each version, must read and
-  draw the same in every later build.
+  settings and the Assets view, and tells the person to update. `previewPacks.test.ts` pins what
+  a later build reads from committed v1, v2 and v3 files, written by the builds that shipped each
+  version: the same manifest, the same plan for drawing each mode (`flattenPlan`), and the same
+  image bytes. It doesn't compare drawn pixels: when the bodies change and their tables are
+  regenerated, a pack can look different.
 
 ### Ways in
 
@@ -328,7 +341,7 @@ turns on for themselves, because the pack format can still change.
 | --------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | Human artist    | One transparent page-size PNG per layer (3360 × 2816), fabric only | Painted over the template layer, which is then hidden. A wrong size is scaled, with a note.          |
 | Human artist    | Logos and numbers as separate images, placed in the app            | Never painted into the fabric.                                                                       |
-| Uniform company | SVG or PDF flats at page size                                      | They fit the template's landmarks.                                                                   |
+| Uniform company | SVG flats at page size (PDF not yet supported, #1310)              | They fit the template's landmarks. Import refuses a PDF with a message to export PNG or SVG.         |
 | AI agent        | SVG flats drawn against `regions.json`, plus items                 | Photo crops only as tile textures for real prints (script, sequins), never warped onto whole panels. |
 | AI agent        | A headless render command                                          | Renders the pack on all 7 bodies, so the agent can compare it with photos.                           |
 
@@ -473,8 +486,10 @@ These are attachments, not artwork:
 
 Real artists test the PNG path in parallel with the renderer work, using the revised template:
 
-- The PNG upload opens to testers only after at least one person has finished a uniform with it.
-- The pack format is frozen only after that test.
+- The PNG upload ships as an opt-in preview (owner decision, 2026-11-24), behind Custom uniforms
+  (preview). It is on by default only in dev, the fork's preview and lab, so testers can reach it
+  before anyone has finished a uniform.
+- The pack format is frozen only after that test, and the preview ends only after it (#1310).
 
 The test also settles the open question on logo grading.
 
@@ -483,7 +498,9 @@ The test also settles the open question on logo grading.
 - **Logo grading:** proportional to k (two of three council members, built and self-tested), or √k
   (one member: logos grow less on fuller bodies). The human test decides.
 - **Shader cost on the web:** the per-body lookup tables plus the atlases, with about 300 marchers
-  and several looks. This is measured before choosing shader or baked UVs.
+  and several looks. Measured so far only on an RTX 3060 Ti in the desktop app: 385 marchers at the
+  same frame rate as palette uniforms. The integrated-GPU and web measurements gate leaving
+  preview (#1310).
 - **Hip region:** whether `hips` stays its own region or merges into the legs once the hip–thigh jog
   is fixed.
 
