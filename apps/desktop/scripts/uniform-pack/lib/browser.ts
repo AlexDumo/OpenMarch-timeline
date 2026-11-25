@@ -59,6 +59,8 @@ export interface ToolPage {
     >;
     /** Calls `page/render.ts`'s export `fn` with `args` */
     render<T>(fn: string, ...args: unknown[]): Promise<T>;
+    /** Calls `page/image.ts`'s export `fn` with `args` */
+    image<T>(fn: string, ...args: unknown[]): Promise<T>;
     /** Console errors and page errors so far */
     errors: string[];
     close(): Promise<void>;
@@ -126,6 +128,18 @@ export async function openToolPage({
                     name,
                     data,
                 ] as const),
+            image: <T>(fn: string, ...args: unknown[]) =>
+                page.evaluate(
+                    async ([f, a]) => {
+                        const m =
+                            (await window.uniformTool.image()) as unknown as Record<
+                                string,
+                                (...x: unknown[]) => unknown
+                            >;
+                        return m[f](...a);
+                    },
+                    [fn, args] as const,
+                ) as Promise<T>,
             render: <T>(fn: string, ...args: unknown[]) =>
                 page.evaluate(
                     async ([f, a]) => {

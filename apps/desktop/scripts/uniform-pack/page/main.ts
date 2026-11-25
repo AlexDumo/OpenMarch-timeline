@@ -8,6 +8,7 @@ const tool = {
     rasterLayer,
     rasterItem,
     render: () => import("./render"),
+    image: () => import("./image"),
 };
 
 declare global {
