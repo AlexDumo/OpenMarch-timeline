@@ -645,6 +645,11 @@ describe("which way rows go (#1193)", () => {
                 expect(cross / (radius * ring)).toBeCloseTo(0, 2);
             });
         expect(arcTool.rows!.go.options(t.params, 12)[0]!.label).toBe("Rings");
+        // Drawn along the ring between its spots too, never cutting across it
+        const drawnLines = arcTool.shape.outline(t.params, 12, ctx);
+        const ringLine = drawnLines[drawnLines.length - 1]!;
+        expect(ringLine.length).toBeGreaterThan(other.length);
+        for (const q of ringLine) expect(dist(q)).toBeCloseTo(ring, 0);
     });
 
     it("are stored, and only as ways this build knows", () => {

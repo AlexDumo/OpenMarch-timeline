@@ -142,30 +142,6 @@ function normalNear(outline: readonly XY[], point: XY): XY {
     return len > 1e-9 ? scale(n, 1 / len) : { x: 0, y: -1 };
 }
 
-/**
- * Which way the rows step from the drawn line `t` spots along it ({@link at}): the frame's `step`,
- * or square to the line there when they follow it, past its ends as at them
- */
-function stepAt(
-    frame: { step: XY | null },
-    base: readonly XY[],
-    normals: readonly XY[] | null,
-    t: number,
-): XY {
-    if (frame.step || !normals || normals.length === 0)
-        return frame.step ?? { x: 0, y: -1 };
-    const k = normals.length;
-    if (k === 1 || t <= 0) return normals[0]!;
-    if (t >= k - 1) return normals[k - 1]!;
-    const i = Math.floor(t);
-    const n = add(
-        scale(normals[i]!, 1 - (t - i)),
-        scale(normals[i + 1]!, t - i),
-    );
-    const len = Math.hypot(n.x, n.y);
-    return len > 1e-9 ? scale(n, 1 / len) : normals[i]!;
-}
-
 /** The rows from the front (or the right) to the back (or the left) */
 const frontToBack = (rows: LineRows, sign: 1 | -1): number[] => {
     const order = rows.list.map((_, i) => i);
@@ -182,7 +158,67 @@ export interface RowLayout {
     readonly count: number;
     readonly spots: readonly Slot[];
     readonly filled: readonly boolean[];
+    /**
+     * Where the row runs, end spot to end spot, following the drawn line's bends between its spots
+     * (its spots alone would cut the corners): what the field draws for it
+     */
+    readonly path: readonly XY[];
 }
+
+/** How far along `line` each of its points is */
+function lengthsOf(line: readonly XY[]): number[] {
+    const out = [0];
+    for (let i = 1; i < line.length; i++)
+        out.push(
+            out[i - 1]! +
+                Math.hypot(
+                    line[i]!.x - line[i - 1]!.x,
+                    line[i]!.y - line[i - 1]!.y,
+                ),
+        );
+    return out;
+}
+
+/** How far along `line` its point nearest `q` is */
+function lengthNear(
+    line: readonly XY[],
+    lengths: readonly number[],
+    q: XY,
+): number {
+    let best = 0;
+    let bestD = Infinity;
+    for (let i = 0; i + 1 < line.length; i++) {
+        const a = line[i]!;
+        const d = sub(line[i + 1]!, a);
+        const len2 = dot(d, d);
+        const f =
+            len2 > 0 ? Math.max(0, Math.min(1, dot(sub(q, a), d) / len2)) : 0;
+        const c = add(a, scale(d, f));
+        const dist = Math.hypot(q.x - c.x, q.y - c.y);
+        if (dist < bestD - 1e-9) {
+            bestD = dist;
+            best = lengths[i]! + f * (lengths[i + 1]! - lengths[i]!);
+        }
+    }
+    return best;
+}
+
+/** The point `l` along `line` */
+function pointAlong(
+    line: readonly XY[],
+    lengths: readonly number[],
+    l: number,
+): XY {
+    let i = 1;
+    while (i < line.length - 1 && lengths[i]! < l) i++;
+    const span = lengths[i]! - lengths[i - 1]!;
+    const f =
+        span > 0 ? Math.max(0, Math.min(1, (l - lengths[i - 1]!) / span)) : 0;
+    return add(line[i - 1]!, scale(sub(line[i]!, line[i - 1]!), f));
+}
+
+/** Samples of a row's path between one spot and the next */
+const PATH_STEPS = 8;
 
 /** A row's empty spots that fit in it, holding `count` marchers */
 function emptiesOf(row: LineRow, count: number): number[] {
@@ -245,6 +281,7 @@ export function layRows(
                 count: n,
                 spots,
                 filled: spots.map(() => true),
+                path: spots,
             },
         ];
     }
@@ -259,8 +296,37 @@ export function layRows(
         );
     const interval = base.length > 1 ? path / (base.length - 1) : rows.apart;
     const frame = rowFrame(p);
-    const outline = frame.step ? null : lineOutline(p);
-    const normals = outline ? base.map((b) => normalNear(outline, b)) : null;
+    const outline = lineOutline(p);
+    const lengths = lengthsOf(outline);
+    const baseAt = base.map((b) => lengthNear(outline, lengths, b));
+    // The drawn line `u` spots along it: on it between its spots, going on straight past its ends
+    const onLine = (u: number): XY => {
+        const last = base.length - 1;
+        if (last < 1 || u <= 0 || u >= last) return at(base, u);
+        const i = Math.floor(u);
+        const f = u - i;
+        if (f < 1e-9) return base[i]!;
+        return pointAlong(
+            outline,
+            lengths,
+            baseAt[i]! + f * (baseAt[i + 1]! - baseAt[i]!),
+        );
+    };
+    // Which way the rows step there: square to the line where it is when they follow it
+    const ends = frame.step
+        ? null
+        : [
+              normalNear(outline, base[0]!),
+              normalNear(outline, base[base.length - 1]!),
+          ];
+    const stepAt = (u: number): XY => {
+        if (frame.step || !ends) return frame.step ?? { x: 0, y: -1 };
+        if (u <= 0) return ends[0]!;
+        if (u >= base.length - 1) return ends[1]!;
+        return normalNear(outline, onLine(u));
+    };
+    const placed = (u: number, offset: number): XY =>
+        add(onLine(u), scale(stepAt(u), offset * rows.apart));
     return rows.list.map((row, index) => {
         const offset = index - rows.drawn;
         const { count, empty, length } = sizes[index]!;
@@ -272,14 +338,17 @@ export function layRows(
         const spots: Slot[] = [];
         for (let j = 0; j < length; j++) {
             const t = start + j;
-            const across = scale(
-                stepAt(frame, base, normals, t),
-                offset * rows.apart,
-            );
-            spots.push({ ...add(at(base, t), across), s: t * interval });
+            spots.push({ ...placed(t, offset), s: t * interval });
         }
         const filled = spots.map((_, j) => !empty.includes(j));
-        return { index, offset, count, spots, filled };
+        const path: XY[] = [];
+        for (let j = 0; j < length; j++) {
+            path.push(spots[j]!);
+            if (j + 1 < length)
+                for (let q = 1; q < PATH_STEPS; q++)
+                    path.push(placed(start + j + q / PATH_STEPS, offset));
+        }
+        return { index, offset, count, spots, filled, path };
     });
 }
 
@@ -1072,7 +1141,7 @@ export function rowsShape(shape: ShapeKind<P>): ShapeKind<P> {
             if (!rowsOf(p)) return own;
             const rows = layRows(p, n, spotsFor(shape, p, ctx))
                 .filter((r) => r.offset !== 0 && r.spots.length > 0)
-                .map((r) => r.spots.map(({ x, y }) => ({ x, y })));
+                .map((r) => r.path.map(({ x, y }) => ({ x, y })));
             return [...own, ...rows];
         },
         generate: (p, n, ctx) => {
@@ -1279,7 +1348,7 @@ export function withRows(kind: ToolKind<P>): ToolKind<P> {
                 ? Math.max(Math.min(half, env.stepPx), env.hitRadius)
                 : half;
             return layRows(p, n, (k) => lineFillSpots(p, k, env?.stepPx)).some(
-                (r) => nearRun(r.spots, point, reach),
+                (r) => nearRun(r.path, point, reach),
             );
         },
         move: (b, n, delta, env) =>
@@ -1358,7 +1427,7 @@ export function withRows(kind: ToolKind<P>): ToolKind<P> {
             if (!rowsOf(p)) return [];
             return layRows(p, n, (k) => lineFillSpots(p, k, stepPx))
                 .filter((r) => r.offset !== 0 && r.spots.length > 0)
-                .map((r) => r.spots.map(({ x, y }) => ({ x, y })));
+                .map((r) => r.path.map(({ x, y }) => ({ x, y })));
         },
     };
 }
