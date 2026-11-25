@@ -58,7 +58,8 @@ export async function grid(data: string, step: number) {
 
 /**
  * Each box's mean and median color as hex, and how much it varies (0 to 255). With `mark`, also
- * the photo with each box outlined and numbered, to check the boxes landed where meant.
+ * the part of the photo round the boxes, enlarged, with each box outlined and numbered, to check
+ * the boxes landed where meant.
  */
 export async function sample(data: string, boxes: number[][], mark = false) {
     const img = await decode(data);
@@ -93,39 +94,46 @@ export async function sample(data: string, boxes: number[][], mark = false) {
         };
     });
     if (!mark) return { boxes: results };
-    // outlined in magenta over a dark rim, numbered from 1, on a copy at least 900 px wide
-    const scale = Math.max(1, Math.ceil(900 / img.width));
-    const m = new OffscreenCanvas(img.width * scale, img.height * scale);
+    // the part of the photo round the boxes (a margin of a quarter of their spread, at least
+    // 40 px), on a copy at least 900 px wide, each box outlined in magenta over a dark rim and
+    // numbered from 1
+    const xs = results.flatMap(({ box: [bx, , bw] }) => [bx, bx + bw]);
+    const ys = results.flatMap(({ box: [, by, , bh] }) => [by, by + bh]);
+    const margin = Math.max(
+        40,
+        Math.round(
+            0.25 *
+                Math.max(
+                    Math.max(...xs) - Math.min(...xs),
+                    Math.max(...ys) - Math.min(...ys),
+                ),
+        ),
+    );
+    const cx0 = Math.max(0, Math.min(...xs) - margin);
+    const cy0 = Math.max(0, Math.min(...ys) - margin);
+    const cw = Math.min(img.width, Math.max(...xs) + margin) - cx0;
+    const chh = Math.min(img.height, Math.max(...ys) + margin) - cy0;
+    const scale = Math.max(1, Math.ceil(900 / cw));
+    const m = new OffscreenCanvas(cw * scale, chh * scale);
     const mx = m.getContext("2d")!;
     mx.imageSmoothingEnabled = false;
-    mx.drawImage(img, 0, 0, m.width, m.height);
-    mx.font = "bold 14px sans-serif";
+    mx.drawImage(img, cx0, cy0, cw, chh, 0, 0, m.width, m.height);
+    mx.font = "bold 16px sans-serif";
     results.forEach(({ box: [bx, by, bw, bh] }, i) => {
+        const X = (bx - cx0) * scale;
+        const Y = (by - cy0) * scale;
         for (const [color, width] of [
             ["#000", 3],
             ["#f0f", 1],
         ] as const) {
             mx.strokeStyle = color;
             mx.lineWidth = width;
-            mx.strokeRect(
-                bx * scale - 1,
-                by * scale - 1,
-                bw * scale + 2,
-                bh * scale + 2,
-            );
+            mx.strokeRect(X - 1, Y - 1, bw * scale + 2, bh * scale + 2);
         }
         mx.fillStyle = "#000";
-        mx.fillText(
-            String(i + 1),
-            bx * scale + bw * scale + 4,
-            by * scale + 12,
-        );
+        mx.fillText(String(i + 1), X + bw * scale + 5, Y + 14);
         mx.fillStyle = "#ff0";
-        mx.fillText(
-            String(i + 1),
-            bx * scale + bw * scale + 3,
-            by * scale + 11,
-        );
+        mx.fillText(String(i + 1), X + bw * scale + 4, Y + 13);
     });
     return { boxes: results, marked: await png(m) };
 }

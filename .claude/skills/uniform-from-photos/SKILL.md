@@ -13,8 +13,9 @@ over the flats) and **modes** (the ways it is worn). The 3D View wraps the flats
 Background: `docs/3d/uniform-artwork.md`. Commands and the `uniform.json` format:
 `apps/desktop/scripts/uniform-pack/README.md`. Read both before step 1.
 
-Work in a folder outside the repository, called `<work>` below. A real uniform is someone else's
-design: its pack, art and renders stay in `<work>`, out of every commit.
+Work in a folder outside the repository, called `<work>` below; write it as an absolute path in
+every command. A real uniform is someone else's design: its pack, art and renders stay in
+`<work>`, out of every commit.
 
 Run commands from `apps/desktop`. Once per checkout: `pnpm install`, then
 `pnpm --filter @openmarch/core build`.
@@ -34,7 +35,8 @@ stands.
 Look these up in the file rather than guessing:
 
 - `panels`: each panel's size and place on the page.
-- `regions`: each region's `id`, `polygon`, `bbox` (its top and bottom heights) and `edges`.
+- `regions`: each region's `id`, `polygon`, `bbox` (`{x, y, w, h}`: its top is `y`, its bottom
+  `y + h`) and `edges`.
 - `guides`: heights such as `collar`, `chest`, `elbow`, `jacketHem`, `crotch`, `knee`.
 - `landmarks`: `chestCentre`, `backNumberCentre`, `sleeveCuff`, `legHem` and each limb's
   `centreLines`.
@@ -53,10 +55,16 @@ Facts the numbers don't say:
 - **Wrap band:** the outer 15% of each half-width squeezes round the side of the body. Keep logos
   and text inside the dashed safe areas.
 - **Neck:** the jacket's mesh reaches a little up the neck, above every region, and takes the
-  palette's `primary`. Choose `primary` for how the neckline should read (usually the jacket fabric).
+  palette's `primary` in every mode: a small V at the front and a spike up the back of the neck,
+  whatever its color. Choose `primary` for how the neckline should read (usually the jacket
+  fabric); a skin neckline can't be shown.
+- **Proportions:** torso and hips heights are height on the body, but sleeves and legs run along
+  the limb, from the shoulder and the crotch. The template's elbow sits well above its jacket hem,
+  unlike a standing person's.
 
 Done when you can say, without looking, which panel and which side of it the performer's left
-sleeve is on, and you have read the elbow and knee heights from `guides`.
+sleeve is on (the template's own labels say it too), and you have read the elbow and knee heights
+from `guides`.
 
 ## 2. Inventory the photos
 
@@ -74,7 +82,8 @@ pnpm uniform:image crop <photo> 20,40,200,400 <work>/figure.png --size 600x1200
 ```
 
 Measure positions on the most front-on, standing figure; arms raised to hold a horn hide the
-chest and pull the sleeves.
+chest and pull the sleeves. The best photo to measure on and the best to sample colors from are
+often different photos: a front-on studio shot can be too dark, and a daylit figure too small.
 
 Write `<work>/inventory.md`: one row per **garment element** (jacket body, yoke, each braid row,
 sash, buttons, cummerbund, pants, stripes, gauntlets, hat, …):
@@ -82,8 +91,15 @@ sash, buttons, cummerbund, pants, stripes, gauntlets, hat, …):
 | Element | Where (regions, heights in inches) | Hex | Modes | How |
 | ------- | ---------------------------------- | --- | ----- | --- |
 
-- **Where:** convert photo positions to template heights by measuring between two landmarks you
-  can see on the body (shoulder line, belt, knee, hem) and interpolating.
+- **Where:** convert photo positions to template heights part by part, each from its own
+  landmarks, and never carry one scale from one part to another:
+
+  | Part        | Landmarks to measure between                              |
+  | ----------- | --------------------------------------------------------- |
+  | torso, hips | `collar`, `chest`, `jacketHem`, `crotch`                  |
+  | sleeves     | the sleeve's `bbox` top (shoulder), `elbow`, `sleeveCuff` |
+  | legs        | `crotch`, `knee`, `legHem`                                |
+
 - **Hex:** sample each color in 3 or more evenly lit boxes, away from highlights and shadows, and
   take the median. `--mark` draws the numbered boxes on the image: open it and drop any box that
   missed (background, skin, another person):
@@ -108,8 +124,8 @@ sash, buttons, cummerbund, pants, stripes, gauntlets, hat, …):
   - _palette_: collar, cuffs, gloves, shoes, hat, plume (`palette` and `options`)
   - _can't_: hangs or stands off the body (sashes, tabards, coat tails, flared gauntlets),
     sheer layers, hat shapes, standing collars, fabric sheen or texture (velvet, satin, metallic),
-    gloves that cover only part of the hand. Paint may show what lies flat on the body; note the
-    rest.
+    gloves that cover only part of the hand, a skin neckline. For a hanging piece, paint the part
+    that lies on the body of a marcher standing at attention, and list the rest under _can't_.
 - **Unseen** parts (often the back): pick the likeliest and mark the row _guessed_.
 
 Done when every element visible in every photo is a row, and every row has a hex, its modes and a
@@ -119,7 +135,9 @@ how.
 
 Write a generator script, `<work>/draw.mjs`, that reads `uniform-regions.json` and writes the SVGs
 into `<work>/pack/`. `apps/desktop/scripts/view3d-assets/uniform-flats-sample.mjs` is a worked
-example: clip paths from the region polygons, bands, and seam stripes from the seam table.
+example: clip paths from the region polygons, bands, and seam stripes from the seam table. The
+sample leaves its fabric to the palette's `primary` and `pants`; a pack from photos fills the
+fabric itself, so its color is exact.
 
 - **Base layer:** `front.svg` and `back.svg`, each `viewBox="0 0 34 78"`. Fill every region the
   garment covers, on both panels, clipped to its polygon, in the fabric hex. A jacket that covers
@@ -129,8 +147,11 @@ example: clip paths from the region polygons, bands, and seam stripes from the s
 - **Details:** paint anything that is part of the cloth and follows it: bands, stripes, yokes,
   braid rows. Draw anything that goes round a limb or across a side on both panels at the same
   heights. A stripe down a side seam follows the seam rows.
-- **Mode layers:** one more pair of SVGs per mode change, holding only what changes (the sash, the
-  open front); everything else transparent.
+- **Mode layers:** one more layer per mode change, holding only what changes (the sash, the open
+  front); everything else transparent. A layer names only the panels it changes: `front`, `back`
+  and `cape` are each optional.
+- **Items that move between modes** (frogs pushed outward when the jacket opens): items draw over
+  every layer, so a moved item is two items, each listed in its own modes' `items`.
 - **Items:** each in its own SVG, outside the flats. The builder trims the image to its painted
   pixels, and `at` is the centre of that trimmed art, in panel inches; `rotate` turns it about
   that centre. So to land one point of the art (a frog's button) somewhere, work out where it sits
@@ -188,10 +209,11 @@ Then compare with the photos, row by row of the inventory:
 
 - **present** in the right modes, and on the right side of the body
 - **height** against the photo's landmarks, and **size** against the scale bar (1 in blocks)
-- **color:** does the render read like the photo? The venue's daylight and the shader darken paint,
-  and nothing shows sheen, so a dark fabric can go black and a satin band can vanish into velvet.
-  Lighten the paint until the render reads like the photo, and note the hex you chose in
-  `rounds.md`.
+- **color:** does the render read like the photo, in value and in hue? The venue's daylight and
+  the shader darken paint, the blue sky light cools neutrals, and nothing shows sheen, so a dark
+  fabric can go black, a grey can go blue, and a satin band can vanish into velvet. Sample the
+  render PNGs with `uniform:image sample` and compare the numbers with the photo's. Adjust the
+  paint until the render reads like the photo, and note the hex you chose in `rounds.md`.
 - **seams:** bands close round limbs; front and back meet
 - **body types:** logos stay round, stripe counts hold, nothing slides off a slim or full body
 - **stands view:** from 40 m it reads like the uniform in the photos

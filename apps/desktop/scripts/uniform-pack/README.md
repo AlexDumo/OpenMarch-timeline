@@ -86,6 +86,8 @@ A folder holds `uniform.json` and the SVG and PNG files it names, by paths insid
   "layers": [
     // panels: each an SVG with viewBox "0 0 34 78" (cape "0 0 20.7 17.9") or a PNG at 32 px/in
     { "id": "base", "name": "Base", "front": "front.svg", "back": "back.svg" },
+    // a layer names only the panels it changes: front, back and cape are each optional
+    { "id": "open", "front": "open-front.svg" },
     // or the whole page: an SVG with viewBox "0 0 105 88", or a 3360 × 2816 PNG
     { "id": "sash", "page": "sash-page.svg" },
   ],
@@ -195,7 +197,7 @@ pnpm uniform:image template <outDir>                      # uniform-template.png
 pnpm uniform:image grid <photo> <out.png> [--step 100]    # the photo with a labelled pixel grid
 pnpm uniform:image sample <photo> 120,340,8,8 410,90 [--mark <out.png>]
                                     # mean and median hex of each box (x,y[,w,h] in the image's pixels);
-                                    # --mark draws the numbered boxes, to check where they landed
+                                    # --mark draws the numbered boxes on an enlarged crop round them
 pnpm uniform:image crop <photo> 300,420,64,64 <out.png> [--size 256x256]
 ```
 

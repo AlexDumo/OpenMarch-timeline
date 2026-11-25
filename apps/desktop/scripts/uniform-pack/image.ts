@@ -20,7 +20,8 @@ const USAGE = `usage: pnpm uniform:image <command> ...
   grid <photo> <out.png> [--step 100]        the photo with a labelled pixel grid, to read coordinates off
   sample <photo> <x,y[,w,h]> ... [--mark <out.png>]
                                              mean and median hex of each box, in the pixels of the
-                                             image given; --mark draws the numbered boxes on it
+                                             image given; --mark draws the numbered boxes on an
+                                             enlarged crop round them
   crop <photo> <x,y,w,h> <out.png> [--size WxH]   a box of the photo, for a print's tile texture`;
 
 const numbers = (s: string | undefined, n: number[]) => {
