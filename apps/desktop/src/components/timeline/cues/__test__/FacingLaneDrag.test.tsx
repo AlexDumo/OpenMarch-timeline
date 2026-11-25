@@ -19,7 +19,7 @@ import { compileShowCues } from "@/cues/showCues";
 import { facingLane } from "@/cues/facing";
 import { useCueSelectionStore } from "@/cues/cueSelectionStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
-import { FacingLaneView } from "../FacingLane";
+import { FacingLaneView, turnBarLabel } from "../FacingLane";
 import { useTurnPopoverStore } from "@/cues/turnPopoverStore";
 import { useTimelinePointer } from "../../TimelinePrimitives";
 import type { TimelineBeatRange } from "../../TimelineViewModel";
@@ -201,29 +201,40 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("the Facing lane (#993)", () => {
-    const grip = (container: HTMLElement, which: "result" | "turn") =>
-        container.querySelector(`[data-testid="facing-lane-${which}-start"]`)!;
+    const q = (container: HTMLElement, testId: string, cueId = 1) =>
+        container.querySelector(
+            `[data-cue-id="${cueId}"] [data-testid="${testId}"], [data-testid="${testId}"][data-cue-id="${cueId}"]`,
+        )!;
 
-    it("draws the turn leading into the cue, striped, then the result solid, each with a start grip", () => {
-        // A transition of 3, counted inclusively: a 2-count turn into count 12
+    it("draws the turn as its own piece before the cue's diamond, with the length handle on the turn only", () => {
         const { container } = renderLane([
-            cue(1, 12, "side2", { transition: 3 }),
+            cue(1, 12, "side2", { transition: 7 }),
         ]);
-        const turn = container.querySelector(
-            '[data-testid="facing-lane-turn"]',
-        )!;
-        expect(turn.textContent).toBe("0° → 90°");
-        const hold = container.querySelector(
-            '[data-testid="facing-lane-hold"]',
-        )!;
+        const turn = q(container, "facing-lane-turn");
+        const hold = q(container, "facing-lane-hold");
+        // 6 counts at 16 px: "↻ 90° · 6 counts" doesn't fit, "↻ 90°" does
+        expect(turn.textContent).toBe("↻ 90°");
         expect(hold.textContent).toContain("Side 2 · 90°");
-        expect(turn.contains(grip(container, "turn"))).toBe(true);
-        expect(hold.contains(grip(container, "result"))).toBe(true);
+        expect(
+            turn.querySelector('[data-testid="facing-lane-turn-start"]'),
+        ).not.toBeNull();
+        expect(
+            hold.querySelector('[data-testid="facing-lane-diamond"]'),
+        ).not.toBeNull();
+        // Nothing on the result changes the turn: no grip, and no tab while it has a turn
+        expect(
+            hold.querySelector('[data-testid="facing-lane-turn-start"]'),
+        ).toBeNull();
+        expect(
+            hold.querySelector('[data-testid="facing-lane-turn-tab"]'),
+        ).toBeNull();
     });
 
-    it("grows the turn backwards when the result's start is dragged left, keeping its count", async () => {
+    it("gives an instant cue a tab that pulls a turn out, keeping the cue on its count", async () => {
         const { container } = renderLane([cue(1, 13, "side2")]);
-        await dragBy(grip(container, "result"), -32);
+        const tab = q(container, "facing-lane-turn-tab");
+        expect(tab.getAttribute("aria-label")).toBe("Drag to turn over counts");
+        await dragBy(tab, -32);
         // Two counts before count 13, stored inclusively as 3
         expect(written.at(-1)?.modifiedCues).toEqual([
             { id: 1, transition: 3 },
@@ -231,15 +242,16 @@ describe("the Facing lane (#993)", () => {
     });
 
     it.each([
-        [-16, 4],
-        [32, null],
+        ["facing-lane-turn-start", -16, 4],
+        ["facing-lane-turn-start", 32, null],
+        ["facing-lane-turn", 16, 2],
     ] as const)(
-        "a 2-count turn whose start is dragged %i px (16 px a count) stores %s",
-        async (dx, transition) => {
+        "a 2-count turn dragged by its %s %i px (16 px a count) stores %s",
+        async (testId, dx, transition) => {
             const { container } = renderLane([
                 cue(1, 13, "side2", { transition: 3 }),
             ]);
-            await dragBy(grip(container, "turn"), dx);
+            await dragBy(q(container, testId), dx);
             expect(written.at(-1)?.modifiedCues).toEqual([
                 { id: 1, transition },
             ]);
@@ -251,29 +263,39 @@ describe("the Facing lane (#993)", () => {
             cue(2, 5, "back"),
             cue(1, 13, "side2"),
         ]);
-        await dragBy(
-            container.querySelector(
-                '[data-testid="facing-lane-hold"][data-cue-id="1"] [data-testid="facing-lane-result-start"]',
-            )!,
-            -400,
-        );
+        await dragBy(q(container, "facing-lane-turn-tab"), -400);
         // From count 5 into count 13: 8 counts, stored as 9
         expect(written.at(-1)?.modifiedCues).toEqual([
             { id: 1, transition: 9 },
         ]);
     });
 
-    it("moves the cue, its turn with it, when its bar is dragged", async () => {
-        const { container } = renderLane([
-            cue(1, 13, "back", { transition: 3 }),
-        ]);
-        await dragBy(
-            container.querySelector('[data-testid="facing-lane-turn"]')!,
-            32,
-        );
-        expect(written.at(-1)?.modifiedCues).toEqual([
-            { id: 1, beatId: 100 + 15 },
-        ]);
+    it.each(["facing-lane-diamond", "facing-lane-hold"] as const)(
+        "moves the cue, its turn with it, when its %s is dragged",
+        async (testId) => {
+            const { container } = renderLane([
+                cue(1, 13, "back", { transition: 3 }),
+            ]);
+            await dragBy(q(container, testId), 32);
+            expect(written.at(-1)?.modifiedCues).toEqual([
+                { id: 1, beatId: 100 + 15 },
+            ]);
+        },
+    );
+
+    it("labels a turn by its signed amount and counts, shorter where it's narrow", () => {
+        const words = {
+            full: (amount: string, counts: number) =>
+                `↻ ${amount} · ${counts} counts`,
+            short: (amount: string) => `↻ ${amount}`,
+        };
+        const piece = { from: 6, to: 8, fromDegrees: 0, degrees: 180 };
+        expect(turnBarLabel(piece, 200, words)).toBe("↻ 180° · 2 counts");
+        expect(turnBarLabel(piece, 50, words)).toBe("↻ 180°");
+        expect(turnBarLabel(piece, 20, words)).toBe("↻");
+        expect(
+            turnBarLabel({ ...piece, fromDegrees: 90, degrees: 0 }, 200, words),
+        ).toBe("↻ −90° · 2 counts");
     });
 
     it("picks a bar on a click and selects its turn and result; an empty-space click is the timeline's", async () => {

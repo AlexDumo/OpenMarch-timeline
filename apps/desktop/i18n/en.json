@@ -4484,7 +4484,11 @@
             "facing": "Facing",
             "facingEmpty": "No facing cues yet. Select performers, then right-click › Facing.",
             "turnMark": "{name}: {value}, {where}",
-            "dragTurnStart": "Drag to set where the turn starts"
+            "dragTurnStart": "Drag to set where the turn starts",
+            "turnLabel": "↻ {amount} · {count, plural, one {# count} other {# counts}}",
+            "turnLabelShort": "↻ {amount}",
+            "dragCue": "Drag to move this facing change",
+            "dragToTurn": "Drag to turn over counts"
         },
         "item": {
             "flag": "Flag",

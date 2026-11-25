@@ -30,7 +30,7 @@ import Term from "@/components/docs/Term.astro";
 import InShort from "@/components/docs/InShort.astro";
 import { Steps } from "@astrojs/starlight/components";
 
-<InShort>Select the marchers, right-click one and choose <Ui k="field.menu.facing" /> › a direction, or press <Kbd action="facingSide2" /> for side 2. To turn over the counts before, drag the start of its bar in the Facing lane to the left.</InShort>
+<InShort>Select the marchers, right-click one and choose <Ui k="field.menu.facing" /> › a direction, or press <Kbd action="facingSide2" /> for side 2. To turn over the counts before, pull the tab on the left of its diamond in the Facing lane to the left.</InShort>
 
 Every marcher faces the front until you turn them. A facing change says where the selected marchers face by a count: they face that way on it, and until their next facing change. They can turn into it instantly or over the counts before it. The 3D View turns them; the 2D field doesn't show facing yet.
 
@@ -74,29 +74,31 @@ Angles don't wrap around, so they say how a marcher gets there:
 
 ## Turn over the counts before
 
-The <Ui k="cues.lane.facing" plain /> lane on the timeline appears with the show's first facing change; to show or hide it, use the <Ui k="cues.lane.lanes" /> row ([Lanes](/guides/timeline/how-the-timeline-works/#lanes)). It has a row for each group of marchers who turn alike. A solid bar starts on the count where they face the new way, and holds that angle up to their next facing change. A striped bar in front of it is the turn into it, from the angle they start at to the one they end at (0° → 90°).
+The <Ui k="cues.lane.facing" plain /> lane on the timeline appears with the show's first facing change; to show or hide it, use the <Ui k="cues.lane.lanes" /> row ([Lanes](/guides/timeline/how-the-timeline-works/#lanes)). It has a row for each group of marchers who turn alike.
+
+- A diamond marks each facing change on its count. The solid bar after it is the angle they hold from there, up to their next facing change.
+- A pale bar with a dashed edge in front of the diamond is the turn into it. Its label says how far they turn and over how many counts, such as ↻ 180° · 2 counts. A negative angle turns the other way. On a narrow bar the counts, then the angle, are left out; point at the bar to read it all.
 
 <Media
   id="marchers-facing-lane"
-  alt="The timeline's Facing lane with one row, G6–G10: a striped bar reading 0° → 90° over the four counts before the end of Page 1, then a solid bar reading Side 2 · 90° from the end of Page 1 to the end of the show. The playhead is at the end of Page 1, where the turn ends."
+  alt="The timeline's Facing lane with one row, G6–G10: a pale turn bar with a dashed edge, labelled with the turn, over the four counts before the end of Page 1, then a diamond on the end of Page 1 and a solid bar reading Side 2 · 90° from there to the end of the show."
 />
 
 To face back on count 3, turning over the 2 counts before it:
 
 <Steps>
 
-1. Turn the marchers to the back on count 3, as above.
-2. In the <Ui k="cues.lane.facing" plain /> lane, point at the left end of the new solid bar. The pointer becomes a two-way arrow.
-3. Drag it two counts to the left. A striped turn grows in front of the bar, from count 1 to count 3, and the bar stays on count 3. The turn goes at an even speed per count.
+1. Turn the marchers to the back on count 3, as above. Its diamond has a small tab with an arrow on its left.
+2. Drag the tab two counts to the left. A turn grows in front of the diamond, from count 1 to count 3, and the diamond stays on count 3. The turn goes at an even speed per count.
 
 </Steps>
 
 <Media
   id="marchers-facing-stretch"
-  alt="G6 to G10 face side 2 at the end of Page 1, instantly. The start of their Side 2 bar in the Facing lane is dragged two counts to the left, and a striped turn appears in front of it, ending where the Side 2 bar starts."
+  alt="G6 to G10 face side 2 at the end of Page 1, instantly. The small tab on the left of their diamond in the Facing lane is pulled two counts to the left, and a pale turn bar appears in front of the diamond, which stays where it was."
 />
 
-- Drag the start of a striped turn to change how many counts it takes. Dragged back to the solid bar, the turn is instant again.
+- To change how many counts a turn takes, drag the turn, or its left edge. The facing change stays on its count. Dragged back to the diamond, the turn is instant again.
 - It lands where you let go, and on page flags, the playhead and measures as other timeline edges do; hold <Kbd keys="Alt" gesture="drag" /> to turn that off.
 - A turn can't start before those marchers' previous facing change: it stops there.
 
@@ -112,12 +114,12 @@ Double-click a turn's bar in the <Ui k="cues.lane.facing" plain /> lane, or righ
 - Drag the dot on the dial to where they end up. Keep going past a full circle to add a spin.
 - **From** is where they face when the turn starts. You can't change it here: it comes from their facing before.
 - Type the angle they end at in **To**. It's on the facing change's count.
-- <Ui k="cues.turn.counts" plain /> is how many counts the turn takes before that count (0 is instant). Changing it moves where the turn starts, not where it ends.
+- <Ui k="cues.turn.counts" plain /> is how many counts the turn takes before that count (0 is instant). Changing it moves where the turn starts, not where it ends. This is also the way to set a turn's length without dragging.
 - The chips turn them to a direction, the shorter way round for each marcher, as the menu does.
 
 ## Move, change or delete a facing change
 
-- Drag a bar sideways to move the facing change. Its turn moves with it.
+- Drag the diamond, or the solid bar after it, sideways to move the facing change to another count. Its turn moves with it, taking the same number of counts. To move it without dragging, put the playhead on the new count, right-click the bar and choose <Ui k="actions.cues.moveToPlayhead" />.
 - Click a bar to pick its facing change. As when you click a move's bar, that also selects its counts: the start flag goes to where the turn starts and the playhead to those marchers' next facing change.
 - Right-click a bar, or press and hold it on a tablet, for its menu: <Ui k="actions.cues.editTurn" plain />, <Ui k="actions.cues.addSelected" plain />, <Ui k="actions.cues.removeSelected" plain />, <Ui k="cues.lane.selectPerformers" plain />, <Ui k="actions.cues.moveToPlayhead" plain /> and <Ui k="actions.cues.delete" plain />.
 - Click a row's name to select its marchers.

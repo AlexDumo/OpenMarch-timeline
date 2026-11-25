@@ -1130,8 +1130,8 @@ const shots = [
     {
         id: "marchers-facing-stretch",
         kind: "clip",
-        // G6–G10 turned to side 2, instantly, at the end of Page 1; the start of the Side 2 bar is
-        // dragged two counts left, and a striped 2-count turn grows in front of it, ending on the
+        // G6–G10 turned to side 2, instantly, at the end of Page 1; the tab on the left of the cue's
+        // diamond is pulled two counts left, and a 2-count turn grows in front of it, ending on the
         // same count
         async setup({ page, wait }) {
             await toPage1(page, wait);
@@ -1145,7 +1145,7 @@ const shots = [
             const two = 2 * (await countWidth(page));
             await overlay.enable();
             const grip = await page
-                .getByTestId("facing-lane-result-start")
+                .getByTestId("facing-lane-turn-tab")
                 .first()
                 .boundingBox();
             const grab = {

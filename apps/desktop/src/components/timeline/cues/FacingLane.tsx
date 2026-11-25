@@ -53,6 +53,7 @@ import { cueNeighbours, turnCounts, turnStartDrag } from "@/cues/cueEdges";
 import { withEquipmentSet } from "@/cues/equipment";
 import {
     facingLane,
+    formatDegrees,
     turnLabel,
     type FacingDirection,
     type FacingLaneData,
@@ -161,7 +162,10 @@ export function useFacingLaneParts(): {
 }
 
 type LaneDrag = { cueId: number; edit: CueEdit | null };
-/** What a press on a cue drags: its bar, or where its turn starts from its result's or turn's start */
+/**
+ * What a press on a cue drags: the cue (its result or diamond), where its turn starts (its turn),
+ * or a new turn out of an instant cue (the diamond's tab)
+ */
 type LaneDragMode = "move" | "resultStart" | "turnStart";
 type CueMenu = { x: number; y: number; cueId: number };
 
@@ -529,7 +533,35 @@ export function FacingLaneView({
                                 piece={piece}
                                 left={xOf(piece.from)}
                                 width={xOf(piece.to) - xOf(piece.from)}
-                                label={turnLabel(piece, names)}
+                                label={
+                                    piece.kind === "turn"
+                                        ? turnBarLabel(
+                                              piece,
+                                              xOf(piece.to) - xOf(piece.from),
+                                              {
+                                                  full: (amount, count) =>
+                                                      t("cues.lane.turnLabel", {
+                                                          amount,
+                                                          count,
+                                                      }),
+                                                  short: (amount) =>
+                                                      t(
+                                                          "cues.lane.turnLabelShort",
+                                                          {
+                                                              amount,
+                                                          },
+                                                      ),
+                                              },
+                                          )
+                                        : turnLabel(piece, names)
+                                }
+                                instant={
+                                    !row.pieces.some(
+                                        (p) =>
+                                            p.cueId === piece.cueId &&
+                                            p.kind === "turn",
+                                    )
+                                }
                                 dragging={
                                     drag !== null && drag.cueId === piece.cueId
                                 }
@@ -631,15 +663,31 @@ function RowName({ row, name }: { row: FacingRow; name: string }) {
     );
 }
 
+/** The diamond that marks a cue on its count, in px */
+const DIAMOND_PX = 13;
+/** The tab on an instant cue's diamond that pulls out a turn, in px */
+const TAB_W = 12;
+const TAB_H = 18;
+/** About how wide a character of a lane label is, in px, to pick the label that fits */
+const LABEL_CHAR_PX = 6;
+
 /**
- * One piece of a row: a striped turn, a solid hold, or the dashed front before any cue. A cue's
- * turn and hold each have a grip at their left edge that sets where the turn starts.
+ * One piece of a row (fork #993):
+ *
+ * - **A turn** is a pale bar with a dashed edge, labelled with how far and how long it turns
+ *   ("↻ 180° · 2 counts"). Anything on it changes the turn's length: dragging it, or its left
+ *   edge, moves where the turn starts (the cue stays on its count). Double-click opens the dial.
+ * - **A result** (the hold from the cue's count) is solid. Dragging it moves the cue, its turn
+ *   coming along at the same length. A diamond marks the cue on its count, and drags the same
+ *   way; an instant cue's diamond has a tab on its left that pulls a turn out.
+ * - **The front before any cue** is dashed, and is empty lane space.
  */
 function FacingBar({
     piece,
     left,
     width,
     label,
+    instant,
     dragging,
     picked,
     lockedReason,
@@ -651,6 +699,8 @@ function FacingBar({
     left: number;
     width: number;
     label: string;
+    /** A result whose cue has no turn: its diamond shows the tab that pulls one out */
+    instant: boolean;
     dragging: boolean;
     picked: boolean;
     lockedReason?: string;
@@ -663,7 +713,13 @@ function FacingBar({
     const turn = piece.kind === "turn";
     const longPress = useLongPressMenu(onMenu);
     const drawnWidth = Math.max(width - 1, 4);
-    const grip = isCue && !lockedReason;
+    const editable = isCue && !lockedReason;
+    /** A press on the bar: a turn changes its length, a result moves the cue */
+    const press = (e: ReactPointerEvent<HTMLElement>, mode: LaneDragMode) => {
+        e.stopPropagation();
+        onPress(e, mode);
+        longPress.start(e);
+    };
     return (
         <div
             data-testid={
@@ -678,14 +734,17 @@ function FacingBar({
             data-timeline-interactive={isCue ? "" : undefined}
             title={isCue ? (lockedReason ?? label) : label}
             className={clsx(
-                "text-micro rounded-4 absolute top-2 flex items-center px-4 leading-none whitespace-nowrap",
+                "text-micro rounded-4 absolute top-2 flex items-center leading-none whitespace-nowrap",
                 isCue
                     ? clsx(
                           "text-text touch-none font-medium",
-                          turn ? "border-accent border" : "bg-accent/40",
-                          !lockedReason && "cursor-grab",
+                          turn
+                              ? "border-accent justify-center border border-dashed px-2"
+                              : "bg-accent/40 px-4",
+                          editable &&
+                              (turn ? "cursor-ew-resize" : "cursor-grab"),
                       )
-                    : "border-stroke text-text-subtitle border border-dashed",
+                    : "border-stroke text-text-subtitle border border-dashed px-4",
                 picked && "ring-accent ring-2",
                 dragging && "z-[6] cursor-grabbing opacity-90 shadow-lg",
             )}
@@ -695,8 +754,8 @@ function FacingBar({
                 height: ROW - 4,
                 ...(turn
                     ? {
-                          backgroundImage:
-                              "repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 35%, transparent) 0 4px, transparent 4px 7px)",
+                          backgroundColor:
+                              "color-mix(in srgb, var(--color-accent) 22%, var(--color-bg-1))",
                       }
                     : {}),
             }}
@@ -712,28 +771,22 @@ function FacingBar({
             onPointerDown={(e) => {
                 // The front before any cue is empty lane space: its press is the timeline's
                 if (!isCue) return;
-                e.stopPropagation();
-                onPress(e, "move");
-                longPress.start(e);
+                press(e, turn ? "turnStart" : "move");
             }}
         >
-            <span className="min-w-0 truncate">{label}</span>
-            {grip && (
+            <span className={clsx("min-w-0 truncate", !turn && "pl-8")}>
+                {label}
+            </span>
+            {turn && editable && (
+                // The turn's left edge: where it starts, the one handle for its length
                 <span
-                    data-testid={
-                        turn
-                            ? "facing-lane-turn-start"
-                            : "facing-lane-result-start"
-                    }
+                    data-testid="facing-lane-turn-start"
                     data-timeline-interactive=""
                     title={t("cues.lane.dragTurnStart")}
                     aria-label={t("cues.lane.dragTurnStart")}
                     className="group/resize absolute top-0 z-[1] h-full cursor-ew-resize touch-none"
                     style={{ left: -GRIP_PX / 2, width: GRIP_PX }}
-                    onPointerDown={(e) => {
-                        e.stopPropagation();
-                        onPress(e, turn ? "turnStart" : "resultStart");
-                    }}
+                    onPointerDown={(e) => press(e, "turnStart")}
                 >
                     <span
                         className={clsx(
@@ -753,8 +806,73 @@ function FacingBar({
                     )}
                 </span>
             )}
+            {isCue && !turn && (
+                // The cue on its count: drag it to move the cue
+                <span
+                    data-testid="facing-lane-diamond"
+                    data-timeline-interactive=""
+                    title={lockedReason ?? t("cues.lane.dragCue")}
+                    aria-label={t("cues.lane.dragCue")}
+                    className={clsx(
+                        "bg-text ring-bg-1 absolute top-1/2 z-[2] -translate-x-1/2 -translate-y-1/2 rotate-45 ring-2",
+                        editable && "cursor-grab",
+                    )}
+                    style={{
+                        left: 0,
+                        width: DIAMOND_PX * 0.72,
+                        height: DIAMOND_PX * 0.72,
+                    }}
+                    onPointerDown={(e) => press(e, "move")}
+                />
+            )}
+            {isCue && !turn && instant && editable && (
+                // An instant cue's tab: pull it left to turn over the counts before
+                <span
+                    data-testid="facing-lane-turn-tab"
+                    data-timeline-interactive=""
+                    title={t("cues.lane.dragToTurn")}
+                    aria-label={t("cues.lane.dragToTurn")}
+                    className="text-text-subtitle hover:text-text border-text-subtitle rounded-l-4 absolute top-1/2 z-[1] flex -translate-y-1/2 cursor-ew-resize touch-none items-center justify-center border border-r-0 leading-none"
+                    style={{
+                        left: -DIAMOND_PX / 2 - TAB_W + 1,
+                        width: TAB_W,
+                        height: TAB_H,
+                    }}
+                    onPointerDown={(e) => press(e, "resultStart")}
+                >
+                    ◂
+                    {picked && (
+                        <TouchHitArea
+                            selected
+                            className="touch:block pointer-events-auto absolute top-1/2 hidden h-full min-h-44 -translate-y-1/2"
+                            style={{ width: TOUCH_HIT_SIZE, right: 0 }}
+                        />
+                    )}
+                </span>
+            )}
         </div>
     );
+}
+
+/**
+ * A turn's words for its bar: the signed turn amount (To minus From) and its counts, "↻ 180° · 2
+ * counts", then "↻ 180°", then the icon alone, whichever fits `width` px.
+ */
+export function turnBarLabel(
+    piece: Pick<FacingPiece, "fromDegrees" | "degrees" | "from" | "to">,
+    width: number,
+    words: {
+        full: (amount: string, counts: number) => string;
+        short: (amount: string) => string;
+    },
+): string {
+    const amount = formatDegrees(piece.degrees - piece.fromDegrees);
+    const counts = Math.round(piece.to - piece.from);
+    const fits = (text: string) => text.length * LABEL_CHAR_PX + 8 <= width;
+    const full = words.full(amount, counts);
+    if (fits(full)) return full;
+    const short = words.short(amount);
+    return fits(short) ? short : "↻";
 }
 
 /** A turn's mark in the folded lane: a diamond. Click picks, right-click or long press opens its menu */
