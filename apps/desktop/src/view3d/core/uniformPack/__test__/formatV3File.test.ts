@@ -1,7 +1,7 @@
 // @vitest-environment node
 // cspell:words omasset Kiritimati Pago
 /**
- * A committed version 3 pack file (Cadets 2019, fork #1257 step 5): this build reads it and still
+ * A committed version 3 pack file (Sample modes, fork #1257 step 5): this build reads it and still
  * writes the same bytes; step 4's reader, copied verbatim in `step4Format.ts`, refuses it; and
  * the uniform pack worker's `flatten` draws each mode's layers from it.
  */
@@ -10,13 +10,13 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { UniformPackError, flattenPlan, readUniformPack } from "../format";
 import * as step4 from "./step4Format";
-import { cadetsV3 } from "./cadetsV3";
+import { sampleModesV3 } from "./sampleModesV3";
 import { fakePng } from "./fixtures";
 
 const file = () =>
     new Uint8Array(
         readFileSync(
-            resolve(__dirname, "fixtures-files/cadets-2019-v3.omasset"),
+            resolve(__dirname, "fixtures-files/sample-modes-v3.omasset"),
         ),
     );
 
@@ -43,7 +43,7 @@ describe("the version 3 pack file", () => {
             "Sash out",
             "Sash out, unzipped",
         ]);
-        expect(Array.from(cadetsV3())).toEqual(Array.from(file()));
+        expect(Array.from(sampleModesV3())).toEqual(Array.from(file()));
     });
 
     it("is refused as newer by step 4's reader, and its schema refuses the manifest too", () => {
@@ -74,7 +74,7 @@ describe("the same pack in any timezone", () => {
                 "Pacific/Pago_Pago",
             ]) {
                 process.env.TZ = tz;
-                out[tz] = Array.from(cadetsV3());
+                out[tz] = Array.from(sampleModesV3());
             }
         } finally {
             if (before === undefined) delete process.env.TZ;

@@ -339,7 +339,7 @@ exports[`preview pack files (format versions 1 to 3) > the format version 3 file
         },
       },
     ],
-    "name": "Cadets 2019",
+    "name": "Sample modes",
     "options": {
       "collar": true,
       "cuffs": true,

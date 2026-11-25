@@ -15,7 +15,7 @@ import type { FlatsResources } from "../marcherBodies";
 
 vi.mock("../flatsAtlas", () => ({}));
 
-const pack = `library:cadets@${"a".repeat(64)}` as UniformPackValue;
+const pack = `library:modes@${"a".repeat(64)}` as UniformPackValue;
 
 describe("switching uniform modes", () => {
     it("gives each mode its own key, which splits back", () => {

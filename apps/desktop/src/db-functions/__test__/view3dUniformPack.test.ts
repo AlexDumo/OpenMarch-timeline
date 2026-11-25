@@ -834,11 +834,11 @@ describeDbTests("view3dUniformPack", (it) => {
     });
 });
 
-/** The tag-1 "Cadets 2019" with plain and sash out modes (format version 3, #1257 step 5) */
+/** The tag-1 "Sample modes" with plain and sash out modes (format version 3, #1257 step 5) */
 const modesPack = (sashName = "Sash out") =>
     writeUniformPack(
         {
-            ...sampleManifest("Cadets 2019"),
+            ...sampleManifest("Sample modes"),
             layers: [
                 {
                     id: "base",
@@ -875,7 +875,7 @@ describeDbTests("view3dUniformPack modes (#1257 step 5)", (it) => {
     }) => {
         const origin = await store(
             db,
-            writeUniformPack(sampleManifest("Cadets 2019"), {
+            writeUniformPack(sampleManifest("Sample modes"), {
                 "layers/base.png": fakePng(3360, 2816, 1),
             }),
         );

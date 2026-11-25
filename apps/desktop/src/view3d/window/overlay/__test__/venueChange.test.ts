@@ -206,7 +206,7 @@ describe("the band's flats uniform (fork #1255)", () => {
 });
 
 describe("the band's uniform mode (fork #1257 step 5)", () => {
-    const pack = `library:cadets@${"a".repeat(64)}` as const;
+    const pack = `library:modes@${"a".repeat(64)}` as const;
     const other = `library:away@${"b".repeat(64)}` as const;
     const wearing = applyVenueChange(defaultVenueForKit("hs"), {
         kind: "uniformArtwork",

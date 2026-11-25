@@ -48,7 +48,7 @@ describe("the page a pack key draws", () => {
 
     it("draws a draft's mode from its own layers, with the overlay it hasn't saved", () => {
         vi.useFakeTimers();
-        const stored = contentsOf(sampleManifest("Cadets 2019"));
+        const stored = contentsOf(sampleManifest("Sample modes"));
         const overlay = fakePng(3360, 2816, 7);
         let sash = "";
         editPack(

@@ -1,6 +1,6 @@
 /**
  * Editing a uniform's modes (step 5 of fork #1257): every edit leaves a pack the format accepts,
- * and the rules in `modeEdits.ts` hold, using Cadets 2019 (plain, sash out, sash out unzipped).
+ * and the rules in `modeEdits.ts` hold, using Sample modes (plain, sash out, sash out unzipped).
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -29,7 +29,7 @@ import {
 } from "../modeEdits";
 import { fakePng, sampleManifest } from "./fixtures";
 
-const base = sampleManifest("Cadets 2019");
+const base = sampleManifest("Sample modes");
 const start = (): PackContents => ({
     ...contentsOf(base),
     items: [
@@ -63,7 +63,7 @@ const written = (contents: PackContents) => {
 };
 
 /** Plain, then sash out (with the sash overlay), then sash out unzipped */
-function cadets() {
+function modesPack() {
     const a = addMode(start(), {
         random,
         name: "Sash out",
@@ -97,8 +97,8 @@ describe("uniform mode edits", () => {
         expect(written(contents).formatVersion).toBe(3);
     });
 
-    it("builds Cadets 2019's three modes", () => {
-        const { contents, unzipped } = cadets();
+    it("builds Sample modes's three modes", () => {
+        const { contents, unzipped } = modesPack();
         expect(contents.modes.map((m) => m.name)).toEqual([
             "Plain",
             "Sash out",
@@ -151,7 +151,7 @@ describe("uniform mode edits", () => {
     });
 
     it("removes a mode but keeps its images, which can be removed once no mode shows them", () => {
-        const { contents, unzipped } = cadets();
+        const { contents, unzipped } = modesPack();
         const next = removeMode(contents, unzipped);
         expect(next.modes).toHaveLength(2);
         expect(next.layers.map((l) => l.id)).toEqual([
@@ -167,7 +167,7 @@ describe("uniform mode edits", () => {
     });
 
     it("keeps the sash when Sash out has it turned off and Unzipped is removed", () => {
-        const { contents, sash, unzipped } = cadets();
+        const { contents, sash, unzipped } = modesPack();
         const off = setModeLayer(contents, sash, "sash", false);
         const next = removeMode(off, unzipped);
         expect(next.layers.map((l) => l.id)).toContain("sash");
@@ -181,7 +181,7 @@ describe("uniform mode edits", () => {
     });
 
     it("removing the last mode keeps exactly what it drew, colors and parts included", () => {
-        const { contents, sash, unzipped } = cadets();
+        const { contents, sash, unzipped } = modesPack();
         const plain = contents.modes[0].id;
         const recolored = setModeParts(
             setModeColor(contents, sash, "primary", "#112233"),
@@ -204,7 +204,7 @@ describe("uniform mode edits", () => {
     });
 
     it("never reuses a removed mode's id", () => {
-        const { contents, sash } = cadets();
+        const { contents, sash } = modesPack();
         const gone = removeMode(contents, sash);
         const again = addMode(gone, {
             name: "Sash out",
@@ -221,7 +221,7 @@ describe("uniform mode edits", () => {
     });
 
     it("keeps a mode's last layer, and never drops a layer turned off", () => {
-        const { contents, sash } = cadets();
+        const { contents, sash } = modesPack();
         const off = setModeLayer(contents, sash, "sash", false);
         expect(off.modes.find((m) => m.id === sash)!.layers).toEqual(["base"]);
         expect(off.layers).toHaveLength(3);
@@ -232,13 +232,13 @@ describe("uniform mode edits", () => {
     });
 
     it("moves a mode, which can make it the default", () => {
-        const { contents, sash } = cadets();
+        const { contents, sash } = modesPack();
         expect(moveMode(contents, sash, -1).modes[0].id).toBe(sash);
         expect(moveMode(contents, contents.modes[0].id, -1)).toBe(contents);
     });
 
     it("renames, keeping the old name for an empty one", () => {
-        const { contents, sash } = cadets();
+        const { contents, sash } = modesPack();
         expect(renameMode(contents, sash, "  Sash on  ").modes[1].name).toBe(
             "Sash on",
         );
@@ -248,7 +248,7 @@ describe("uniform mode edits", () => {
     });
 
     it("shows a new item in every mode, and drops a removed one from them", () => {
-        const { contents, sash } = cadets();
+        const { contents, sash } = modesPack();
         const hidden = setModeItem(contents, sash, "crest", false);
         expect(hidden.modes.find((m) => m.id === sash)!.items).toEqual([]);
         const added = tidyContents(

@@ -34,7 +34,7 @@ const number: UniformPackItem = {
     height: 8,
 };
 
-/** Cadets 2019, as the design doc names its modes */
+/** Sample modes, as the design doc names its modes */
 const plain: UniformPackMode = {
     id: "plain",
     name: "Plain",
@@ -56,10 +56,10 @@ const unzipped: UniformPackMode = {
     options: { collar: false, hat: false },
 };
 
-const cadets = (
+const modesPack = (
     modes: UniformPackMode[] = [plain, sashOut, unzipped],
 ): UniformPackManifest => {
-    const base = sampleManifest("Cadets 2019");
+    const base = sampleManifest("Sample modes");
     return {
         ...base,
         layers: [
@@ -108,7 +108,7 @@ const rawPack = (manifest: object) =>
 
 describe("uniform pack modes (format version 3)", () => {
     it("round-trips a pack with modes as version 3, writing the same bytes again", () => {
-        const bytes = writeUniformPack(cadets(), files);
+        const bytes = writeUniformPack(modesPack(), files);
         const read = readUniformPack(bytes);
         expect(read.manifest.formatVersion).toBe(3);
         expect(read.manifest.modes).toEqual([plain, sashOut, unzipped]);
@@ -122,7 +122,7 @@ describe("uniform pack modes (format version 3)", () => {
     });
 
     it("still writes a pack without modes as version 1 or 2, and reads older files", () => {
-        const two = readUniformPack(writeUniformPack(cadets([]), files));
+        const two = readUniformPack(writeUniformPack(modesPack([]), files));
         expect(two.manifest.formatVersion).toBe(2);
         const one = readUniformPack(
             writeUniformPack(sampleManifest(), {
@@ -141,7 +141,7 @@ describe("uniform pack modes (format version 3)", () => {
                 ).manifest.formatVersion,
             ).toBe(version);
         // removing the last mode goes back to the lowest version
-        const three = readUniformPack(writeUniformPack(cadets(), files));
+        const three = readUniformPack(writeUniformPack(modesPack(), files));
         expect(
             readUniformPack(packWithContents(three, { modes: [] })).manifest
                 .formatVersion,
@@ -152,7 +152,7 @@ describe("uniform pack modes (format version 3)", () => {
         // step 4's own reader refusing version 3 is checked in formatV3File.test.ts
         expect(
             codeOf(() =>
-                readUniformPack(rawPack({ ...cadets(), formatVersion: 2 })),
+                readUniformPack(rawPack({ ...modesPack(), formatVersion: 2 })),
             ),
         ).toBe("damaged");
     });
@@ -174,7 +174,7 @@ describe("uniform pack modes (format version 3)", () => {
             expect(
                 codeOf(() =>
                     readUniformPack(
-                        rawPack({ ...cadets(modes), formatVersion: 3 }),
+                        rawPack({ ...modesPack(modes), formatVersion: 3 }),
                     ),
                 ),
                 JSON.stringify(modes),
@@ -184,7 +184,7 @@ describe("uniform pack modes (format version 3)", () => {
             codeOf(() =>
                 readUniformPack(
                     rawPack({
-                        ...cadets([{ ...plain, tint: "#ff0000" } as never]),
+                        ...modesPack([{ ...plain, tint: "#ff0000" } as never]),
                         formatVersion: 3,
                     }),
                 ),
@@ -195,7 +195,7 @@ describe("uniform pack modes (format version 3)", () => {
             codeOf(() =>
                 readUniformPack(
                     rawPack({
-                        ...cadets(),
+                        ...modesPack(),
                         formatVersion: 3,
                         variants: [{ id: "guard" }],
                     }),
@@ -205,7 +205,7 @@ describe("uniform pack modes (format version 3)", () => {
     });
 
     it("draws each mode's layers and items, and the default for a mode it doesn't have", () => {
-        const manifest = cadets();
+        const manifest = modesPack();
         const drawn = (mode: string | null) => {
             const d = drawnInMode(manifest, mode);
             return [d.layers.map((l) => l.id), d.items.map((i) => i.id)];
@@ -221,12 +221,12 @@ describe("uniform pack modes (format version 3)", () => {
         expect(drawn("removed-mode")).toEqual(drawn("plain"));
         // a pack without modes draws everything
         expect(
-            drawnInMode(cadets([]), "sash-out").layers.map((l) => l.id),
+            drawnInMode(modesPack([]), "sash-out").layers.map((l) => l.id),
         ).toEqual(["base", "sash", "open-front"]);
     });
 
     it("takes a mode's colors and parts over the uniform's own", () => {
-        const manifest = cadets();
+        const manifest = modesPack();
         const own = lookOfManifest(manifest, "plain");
         const open = lookOfManifest(manifest, "unzipped");
         expect(open.colors.primary).toBe(0xf2f2ee);
