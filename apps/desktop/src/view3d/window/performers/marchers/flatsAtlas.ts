@@ -631,6 +631,7 @@ async function composeFrom(
     texture.generateMipmaps = true;
     texture.minFilter = THREE.LinearMipmapLinearFilter;
     texture.magFilter = THREE.LinearFilter;
+    // 4: the shader keeps the hem clear by what this filter reads (omFlatHemReach)
     texture.anisotropy = 4;
     texture.wrapS = THREE.ClampToEdgeWrapping;
     texture.wrapT = THREE.ClampToEdgeWrapping;

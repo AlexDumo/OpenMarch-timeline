@@ -48,6 +48,17 @@ const float OM_FLAT_PI = 3.14159265;
 const float OM_FLAT_HEM_INSET = 0.05;
 // The most (in) a sample's filter footprint keeps the torso and the hips off the hem (omFlatArt).
 const float OM_FLAT_HEM_FOOTPRINT_MAX = 0.5;
+// How far (in) along the flat's y a sample with gradients gx, gy (in per pixel) reads: the texel size at the
+// coarser of the two mip levels a trilinear, 4x anisotropic lookup blends (the level as the GPU picks it, from
+// the footprint's longer axis over its anisotropy), 1.5 texels so a texel straddling the hem stays clear
+// wherever the hem falls in it, plus half the footprint's vertical extent, along which the anisotropic
+// probes spread. Sideways extent doesn't count: the hem runs across the flats.
+float omFlatHemReach(vec2 gx, vec2 gy) {
+  float rx = length(gx) / uFlatPx, ry = length(gy) / uFlatPx;
+  float rLong = max(rx, ry), rShort = max(min(rx, ry), 1e-6);
+  float lod = max(0.0, ceil(log2(max(rLong / min(4.0, rLong / rShort), 1.0))));
+  return 1.5 * exp2(lod) * uFlatPx + 0.5 * max(abs(gx.y), abs(gy.y));
+}
 // The hem inset (in) at this atlas's resolution.
 float omFlatHemInset() {
   return max(OM_FLAT_HEM_INSET, uFlatPx);
@@ -183,11 +194,10 @@ vec4 omFlatArt() {
     gx = vec2(length(dFdx(vRest)) / OM_FLAT_IN, 0.0);
     gy = vec2(0.0, length(dFdy(vRest)) / OM_FLAT_IN);
   }
-  // off the hem by the filter's own footprint too: at a coarser mip level one atlas pixel isn't enough (capped,
-  // so a far marcher's jacket doesn't take art from inches higher up)
+  // off the hem by what the filter reads too: at a coarser mip level a texel can straddle the hem
   if (s == 0 || s == 1) {
     float hem = uFlatY0[1];
-    float keep = max(omFlatHemInset(), min(OM_FLAT_HEM_FOOTPRINT_MAX, max(length(gx), length(gy))));
+    float keep = max(omFlatHemInset(), min(OM_FLAT_HEM_FOOTPRINT_MAX, omFlatHemReach(gx, gy)));
     q.y = s == 0 ? min(q.y, hem - keep) : max(q.y, hem + keep);
   }
   if (valid < 0.5) return vec4(0.0);

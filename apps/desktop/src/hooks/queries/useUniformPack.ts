@@ -105,6 +105,25 @@ export async function readStoredUniformPackBytes(
     return bytes ? { value: stored.value, name: stored.name, bytes } : null;
 }
 
+/**
+ * The mode ids of the uniform version `value` names (none for a pack without modes), read in
+ * the worker without decoding its images; undefined when the show has no such uniform or it
+ * doesn't read
+ */
+export async function uniformPackModes(
+    value: string,
+): Promise<string[] | undefined> {
+    try {
+        const stored = await readStoredUniformPackBytes(value);
+        if (!stored) return undefined;
+        const manifest = await readPackManifest(stored.bytes);
+        return (manifest.modes ?? []).map((mode) => mode.id);
+    } catch (error) {
+        console.warn("3D View: couldn't read the uniform's modes", error);
+        return undefined;
+    }
+}
+
 /** A pack file's manifest, read and checked in the worker; throws when it isn't a pack */
 export async function readPackManifest(
     bytes: Uint8Array,

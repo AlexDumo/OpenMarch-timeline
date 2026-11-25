@@ -23,6 +23,7 @@ import {
     type VenuePickBase,
 } from "@/view3d/sync/venuePick";
 import { fieldPropertiesQueryOptions } from "./useFieldProperties";
+import { uniformPackModes } from "./useUniformPack";
 
 /**
  * The key base matches the table name, so undo and redo (which invalidate by
@@ -104,20 +105,34 @@ export const useVenueSettings = (): UseVenueSettingsReturn => {
  */
 export const venuePickMutationOptions = (qc: QueryClient) =>
     mutationOptions({
-        mutationFn: ({
+        mutationFn: async ({
             settings,
             base,
         }: {
             settings: VenueSettings;
             base?: VenuePickBase;
-        }) =>
-            updateVenueSettings({
+        }) => {
+            if (!base) return await updateVenueSettings({ db, settings });
+            // the modes of the version the pick will land on, read before the write (in the
+            // worker, without decoding): a picked mode another version lacks is dropped
+            const target = pickOnStoredUniform(
+                settings,
+                base,
+                await getStoredVenueSettings({ db }),
+            ).uniformArtwork;
+            const modes =
+                typeof target === "string" && target !== base.uniformArtwork
+                    ? await uniformPackModes(target)
+                    : undefined;
+            return await updateVenueSettings({
                 db,
                 settings,
-                rebase: base
-                    ? (next, stored) => pickOnStoredUniform(next, base, stored)
-                    : undefined,
-            }),
+                rebase: (next, stored) =>
+                    pickOnStoredUniform(next, base, stored, (value) =>
+                        value === target ? modes : undefined,
+                    ),
+            });
+        },
         onSuccess: async () => {
             await qc.invalidateQueries({ queryKey: venueSettingsKeys.all() });
         },

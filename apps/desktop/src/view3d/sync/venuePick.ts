@@ -56,12 +56,17 @@ const sameUniform = (a: string | number | null, b: string | number | null) => {
  *   uniform, or what an Undo the window hadn't seen put back);
  * - a picked uniform (or preset) stands;
  * - a picked mode stands while the stored venue still wears that uniform, in any version; once
- *   it wears another (an Undo), the stored mode stays, as Undo wins.
+ *   it wears another (an Undo), the stored mode stays, as Undo wins;
+ * - a picked mode moved onto another version of the uniform than the one it was picked from
+ *   stands only if `modesOf` says that version has it, as `setUniformPackInTransaction` keeps
+ *   a mode (an edit may have removed it); unknown (undefined) counts as not having it.
  */
 export function pickOnStoredUniform(
     next: VenueSettings,
     base: VenuePickBase,
     stored: VenueSettings | undefined,
+    /** The mode ids of the uniform version a value names, when known */
+    modesOf: (value: string) => readonly string[] | undefined = () => undefined,
 ): VenueSettings {
     if (!stored) return next;
     const now = venuePickBase(stored);
@@ -72,10 +77,19 @@ export function pickOnStoredUniform(
     const sameWorn =
         base.uniformArtwork === now.uniformArtwork ||
         sameUniform(base.uniformArtwork, now.uniformArtwork);
-    const mode =
+    let mode =
         artworkPicked || (modePicked && sameWorn)
             ? picked.uniformMode
             : now.uniformMode;
+    // a mode picked from one version and written onto another: only if that one has it
+    if (
+        mode !== null &&
+        !artworkPicked &&
+        modePicked &&
+        artwork !== base.uniformArtwork &&
+        !(typeof artwork === "string" && modesOf(artwork)?.includes(mode))
+    )
+        mode = null;
     // eslint-disable-next-line @typescript-eslint/no-unused-vars -- set again below
     const { uniformArtwork, uniformMode, ...rest } = next;
     return {
