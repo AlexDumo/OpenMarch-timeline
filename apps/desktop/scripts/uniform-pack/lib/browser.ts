@@ -57,6 +57,12 @@ export interface ToolPage {
     ): Promise<
         { png: string; width: number; height: number } | { error: string }
     >;
+    /** The app's own import of a file, untouched, as base64 (`page/raster.ts`) */
+    appImport(
+        kind: "page" | "item",
+        name: string,
+        data: string,
+    ): Promise<string>;
     /** Calls `page/render.ts`'s export `fn` with `args` */
     render<T>(fn: string, ...args: unknown[]): Promise<T>;
     /** Calls `page/image.ts`'s export `fn` with `args` */
@@ -66,15 +72,49 @@ export interface ToolPage {
     close(): Promise<void>;
 }
 
+const CACHE_PREFIX = "uniform-tool-";
+
+/**
+ * Removes the Vite caches of runs whose process is gone (killed before they could clean up).
+ * Each cache is named for its run's process, `uniform-tool-<pid>-…`.
+ */
+export function sweepStaleCaches(root = os.tmpdir()): string[] {
+    const removed: string[] = [];
+    for (const name of fs.readdirSync(root)) {
+        const m = new RegExp(`^${CACHE_PREFIX}(\\d+)-`).exec(name);
+        if (!m) continue;
+        const pid = Number(m[1]);
+        let alive = true;
+        try {
+            process.kill(pid, 0);
+        } catch (error) {
+            alive = (error as NodeJS.ErrnoException).code === "EPERM";
+        }
+        if (alive) continue;
+        fs.rmSync(path.join(root, name), { recursive: true, force: true });
+        removed.push(name);
+    }
+    return removed;
+}
+
+/**
+ * Opens the page. With `handleSignals` (the default), SIGINT and SIGTERM close the browser and
+ * the server, remove the cache and exit with 130; `uniform:render` handles them itself.
+ */
 export async function openToolPage({
     gpu,
+    handleSignals = true,
 }: {
     gpu: boolean;
+    handleSignals?: boolean;
 }): Promise<ToolPage> {
     const req = createRequire(path.join(desktop, "package.json"));
     const { chromium } = req("playwright") as typeof import("playwright");
     const { createServer } = req("vite") as typeof import("vite");
-    const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "uniform-tool-"));
+    sweepStaleCaches();
+    const cacheDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), `${CACHE_PREFIX}${process.pid}-`),
+    );
     const server = await createServer({
         configFile: path.join(tool, "vite.config.mts"),
         cacheDir,
@@ -82,16 +122,25 @@ export async function openToolPage({
         logLevel: "error",
     });
     let browser: Awaited<ReturnType<typeof chromium.launch>> | null = null;
+    const onSignal = () => {
+        void close().then(() => process.exit(130));
+    };
     const close = async () => {
+        process.off("SIGINT", onSignal);
+        process.off("SIGTERM", onSignal);
         await browser?.close().catch(() => undefined);
         await server.close().catch(() => undefined);
         fs.rmSync(cacheDir, { recursive: true, force: true });
     };
+    if (handleSignals) {
+        process.once("SIGINT", onSignal);
+        process.once("SIGTERM", onSignal);
+    }
     try {
         await server.listen();
         const url = server.resolvedUrls!.local[0];
         browser = await chromium.launch({
-            args: ["--no-sandbox", ...(gpu ? GPU_FLAGS : [])],
+            args: gpu ? GPU_FLAGS : [],
         });
         const page = await browser.newPage({
             viewport: { width: 640, height: 480 },
@@ -122,6 +171,11 @@ export async function openToolPage({
                 page.evaluate(
                     ([n, d]) => window.uniformTool.rasterLayer(n, d),
                     [name, data] as const,
+                ),
+            appImport: (kind, name, data) =>
+                page.evaluate(
+                    ([k, n, d]) => window.uniformTool.appImport(k, n, d),
+                    [kind, name, data] as const,
                 ),
             rasterItem: (name, data) =>
                 page.evaluate(([n, d]) => window.uniformTool.rasterItem(n, d), [

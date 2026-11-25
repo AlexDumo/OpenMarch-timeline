@@ -58,3 +58,26 @@ export async function rasterItem(name: string, data: string) {
         return refusal(error);
     }
 }
+
+/**
+ * What the app's own import makes of a file, untouched: the whole pack file for a page, the
+ * stored PNG for an item. Only the smoke test calls it, to check the builder against the app.
+ */
+export async function appImport(
+    kind: "page" | "item",
+    name: string,
+    data: string,
+) {
+    const file = fileOf(name, fromBase64(data));
+    if (kind === "page") {
+        const imported = await importUniformFile(
+            file,
+            UNIFORM_PRESETS[DEFAULT_UNIFORM_PRESET].band,
+            pageRegions,
+        );
+        return toBase64(imported.pack);
+    }
+    const item = await importItemFile(file);
+    item.image.bitmap.close();
+    return toBase64(item.image.png);
+}

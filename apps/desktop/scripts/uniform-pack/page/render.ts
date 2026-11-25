@@ -99,25 +99,38 @@ export const VIEW_AZIMUTH: Record<string, number> = {
 };
 
 // ------------------------------------------------------------------ the renderer
-const renderer = new THREE.WebGLRenderer({
-    antialias: true,
-    preserveDrawingBuffer: true,
-    powerPreference: "high-performance",
-});
-renderer.setPixelRatio(1);
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-document.body.appendChild(renderer.domElement);
+let renderer!: THREE.WebGLRenderer;
 const camera = new THREE.PerspectiveCamera(20, 1, 0.1, 3000);
 const scene = new THREE.Scene();
 
-/** The WebGL renderer string: what the GPU check reads */
-export function gpu(): string {
+/**
+ * Creates the WebGL renderer and returns its renderer string, for the GPU check, which runs
+ * before anything else is loaded or drawn. `error` when no WebGL context could be made.
+ */
+export function gpu(): { renderer: string } | { error: string } {
+    try {
+        renderer ??= new THREE.WebGLRenderer({
+            antialias: true,
+            preserveDrawingBuffer: true,
+            powerPreference: "high-performance",
+        });
+    } catch (error) {
+        return {
+            error: error instanceof Error ? error.message : String(error),
+        };
+    }
+    renderer.setPixelRatio(1);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    if (!renderer.domElement.isConnected)
+        document.body.appendChild(renderer.domElement);
     const gl = renderer.getContext();
     const dbg = gl.getExtension("WEBGL_debug_renderer_info");
-    return String(
-        gl.getParameter(dbg ? dbg.UNMASKED_RENDERER_WEBGL : gl.RENDERER),
-    );
+    return {
+        renderer: String(
+            gl.getParameter(dbg ? dbg.UNMASKED_RENDERER_WEBGL : gl.RENDERER),
+        ),
+    };
 }
 
 // ------------------------------------------------------------------ the set
@@ -242,8 +255,12 @@ let bake: ChannelBake | null = null;
 let strideCount = 0;
 let strideApart = 0;
 
-/** Loads the bodies, the class 1.00 clips and the venue, and bakes attention and 8 to 5 */
-export async function init(): Promise<{ gpu: string; seconds: number }> {
+/**
+ * Loads the bodies, the class 1.00 clips and the venue, and bakes attention and 8 to 5. Call
+ * after {@link gpu} has passed the GPU check.
+ */
+export async function init(): Promise<{ seconds: number }> {
+    if (!renderer) throw new Error("check the GPU first");
     const t0 = performance.now();
     const [loaded, clips] = await Promise.all([
         loadBodies(),
@@ -270,7 +287,7 @@ export async function init(): Promise<{ gpu: string; seconds: number }> {
     // the camera keeps the sun over its left shoulder
     const sun = env!.sun.position.clone().sub(venue.centre);
     turntableAz = Math.atan2(sun.x, sun.z) - (35 * Math.PI) / 180;
-    return { gpu: gpu(), seconds: (performance.now() - t0) / 1000 };
+    return { seconds: (performance.now() - t0) / 1000 };
 }
 
 let pack: UniformPack | null = null;
@@ -312,8 +329,10 @@ function drawn(manifest: UniformPackManifest, mode: string | null) {
             items: UniformPackItem[];
         };
     };
-    if (mode && f.drawnInMode) return f.drawnInMode(manifest, mode);
-    return { layers: manifest.layers, items: manifest.items ?? [] };
+    if (!mode) return { layers: manifest.layers, items: manifest.items ?? [] };
+    if (!f.drawnInMode)
+        throw new Error(`this checkout's pack format can't draw mode ${mode}`);
+    return f.drawnInMode(manifest, mode);
 }
 
 /** The look a mode wears: the manifest's palette and options with the mode's changes */
@@ -332,7 +351,10 @@ function keyOf(mode: string | null): FlatsArtworkKey {
     const a = uniformArtwork as unknown as {
         withMode?: (k: UniformPackValue, m: string | null) => UniformPackValue;
     };
-    return mode && a.withMode ? a.withMode(packValue!, mode) : packValue!;
+    if (!mode) return packValue!;
+    if (!a.withMode)
+        throw new Error(`this checkout's 3D View can't wear mode ${mode}`);
+    return a.withMode(packValue!, mode);
 }
 
 /** Each layer's notes (the app's page checks), by id, and whether its image is the page's size */

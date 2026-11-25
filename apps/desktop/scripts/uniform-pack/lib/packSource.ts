@@ -12,14 +12,14 @@ import { z } from "zod";
 import {
     FLATS_PAGE_IN,
     FLATS_PAGE_PX,
-    FLATS_REGION_IDS,
-    ITEM_GRADES,
     UNIFORM_PACK_VERSION,
+    pngHeaderSize,
     requiredPackVersion,
     uniformPackManifestSchema,
     writeUniformPack,
     type UniformPackManifest,
 } from "@/view3d/core/uniformPack/format";
+import { toBase64 } from "../page/bytes";
 
 /** What a pack source names its art by: a path inside the pack folder */
 const fileName = z
@@ -27,41 +27,30 @@ const fileName = z
     .min(1)
     .regex(/\.(svg|png)$/i, "must be an .svg or .png file");
 
-const idSchema = z
-    .string()
-    .regex(
-        /^[a-z0-9][a-z0-9-]{0,31}$/,
-        "must be lowercase letters, digits and dashes, starting with a letter or digit, at most 32 characters",
-    );
+/**
+ * The app's own pieces of the manifest schema, so the source's ids, palette roles, part options
+ * and styles are whatever the pack format says, never a copy of it
+ */
+const app = uniformPackManifestSchema.shape;
+const appId = app.layers.element.shape.id;
+const appHex = app.palette.shape.primary;
 
-const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'must be "#rrggbb"');
+/** A string the app's schema `of` takes, else `message` (the app's own wording is a regex) */
+const accepted = (of: z.ZodType, message: string) =>
+    z.string().refine((v) => of.safeParse(v).success, message);
 
-const PALETTE_ROLES = [
-    "primary",
-    "secondary",
-    "accent",
-    "trim",
-    "pants",
-    "shoes",
-    "gloves",
-    "hat",
-    "plume",
-    "visor",
-] as const;
-const OPTION_KEYS = ["stripe", "collar", "cuffs", "gloves", "hat"] as const;
+const idSchema = accepted(
+    appId,
+    "must be lowercase letters, digits and dashes, starting with a letter or digit, at most 32 characters",
+);
+const hex = accepted(appHex, 'must be "#rrggbb"');
 
 const paletteSource = z.strictObject(
-    Object.fromEntries(PALETTE_ROLES.map((r) => [r, hex])) as Record<
-        (typeof PALETTE_ROLES)[number],
-        typeof hex
-    >,
+    Object.fromEntries(
+        Object.keys(app.palette.shape).map((role) => [role, hex]),
+    ) as Record<keyof typeof app.palette.shape, typeof hex>,
 );
-const optionsSource = z.strictObject(
-    Object.fromEntries(OPTION_KEYS.map((k) => [k, z.boolean()])) as Record<
-        (typeof OPTION_KEYS)[number],
-        z.ZodBoolean
-    >,
-);
+const optionsSource = app.options;
 
 const layerSource = z.strictObject({
     id: idSchema,
@@ -74,18 +63,11 @@ const layerSource = z.strictObject({
     cape: fileName.optional(),
 });
 
+/** An item as the app's schema has it, with `file` the source's art instead of the pack's PNG */
 const itemSource = z.strictObject({
+    ...app.items.unwrap().element.shape,
     id: idSchema,
-    name: z.string().max(120).optional(),
     file: fileName,
-    panel: z.enum(["front", "back", "cape"]),
-    at: z.tuple([z.number(), z.number()]),
-    width: z.number().optional(),
-    height: z.number().optional(),
-    rotate: z.number().optional(),
-    opacity: z.number().optional(),
-    grade: z.enum(ITEM_GRADES).optional(),
-    regions: z.array(z.enum(FLATS_REGION_IDS)).optional(),
 });
 
 const modeSource = z.strictObject({
@@ -97,30 +79,17 @@ const modeSource = z.strictObject({
     options: optionsSource.partial().optional(),
 });
 
-export const STYLES = [
-    "classic",
-    "sash",
-    "plastron",
-    "military",
-    "split",
-    "fade",
-    "cadet",
-] as const;
+/** The styles the app's schema takes */
+export const STYLES = app.style.options;
 
 /** `uniform.json`: what an author (an agent, usually) writes */
 export const packSourceSchema = z.strictObject({
     $schema: z.string().optional(),
     name: z.string().min(1).max(120),
-    style: z.enum(STYLES),
+    style: app.style,
     palette: paletteSource,
     options: optionsSource,
-    credits: z
-        .strictObject({
-            license: z.string().max(200).optional(),
-            author: z.string().max(200).optional(),
-            source: z.string().max(500).optional(),
-        })
-        .optional(),
+    credits: app.credits.optional(),
     layers: z.array(layerSource).min(1),
     items: z.array(itemSource).optional(),
     modes: z.array(modeSource).optional(),
@@ -354,22 +323,6 @@ export function rootViewBox(
         : null;
 }
 
-/** A PNG's size from its header, or null */
-export function pngSize(
-    bytes: Uint8Array,
-): { width: number; height: number } | null {
-    if (
-        bytes.length < 24 ||
-        bytes[0] !== 0x89 ||
-        bytes[1] !== 0x50 ||
-        bytes[2] !== 0x4e ||
-        bytes[3] !== 0x47
-    )
-        return null;
-    const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    return { width: v.getUint32(16), height: v.getUint32(20) };
-}
-
 const near = (a: number, b: number, tolerance = 0.01) =>
     Math.abs(a - b) <= tolerance;
 
@@ -397,7 +350,7 @@ export function layerFileProblem(
     };
     const what = target === "page" ? "the page" : `the ${target} panel`;
     if (/\.png$/i.test(file)) {
-        const px = pngSize(bytes);
+        const px = pngHeaderSize(bytes);
         if (!px) return `${where}: ${file} isn't a PNG`;
         if (px.width !== wantPx.width || px.height !== wantPx.height)
             return `${where}: ${file} is ${px.width} × ${px.height} px; ${what} is ${wantPx.width} × ${wantPx.height} px (${size.width} × ${size.height} in at 32 px/in)`;
@@ -418,13 +371,6 @@ export function layerFileProblem(
     return null;
 }
 
-const base64 = (bytes: Uint8Array) => {
-    let s = "";
-    for (let i = 0; i < bytes.length; i += 0x8000)
-        s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-    return btoa(s);
-};
-
 /**
  * A page SVG (viewBox "0 0 105 88") holding each panel's art where its panel sits. Each panel is
  * an `<image>` of its own file, so ids inside the front and back SVGs can't clash, and the
@@ -440,7 +386,7 @@ export function pageSvgFromPanels(
             const { file, bytes } = parts[p]!;
             const type = /\.png$/i.test(file) ? "image/png" : "image/svg+xml";
             const r = panels[p];
-            return `<image x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" preserveAspectRatio="none" href="data:${type};base64,${base64(bytes)}"/>`;
+            return `<image x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" preserveAspectRatio="none" href="data:${type};base64,${toBase64(bytes)}"/>`;
         });
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${FLATS_PAGE_IN.width} ${FLATS_PAGE_IN.height}">${images.join("")}</svg>`;
 }

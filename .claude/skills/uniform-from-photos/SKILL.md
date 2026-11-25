@@ -3,7 +3,7 @@ name: uniform-from-photos
 description: Turn photos of a marching uniform into an OpenMarch uniform pack (.omasset) of SVG flats, placed items and modes, render it on all 7 body types, and compare the renders with the photos. Use when given photos of a uniform to recreate in the 3D View, or asked to make a uniform pack.
 ---
 
-<!-- cspell:words omasset camo -->
+<!-- cspell:words omasset camo paintable -->
 
 # Uniform from photos
 
@@ -31,26 +31,32 @@ Open `uniform-template.png` and read `uniform-regions.json`. All coordinates are
 x right, y down from the panel's top-left corner, so a region's `polygon` is a clip path as it
 stands.
 
-- **Panels:** `front` and `back` are 34 × 78 in, `cape` 20.7 × 17.9 in. The centre line is x = 17.
+Look these up in the file rather than guessing:
+
+- `panels`: each panel's size and place on the page.
+- `regions`: each region's `id`, `polygon`, `bbox` (its top and bottom heights) and `edges`.
+- `guides`: heights such as `collar`, `chest`, `elbow`, `jacketHem`, `crotch`, `knee`.
+- `landmarks`: `chestCentre`, `backNumberCentre`, `sleeveCuff`, `legHem` and each limb's
+  `centreLines`.
+
+Facts the numbers don't say:
+
 - **Mirror:** on the front panel the performer's right is on your left; on the back panel their
   left is on your left. Region ids name the performer's side: `front-sleeve-L` is on your right.
-- **Regions:** `torso` (to the jacket hem), `sleeve-L`/`-R` (to the cuff), `hips` (belt to
-  crotch), `leg-L`/`-R` (to the hem), on each panel. Each outline is the side seam where front
-  meets back. Head, neck, hands, shoes and hat are outside every region: palette colors only.
-- **Seams:** each region's `seams` gives both seam x's every 0.25 in of height. A band drawn at the
-  same heights on both panels closes round the limb. The cape has no seams.
-- **Heights** (`guides`, `landmarks`, each region's `bbox`): collar 18.84, sleeve top (the
-  shoulder point) 20.42, chest 25.32, elbow 29.28, jacket hem 38.31, sleeve cuff 41.32, crotch
-  43.24, knee 56.3, leg hem 74.04. The torso's first seam rows run over the shoulder tops, from the
-  neck out to the sleeve. Chest centre (17, 25.32) on the front, back number centre (17, 28.47) on
-  the back.
-- **Neck:** the jacket's mesh reaches a little up the neck, above every region, and takes the
-  palette's `primary`. Choose `primary` for how the neckline should read (usually the jacket fabric).
+- **Seams:** each region's outline is the side seam where front meets back, and its `seams` gives
+  both seam x's every 0.25 in of height. A band drawn at the same heights on both panels closes
+  round the limb. The cape has no seams.
+- **Shoulders:** the torso's first seam rows run over the shoulder tops, from the neck out to the
+  sleeve; a sleeve's `bbox` top is the shoulder point.
+- **Not paintable:** head, neck, hands, shoes and hat are outside every region: palette colors
+  only.
 - **Wrap band:** the outer 15% of each half-width squeezes round the side of the body. Keep logos
   and text inside the dashed safe areas.
+- **Neck:** the jacket's mesh reaches a little up the neck, above every region, and takes the
+  palette's `primary`. Choose `primary` for how the neckline should read (usually the jacket fabric).
 
 Done when you can say, without looking, which panel and which side of it the performer's left
-sleeve is on, and at what height the elbow and the knee are.
+sleeve is on, and you have read the elbow and knee heights from `guides`.
 
 ## 2. Inventory the photos
 

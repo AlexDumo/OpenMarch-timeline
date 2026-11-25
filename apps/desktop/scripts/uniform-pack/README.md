@@ -167,17 +167,24 @@ draws: the template left visible, a painted logo, an empty layer, a layer at the
 item not drawn or too thin, an item outside every region, a print left plain on a body. A pack
 without modes has one mode, `default`.
 
-Exit codes: 0 rendered, 2 render error, 3 no GPU, 4 bad arguments or pack.
+Exit codes: 0 rendered, 2 render error (a mode that fails to render included), 3 no GPU, 4 bad
+arguments or pack, 5 rendered but a mode has errors in `report.json`, 130 stopped by Ctrl+C or
+SIGTERM.
 
 ### GPU and concurrency
 
 - Chromium draws WebGL with ANGLE on Vulkan (`--use-gl=angle --use-angle=vulkan
 --enable-features=Vulkan --ignore-gpu-blocklist`), headless, with no X server.
-- The renderer string is checked before anything is drawn. A software renderer (SwiftShader,
-  llvmpipe) is refused with exit 3. There is no CPU fallback.
+- The renderer string is checked first, before the bodies, clips or venue load. No WebGL context,
+  or a software renderer (SwiftShader, llvmpipe), is refused with exit 3. There is no CPU
+  fallback.
 - Every run has its own Vite server on a free port, its own Vite cache in a temporary folder and
   its own browser. Runs into different output folders can go at once.
-- An output folder holds one run at a time (`.uniform-render.lock`).
+- An output folder holds one run at a time: the lock is a directory, `.uniform-render.lock`, made
+  atomically; a lock whose process is gone is taken over.
+- Ctrl+C or SIGTERM closes the browser and server, removes the cache and lets go of the lock.
+  Caches are `uniform-tool-<pid>-…` in the system temporary folder; a run removes any whose
+  process is gone.
 
 A render of one mode takes about 8 s on the RTX 3060 Ti, most of it starting up.
 

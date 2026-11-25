@@ -2,19 +2,14 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import regionsJson from "@/view3d/assets/uniform-flats/regions.json";
 import type { FlatsRegions } from "@/view3d/core/marchers/uniformArtwork";
-import {
-    UNIFORM_PACK_VERSION,
-    readUniformPack,
-    writeUniformPack,
-} from "@/view3d/core/uniformPack/format";
+import { UNIFORM_PACK_VERSION } from "@/view3d/core/uniformPack/format";
 import { buildFolder } from "../build";
 import { itemChecks, layerNotes } from "../packChecks";
 import {
     PackSourceError,
-    assemblePack,
     layerFileProblem,
     pageSvgFromPanels,
     parsePackSource,
@@ -54,6 +49,26 @@ function problemsOf(fn: () => unknown): string[] {
 }
 
 const all = () => true;
+
+describe("the example", () => {
+    it("is the app's built-in sample art, unchanged", () => {
+        const sample = path.resolve(
+            __dirname,
+            "../../../../src/view3d/assets/uniform-flats/sample",
+        );
+        for (const file of [
+            "front.svg",
+            "back.svg",
+            "crest.svg",
+            "number.svg",
+            "LICENSE",
+        ])
+            expect(
+                fs.readFileSync(path.join(example, file), "utf8"),
+                `${file}: copy it again from ${sample}`,
+            ).toBe(fs.readFileSync(path.join(sample, file), "utf8"));
+    });
+});
 
 describe("uniform.json", () => {
     it("parses the example", () => {
@@ -323,30 +338,6 @@ describe("item checks", () => {
     });
 });
 
-describe("assemblePack", () => {
-    it("is byte for byte the app's own writer, and reads back", () => {
-        const plan = planPack(parsePackSource(exampleSource()), all);
-        const layers = { base: fakePng(3360, 2816, 1) };
-        const items = {
-            "items/crest.png": fakePng(100, 100, 2),
-            "items/number.png": fakePng(60, 80, 3),
-        };
-        const bytes = assemblePack(plan, layers, items);
-        const app = writeUniformPack(plan.manifest, {
-            "layers/base.png": layers.base,
-            ...items,
-        });
-        expect(bytes).toEqual(app);
-        const read = readUniformPack(bytes);
-        expect(read.manifest).toEqual(plan.manifest);
-        expect(read.layers[0].png).toEqual(layers.base);
-        expect(read.itemFiles.map((f) => f.file)).toEqual([
-            "items/crest.png",
-            "items/number.png",
-        ]);
-    });
-});
-
 describe("buildFolder", () => {
     const page = {
         rasterLayer: async () => ({
@@ -391,6 +382,38 @@ describe("buildFolder", () => {
             fs.rmSync(path.join(path.dirname(dir), "front.svg"), {
                 force: true,
             });
+        }
+    });
+
+    it("refuses a file that links out of the pack folder", async () => {
+        const outside = fs.mkdtempSync(path.join(os.tmpdir(), "uniform-out-"));
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "uniform-src-"));
+        try {
+            fs.writeFileSync(
+                path.join(outside, "secret.svg"),
+                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 34 78"/>',
+            );
+            fs.symlinkSync(
+                path.join(outside, "secret.svg"),
+                path.join(dir, "front.svg"),
+            );
+            const json = exampleSource();
+            json.layers = [{ id: "base", front: "front.svg" }];
+            delete json.items;
+            fs.writeFileSync(
+                path.join(dir, "uniform.json"),
+                JSON.stringify(json),
+            );
+            const rasterLayer = vi.fn();
+            await expect(
+                buildFolder(dir, { ...page, rasterLayer }),
+            ).rejects.toThrow(
+                "front.svg: must be a path inside the pack folder",
+            );
+            expect(rasterLayer).not.toHaveBeenCalled();
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+            fs.rmSync(outside, { recursive: true, force: true });
         }
     });
 
