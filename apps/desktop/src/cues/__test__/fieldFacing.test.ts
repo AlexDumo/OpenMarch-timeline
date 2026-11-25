@@ -66,7 +66,7 @@ describe("the field's count clock (#1316)", () => {
     });
 });
 
-/** The facing the field's arrow shows for performer `id` at spec beat `beat`, in degrees. */
+/** The facing the field's caret shows for performer `id` at spec beat `beat`, in degrees. */
 const degreesAt = (id: number, beat: number) =>
     facingAt(show.compiled, id, clockAt(beat));
 

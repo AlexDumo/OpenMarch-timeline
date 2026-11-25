@@ -26,8 +26,8 @@ export type FieldTestMarcher = {
      */
     equipmentIcon: string;
     /**
-     * Which way the field's facing arrow points for them (fork #1316), in unwrapped degrees (0
-     * front, 90 side 2), or null for no arrow (Show facing off, or a prop)
+     * Which way the field's facing caret points for them (fork #1316), in unwrapped degrees (0
+     * front, 90 side 2), or null for no caret (Show facing off, or a prop)
      */
     facing: number | null;
     /** Where the dot is drawn, in field units. */

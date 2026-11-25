@@ -706,7 +706,7 @@ test("change: the field display bar holds paths, labels, equipment icons, facing
         "field-display-labels",
         // What each performer holds, as an icon by the drill number (fork #992)
         "field-display-equipment",
-        // Show facing: an arrow from every dot the way they face (fork #1316)
+        // Show facing: a caret in front of every dot the way they face (fork #1316)
         "field-display-facing",
         "field-display-shapes",
         // The show's 3D venue under the grid (#1207), off by default

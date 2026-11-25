@@ -77,7 +77,7 @@ const ORDER_CHOICES: readonly Choice<ShapeOutlines>[] = [
 /**
  * How the field is displayed, apart from the timeline: a small bar at the field's top right (the
  * zoom controls hold the bottom right). It replaced the toolbar's View tab. Path overlays, marcher
- * labels, equipment icons (fork #992), facing arrows (fork #1316), placed shapes' outlines, the
+ * labels, equipment icons (fork #992), facing carets (fork #1316), placed shapes' outlines, the
  * venue under the field (#1207) and a line's order (pathways step 4g). The Select tool's Box
  * and Lasso sit above it in a bar of their own, outside the touch layout (whose pill has its own
  * drag modes).
@@ -124,7 +124,7 @@ export default function FieldDisplayBar() {
                         keepOpen
                         more={<EquipmentPlaceChoices />}
                     />
-                    {/* Which way performers face, as an arrow from each dot (fork #1316) */}
+                    {/* Which way performers face, as a caret in front of each dot (fork #1316) */}
                     <FacingButton />
                     {/* Placed boxes' outlines (docs/timeline/research/shapes/07-placed-boxes.md) */}
                     <ChoiceButton
@@ -157,8 +157,8 @@ export default function FieldDisplayBar() {
 }
 
 /**
- * Show facing (fork #1316): an arrow from every performer's dot the way they face, on or off.
- * Pressed while the arrows show; off by default.
+ * Show facing (fork #1316): a caret in front of every performer's dot the way they face, on or
+ * off. Pressed while the carets show; off by default.
  */
 function FacingButton() {
     const { t } = useTranslate();

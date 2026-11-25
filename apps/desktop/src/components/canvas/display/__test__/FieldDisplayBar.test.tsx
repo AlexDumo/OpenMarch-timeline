@@ -209,7 +209,7 @@ describe("FieldDisplayBar", () => {
         ).toBe("true");
     });
 
-    it("Show facing: off by default, a press turns the arrows on and another off (#1316)", () => {
+    it("Show facing: off by default, a press turns the carets on and another off (#1316)", () => {
         open();
         const button = screen.getByTestId("field-display-facing");
         expect(button.getAttribute("aria-label")).toBe("Show facing");

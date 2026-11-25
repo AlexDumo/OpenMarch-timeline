@@ -1,10 +1,10 @@
 /**
  * Facing on the 2D field (fork #1316): which way each performer faces at the playhead, as the
- * arrow the facing arrows layer draws from their dot. The angle is core's `facingAt`, the compile
+ * caret the facing carets layer draws in front of their dot. The angle is core's `facingAt`, the compile
  * the Facing lane, the field menu and the 3D View read, so the field turns exactly when they do:
  * linearly through a turn, landing on the cue's count. A performer with no Facing cue faces front.
  *
- * The field display bar's Show facing toggle turns the arrows on for everyone (off by default).
+ * The field display bar's Show facing toggle turns the carets on for everyone (off by default).
  *
  * Pure: no React, three.js or database.
  */

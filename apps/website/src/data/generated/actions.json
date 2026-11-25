@@ -1133,7 +1133,7 @@
         ]
     },
     "toggleFacingArrows": {
-        "label": "Show or hide facing arrows",
+        "label": "Show or hide which way performers face",
         "category": "ui",
         "bindings": []
     },

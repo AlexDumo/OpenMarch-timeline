@@ -154,7 +154,7 @@ import { shownKit } from "@/view3d/core/venueSettings";
 import MarchersLayer from "./layers/MarchersLayer";
 import ItemsLayer from "./layers/ItemsLayer";
 import LabelsLayer, { type LabelStyle } from "./layers/LabelsLayer";
-import FacingArrowsLayer from "./layers/FacingArrowsLayer";
+import FacingCaretsLayer from "./layers/FacingCaretsLayer";
 import { useEquipmentIcons } from "@/cues/useEquipmentIcons";
 import { useFieldFacing } from "@/cues/useFieldFacing";
 import OverlayLayer from "./layers/OverlayLayer";
@@ -357,7 +357,7 @@ function ThreeFieldView() {
     const numbersOnly = labelForm === "numbers";
     // What a performer holds, by their drill number, when it isn't their section's usual (#992)
     const equipmentIcons = useEquipmentIcons();
-    // Which way each performer faces at the playhead, as an arrow from their dot (#1316)
+    // Which way each performer faces at the playhead, as a caret in front of their dot (#1316)
     const facing = useFieldFacing();
     const equipmentIconPlace = useUiSettingsStore(
         (s) => s.uiSettings.equipmentIconPlace ?? "beside",
@@ -910,8 +910,8 @@ function ThreeFieldView() {
                             icons={equipmentIcons}
                             iconPlace={equipmentIconPlace}
                         />
-                        {/* Which way each performer faces, as an arrow from their dot (#1316) */}
-                        <FacingArrowsLayer
+                        {/* Which way each performer faces, as a caret in front of their dot (#1316) */}
+                        <FacingCaretsLayer
                             marchers={marchers}
                             dimming={dimming}
                             theme={fieldProperties.theme}

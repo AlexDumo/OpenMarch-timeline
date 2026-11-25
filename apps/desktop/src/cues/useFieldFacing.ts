@@ -6,20 +6,20 @@ import { isPerformer } from "@/global/classes/Marcher";
 import { cueClockAtBeat, writeFacingDirections } from "./fieldFacing";
 import { useShowCues } from "./useShowCues";
 
-/** Which way each performer faces at a beat, for the 2D field's facing arrows (fork #1316). */
+/** Which way each performer faces at a beat, for the 2D field's facing carets (fork #1316). */
 export interface FieldFacing {
     /**
      * Writes each of `ids`' facing direction at spec beat `beat` (fractional while playing) into
-     * `out`, x, y per id in field units, 0, 0 for one with no arrow. Cheap enough to call every
+     * `out`, x, y per id in field units, 0, 0 for one with no caret. Cheap enough to call every
      * frame.
      */
     write(ids: readonly number[], beat: number, out: Float32Array): void;
-    /** The facing drawn for `id` at `beat`, in unwrapped degrees, or null for no arrow. */
+    /** The facing drawn for `id` at `beat`, in unwrapped degrees, or null for no caret. */
     degreesAt(id: number, beat: number): number | null;
 }
 
 /**
- * The facing the 2D field draws arrows for while the field display bar's Show facing is on, or
+ * The facing the 2D field draws carets for while the field display bar's Show facing is on, or
  * null while it's off. Every performer gets one: a performer with no Facing cue faces front.
  * Props and equipment don't face.
  */

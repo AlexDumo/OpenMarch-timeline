@@ -4,7 +4,7 @@ import { dotSizes } from "./selectionRing";
 /**
  * The facing caret drawn just in front of each performer's dot, pointing where they face (fork
  * #1316): a small chevron (^) whose point aims the facing, as a heading caret on a map. The facing
- * arrows layer draws it; the labels layer keeps drill numbers off it.
+ * carets layer draws it; the labels layer keeps drill numbers off it.
  *
  * In field units (a dot's radius is 5) while zoomed in. Zoomed out, the caret grows to keep
  * {@link MIN_CARET_PX} across on screen, and its stroke never gets thinner than
@@ -27,31 +27,29 @@ const HALO_PX = 1;
 export const ICON_DOT_REACH = 1.5;
 
 /** The caret at a zoom, in field units, measured along the facing from the dot's center. */
-export type ArrowSizes = {
+export type CaretSizes = {
     /** Where the arms start for a round dot (`start` × the marcher's reach in dot radii) */
     start: number;
-    /** Arms to point */
-    length: number;
-    /** The whole caret is its head: `length` */
-    headLength: number;
-    headHalfWidth: number;
+    /** Arms to point, along the facing */
+    depth: number;
+    /** Half the caret's width, across the facing, arm to arm */
+    halfWidth: number;
     /** Half the stroke's width */
-    shaftHalfWidth: number;
+    strokeHalfWidth: number;
     /** The background-colored edge round the caret */
     halo: number;
 };
 
 /** The caret's sizes at `zoom` (CSS px per field unit). */
-export function arrowSizes(zoom: number): ArrowSizes {
+export function caretSizes(zoom: number): CaretSizes {
     const grow = Math.max(1, MIN_CARET_PX / (2 * CARET_HALF_WIDTH * zoom));
     return {
         start:
             DOT_RADIUS * dotSizes(zoom).scale +
             Math.max(CARET_GAP, MIN_GAP_PX / zoom),
-        length: CARET_DEPTH * grow,
-        headLength: CARET_DEPTH * grow,
-        headHalfWidth: CARET_HALF_WIDTH * grow,
-        shaftHalfWidth: Math.max(
+        depth: CARET_DEPTH * grow,
+        halfWidth: CARET_HALF_WIDTH * grow,
+        strokeHalfWidth: Math.max(
             STROKE_HALF_WIDTH * grow,
             MIN_STROKE_PX / 2 / zoom,
         ),
@@ -70,62 +68,63 @@ export type LabelPlacement = {
 };
 
 /**
- * Each label's anchor (x, y per marcher, field units) moved off its own facing arrow: a label
- * above the dot goes below it when the arrow points through it, and one beside the dot goes to
- * the left when the arrow points right through it. `directions` are the arrows' (x, y per
+ * Each label's anchor (x, y per marcher, field units) moved off its own facing caret: a label
+ * above the dot goes below it when the caret points through it, and one beside the dot goes to
+ * the left when the caret points right through it. `directions` are the carets' (x, y per
  * marcher, 0, 0 for none) and `widths` each label's width. Writes into `out` and returns it.
  */
-export function anchorsClearOfArrows({
+export function anchorsClearOfCarets({
     positions,
     directions,
     widths,
     label,
-    arrow,
+    caret,
     out,
 }: {
     positions: Float64Array;
     directions: Float32Array;
     widths: ArrayLike<number>;
     label: LabelPlacement;
-    arrow: ArrowSizes;
+    caret: CaretSizes;
     out: Float64Array;
 }): Float64Array {
     out.set(positions);
     const n = Math.min(positions.length, directions.length) / 2;
-    // The shaft, then the head (as wide as its base all along), each with its halo
-    const tail = arrow.start - arrow.halo;
-    const neck = arrow.start + arrow.length - arrow.headLength;
-    const tip = arrow.start + arrow.length + arrow.halo;
-    const shaft = arrow.shaftHalfWidth + arrow.halo;
-    const head = arrow.headHalfWidth + arrow.shaftHalfWidth + arrow.halo;
+    // The caret's two strokes, from each arm to the point, each as thick as the stroke and halo
+    const arms = caret.start;
+    const point = caret.start + caret.depth;
+    const thick = caret.strokeHalfWidth + caret.halo;
     const h = label.height / 2;
     for (let i = 0; i < n; i++) {
         const dx = directions[i * 2];
         const dy = directions[i * 2 + 1];
         if (dx === 0 && dy === 0) continue;
         const width = widths[i] ?? 0;
-        const part = (
-            from: number,
-            to: number,
-            half: number,
+        // Along the facing (dx, dy) and across it (-dy, dx)
+        const at = (along: number, across: number) =>
+            [dx * along - dy * across, dy * along + dx * across] as const;
+        const [px, py] = at(point, 0);
+        const stroke = (
+            side: number,
             x0: number,
             y0: number,
             x1: number,
             y1: number,
-        ) =>
-            segmentHitsBox(
-                dx * from,
-                dy * from,
-                dx * to,
-                dy * to,
-                x0 - half,
-                y0 - half,
-                x1 + half,
-                y1 + half,
+        ) => {
+            const [ax, ay] = at(arms, side * caret.halfWidth);
+            return segmentHitsBox(
+                ax,
+                ay,
+                px,
+                py,
+                x0 - thick,
+                y0 - thick,
+                x1 + thick,
+                y1 + thick,
             );
+        };
         const hits = (x0: number, y0: number, x1: number, y1: number) =>
-            part(tail, neck, shaft, x0, y0, x1, y1) ||
-            part(neck, tip, head, x0, y0, x1, y1);
+            stroke(1, x0, y0, x1, y1) || stroke(-1, x0, y0, x1, y1);
         if (label.beside) {
             const left = label.offset;
             if (!hits(left, -h, left + width, h)) continue;
