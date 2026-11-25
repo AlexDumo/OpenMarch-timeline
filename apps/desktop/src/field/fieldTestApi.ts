@@ -278,7 +278,7 @@ export type FieldTestShapeOverlay = {
     /** The rings round a group's members and selected marchers off it (pathways step 15) */
     memberRings: {
         at: { x: number; y: number };
-        kind: "group" | "own";
+        kind: "group" | "own" | "record";
         label: string;
     }[];
     /** Spots it leaves empty on purpose (an odd-count outline's gap), field units. */

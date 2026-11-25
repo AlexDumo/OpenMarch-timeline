@@ -340,6 +340,8 @@
             "toggleFacingLane": "Show or hide the Facing lane"
         },
         "path": {
+            "record": "Record path",
+            "evenSpeed": "Make speed even",
             "pen": "Path pen",
             "remove": "Remove path",
             "edit": "Edit path",
@@ -5246,6 +5248,27 @@
         }
     },
     "pathways": {
+        "record": {
+            "selectFirst": "Select the marchers to record first",
+            "twoMoves": "The selected marchers are in different moves here. Record them one move at a time.",
+            "noMove": "There's no move at the playhead to record. Put the playhead inside a page.",
+            "saveFailed": "Couldn't save the recorded path",
+            "evened": "Speed made even for {count, plural, one {# marcher} other {# marchers}}",
+            "notRecorded": "No recorded path to even out here: record one first",
+            "countIn": "Get ready",
+            "recording": "Recording",
+            "countOf": "count {count} of {counts}",
+            "hint": "Press anywhere on the field and drag · Space stops and keeps it · Esc throws the take away",
+            "button": "Record path",
+            "stop": "Stop and keep",
+            "ready": "Ready to record",
+            "readyLine": "{move} · {counts} counts · {count, plural, one {# marcher} other {# marchers}}",
+            "readyHint": "Click marchers to choose who records",
+            "take": "Record take",
+            "takeKeys": "Record take <keys></keys>",
+            "done": "Done <keys></keys>",
+            "armedRing": "Armed to record"
+        },
         "editor": {
             "finish": "Finish",
             "cancel": "Cancel",

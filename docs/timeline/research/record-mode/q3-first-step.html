@@ -1,0 +1,123 @@
+<!-- cspell:disable -->
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <style>
+            body {
+                font-family: var(--font-sans, system-ui, sans-serif);
+                color: var(--foreground, #ececf1);
+                margin: 0;
+            }
+            .mut {
+                color: var(--muted-foreground, #9a9aa5);
+            }
+            h2 {
+                font-size: 15px;
+                margin: 0 0 4px;
+            }
+            p {
+                margin: 0 0 10px;
+                font-size: 13px;
+                line-height: 1.45;
+            }
+            .row {
+                display: grid;
+                grid-template-columns: 1.2fr 1fr;
+                gap: 12px;
+            }
+            @media (max-width: 560px) {
+                .row {
+                    grid-template-columns: 1fr;
+                }
+            }
+            .box {
+                border: 1px solid var(--border, #2e2e35);
+                border-radius: var(--radius, 10px);
+                padding: 12px;
+                background: var(--card, #141417);
+                font-size: 12.5px;
+                line-height: 1.5;
+            }
+            .box h3 {
+                font-size: 13px;
+                margin: 0 0 6px;
+            }
+            ol,
+            ul {
+                margin: 0;
+                padding-left: 18px;
+            }
+            li {
+                margin-bottom: 3px;
+            }
+            .in h3 {
+                color: var(--success, #34d399);
+            }
+            .out h3 {
+                color: var(--muted-foreground, #9a9aa5);
+            }
+            .out li {
+                color: var(--muted-foreground, #9a9aa5);
+            }
+            .try {
+                margin-top: 12px;
+                border-left: 3px solid var(--destructive, #f05252);
+                padding: 6px 10px;
+                font-size: 13px;
+                line-height: 1.45;
+            }
+        </style>
+    </head>
+    <body>
+        <h2>3 · Direction and the smallest first step</h2>
+        <p class="mut">
+            Record mode you arm, modeled on Edit move's bar and DAW record-arm.
+            It owns the start view; there is no general start view.
+        </p>
+
+        <div class="row">
+            <div class="box in">
+                <h3>First build (one step)</h3>
+                <ol>
+                    <li>
+                        Record (button or Alt+Shift+R) <b>arms</b>: the field
+                        shows the move's start, armed marchers ringed red, their
+                        current paths dashed to a hollow end dot.
+                    </li>
+                    <li>
+                        A bar over the field: who's armed, <b>Space</b> records
+                        a take, <b>Done</b> or Escape leaves.
+                    </li>
+                    <li>
+                        A take is today's take. Afterwards: back to the start,
+                        still armed, new path shown.
+                    </li>
+                    <li>
+                        Click marchers to re-arm. Drags before a take do
+                        nothing.
+                    </li>
+                </ol>
+            </div>
+            <div class="box out">
+                <h3>Left out on purpose</h3>
+                <ul>
+                    <li>Next and Previous page while armed</li>
+                    <li>Other marchers' paths while armed</li>
+                    <li>Punch in/out, pre-roll, Expert window as the range</li>
+                    <li>Take history, picking takes</li>
+                    <li>Leader and rotation recording</li>
+                    <li>Press-to-start, no count-in</li>
+                    <li>Start-view toggle or hold-to-peek</li>
+                    <li>Tablet details</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="try">
+            <b>Try:</b> select 3 marchers on Page 2 · Record · look at the
+            starting form · Space · drag · let it finish · Space for a retake ·
+            Done.
+        </div>
+    </body>
+</html>

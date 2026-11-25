@@ -1,4 +1,5 @@
 import { threeZoomControls } from "@/field/three/fieldNavigation";
+import { RecordPathCounter } from "@/pathways/RecordPath";
 import { reportWindowLoaded } from "@/analytics/usageEvents";
 import Toolbar, { PreviewToolbar } from "@/components/toolbar/Toolbar";
 import Inspector from "@/components/inspector/Inspector";
@@ -377,6 +378,7 @@ function App() {
                                                             <Suspense>
                                                                 <ThreeField />
                                                             </Suspense>
+                                                            <RecordPathCounter />
                                                             {/* The Edit field mode holds the view still, fitted inside its rulers */}
                                                             {!fieldEditing && (
                                                                 <>

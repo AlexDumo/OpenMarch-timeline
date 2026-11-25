@@ -1,4 +1,5 @@
 import { useAlignmentActionHandlers } from "./handlers/useAlignmentActionHandlers";
+import { useRecordPathActions } from "@/pathways/RecordPath";
 import { useAppActionHandlers } from "./handlers/useAppActionHandlers";
 import { useBatchEditActionHandlers } from "./handlers/useBatchEditActionHandlers";
 import { useCursorActionHandlers } from "./handlers/useCursorActionHandlers";
@@ -47,6 +48,7 @@ export function EditorActionHandlers() {
     useAppActionHandlers();
     useHistoryActionHandlers();
     useNavigationActionHandlers();
+    useRecordPathActions();
     useBatchEditActionHandlers();
     useNudgeActionHandlers();
     useAlignmentActionHandlers();

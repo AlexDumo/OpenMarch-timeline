@@ -1,4 +1,5 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { RecordPathButton } from "@/pathways/RecordPath";
 import { isModifierHeld } from "@/input/modifierGrace";
 import * as Popover from "@radix-ui/react-popover";
 import {
@@ -433,6 +434,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                         direction="next"
                         onNavigate={onNavigate}
                     />
+                    {!playOnly && <RecordPathButton />}
                 </div>
                 {(accessories != null || (secondary != null && !folded)) && (
                     <>
