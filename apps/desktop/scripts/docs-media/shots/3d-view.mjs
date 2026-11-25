@@ -929,10 +929,15 @@ const shots = [
             return {
                 box: ctx.union(
                     await ctx.around(
-                        view.getByTestId("view3d-uniform-preview-badge").first(),
+                        view
+                            .getByTestId("view3d-uniform-preview-badge")
+                            .first(),
                         10,
                     ),
-                    await ctx.around(view.getByTestId("view3d-uniform-import"), 8),
+                    await ctx.around(
+                        view.getByTestId("view3d-uniform-import"),
+                        8,
+                    ),
                 ),
                 target: view,
             };
@@ -987,7 +992,10 @@ const shots = [
             await ctx.wait(1000);
             return {
                 box: ctx.union(
-                    await ctx.around(view.getByTestId("view3d-uniform-picker"), 10),
+                    await ctx.around(
+                        view.getByTestId("view3d-uniform-picker"),
+                        10,
+                    ),
                     await ctx.around(note, 8),
                 ),
                 target: view,
