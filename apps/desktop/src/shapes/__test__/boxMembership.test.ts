@@ -18,6 +18,7 @@ import {
     saveShapeRecipeInTransaction,
 } from "@/db-functions/shapeRecipes";
 import { boxMembershipEdit } from "../placed/boxMembership";
+import type { ShapeContext } from "../types";
 
 /**
  * Placed boxes stay true to the field through coordinate edits
@@ -98,9 +99,12 @@ const edit = async (
     db: DbConnection,
     target: TimelineEditTarget & { kind: "range" },
     moves: { marcherId: number; x: number; y: number }[],
+    /** How shapes lay out, to keep one turned or scaled: none, as with no field */
+    ctx: ShapeContext | null = null,
 ) => {
     const membership = boxMembershipEdit({
         moves,
+        ctx,
         beat: target.end,
         positionOf: (id) => {
             const [x, y] = resolver().positionAt(id, target.end);
@@ -140,6 +144,64 @@ describeDbTests("Placed box membership", (it) => {
         expect(after[0]!.id).toBe(before!.id);
         expect(after[0]!.params).toMatchObject({ center: { x: 120, y: 50 } });
         expect(after[0]!.members.map((m) => m.x)).toEqual([110, 130, 110, 130]);
+    });
+
+    it("turning every member about one point turns the box, members and all, one undo step (#1236)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const ids = await show(db);
+        await place(db, ids);
+        const [before] = await readAllShapeRecipes(db);
+        // A quarter turn clockwise on screen about the box's center (110, 50)
+        const turned = SPOTS.map(({ x, y }) => ({
+            x: 110 - (y - 50),
+            y: 50 + (x - 110),
+        }));
+        const moves = ids.map((marcherId, i) => ({ marcherId, ...turned[i]! }));
+        const ctx: ShapeContext = { stepPx: 10, snapPoint: (p) => p };
+        const leaves = await edit(db, PAGE2, moves, ctx);
+        expect(leaves).toEqual([]);
+        const after = await readAllShapeRecipes(db);
+        expect(after).toHaveLength(1);
+        expect(after[0]!.id).toBe(before!.id);
+        expect(after[0]!.kind).toBe("block");
+        expect(after[0]!.params).toMatchObject({
+            center: { x: 110, y: 50 },
+            files: 2,
+            spots: 4,
+        });
+        expect((after[0]!.params as { rotation: number }).rotation).toBeCloseTo(
+            Math.PI / 2,
+        );
+        expect(after[0]!.members.map((m) => [m.x, m.y])).toEqual(
+            turned.map((p) => [p.x, p.y]),
+        );
+
+        await performUndo(db);
+        await timelineResolverSettled();
+        const [undone] = await readAllShapeRecipes(db);
+        expect(undone).toEqual(before);
+    });
+
+    it("a box turned with no field to lay it out loses its members, as before", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const ids = await show(db);
+        await place(db, ids);
+        const turned = SPOTS.map(({ x, y }) => ({
+            x: 110 - (y - 50),
+            y: 50 + (x - 110),
+        }));
+        await edit(
+            db,
+            PAGE2,
+            ids.map((marcherId, i) => ({ marcherId, ...turned[i]! })),
+        );
+        // Every member left, so the box is gone
+        const after = await readAllShapeRecipes(db);
+        expect(after.flatMap((r) => r.members)).toEqual([]);
     });
 
     it("moving one member takes it out and leaves a hole, one undo step", async ({

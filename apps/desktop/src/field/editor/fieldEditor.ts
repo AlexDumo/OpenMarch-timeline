@@ -189,6 +189,13 @@ export type FieldEditorPorts = {
     /** A double-click on marcher `id`: the second click came after a click on it. */
     doubleClickMarcher?(id: number): void;
     /**
+     * Whether the selection box's scale handles keep its ratio whatever is
+     * held: the selection is placed shapes selected whole (#1236), which an
+     * uneven scale would bend out of form (an arc would no longer be round).
+     * Read at each press; free when omitted.
+     */
+    keepsRatio?(): boolean;
+    /**
      * Whether a marcher row is an item (a prop or equipment, C2.1). Items are
      * hit by their Outline ({@link itemAt}), not by a dot at their center.
      */
@@ -1970,6 +1977,7 @@ export class FieldEditor {
                   (point) => this.ports.snap?.(point) ?? point,
                   this.options.snap,
                   () => this.options.pull?.() ?? null,
+                  this.ports.keepsRatio?.() ?? false,
               );
     }
 

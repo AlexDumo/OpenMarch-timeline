@@ -13,7 +13,7 @@ import { useFieldTopInset } from "@/components/canvas/fieldLayers";
 import { useShallow } from "zustand/react/shallow";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import type { OrthographicCamera, WebGLRenderer } from "three";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DEFAULT_FIELD_THEME, type FieldProperties } from "@openmarch/core";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
@@ -75,6 +75,8 @@ import {
     canReachInside,
 } from "@/shapes/placed/boxSelection";
 import { doubleClickMember } from "@/shapes/placed/selectLinkedShapes";
+import { dropOnShapes } from "@/shapes/placed/commitBox";
+import { useBoxSelectionStore } from "@/shapes/placed/boxSelectionStore";
 import {
     drawnPlacedBoxes,
     drawnShapeJoints,
@@ -225,6 +227,7 @@ export default function ThreeField() {
  */
 function ThreeFieldView() {
     const databaseReady = useDatabaseReady();
+    const queryClient = useQueryClient();
     const { data: fieldProperties } = useQuery(
         fieldPropertiesQueryOptions(databaseReady),
     );
@@ -500,8 +503,10 @@ function ThreeFieldView() {
                         useSelectionCoverStore.getState().covers,
                     showPositions: (positions) =>
                         marchers.setOverrides(positions),
-                    // #196: drops go through the drop-to-timeline path
+                    // #196: drops go through the drop-to-timeline path; one that turned or
+                    // scaled placed shapes selected whole takes them with it (#1236)
                     drop: (positions) =>
+                        dropOnShapes(positions, queryClient) ??
                         dropMarchersOnTimeline(
                             positions,
                             latest.current.moveMarchers,
@@ -519,6 +524,9 @@ function ThreeFieldView() {
                     reachesInside: canReachInside,
                     // #1236: on a linked shape, its whole figure; else inside the box
                     doubleClickMarcher: doubleClickMember,
+                    // #1236: shapes selected whole scale evenly, so arcs stay round
+                    keepsRatio: () =>
+                        useBoxSelectionStore.getState().shapes.length > 0,
                     // C2.1: items are hit anywhere inside their Outline
                     isItem: (id) => items.isItem(id),
                     // The pit's locked equipment: no marquee or lasso takes it
@@ -563,7 +571,7 @@ function ThreeFieldView() {
                     ),
                 },
             ),
-        [marchers, items, dimming],
+        [marchers, items, dimming, queryClient],
     );
     useEffect(() => {
         setActiveFieldEditor(editor);

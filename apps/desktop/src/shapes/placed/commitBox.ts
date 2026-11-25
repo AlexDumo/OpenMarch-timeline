@@ -18,10 +18,14 @@ import type { ToolEnv } from "../tool/toolKind";
 import type { LineParams } from "../line/lineGeometry";
 import { followersOf, liveLinks, withoutDeadLinks } from "./shapeLinks";
 import { liveTargets } from "./liveBox";
-import { shapesMoved } from "./movedShapes";
+import {
+    shapesMoved,
+    shapesTransformed,
+    similarityOfDrop,
+} from "./movedShapes";
 import type { PlacedBox } from "./placedBox";
 import { placedOrderChoice } from "./placedOrder";
-import { useSavingBoxStore } from "./boxSelectionStore";
+import { useBoxSelectionStore, useSavingBoxStore } from "./boxSelectionStore";
 import { placedBoxesAt, placedBoxesRead } from "./placedBoxStore";
 import {
     historyStepsPending,
@@ -203,6 +207,101 @@ export function moveShapes(
                 useSavingBoxStore.setState({ box: null, beats: [] });
         }
     }, undefined);
+}
+
+/**
+ * A drop of the selection's marchers (`positions`) that turned, scaled evenly or mirrored placed
+ * shapes selected whole (#1236: the selection box's handles, a rotation typed in the inspector):
+ * saved through {@link transformShapes}, so each shape goes with its members, keeping its kind,
+ * count and links, and shapes linked to them follow. Null when it's no such drop (one that only
+ * moved them, or bent one out of form, or a kind that can't follow), for the plain drop to save.
+ */
+export function dropOnShapes(
+    positions: readonly {
+        readonly id: number;
+        readonly x: number;
+        readonly y: number;
+    }[],
+    queryClient: QueryClient,
+): Promise<"saved" | "refused"> | null {
+    const { selected, shapes } = useBoxSelectionStore.getState();
+    const boxes = shapes.length > 0 ? shapes : selected ? [selected] : [];
+    const field = currentShapeField();
+    if (boxes.length === 0 || !field) return null;
+    const sim = similarityOfDrop(boxes, positions);
+    if (!sim || !shapesTransformed(boxes, sim, [], shapeContextFor(field)))
+        return null;
+    return transformShapes(boxes, positions, queryClient);
+}
+
+/**
+ * Takes the placed shapes `boxes`, selected whole, to where their members were dropped
+ * (`positions`) through one turn, even scale or mirror (#1236): each through its kind, so it keeps
+ * its kind, count and form and every link between them holds (`shapesTransformed`), and every
+ * shape linked to them left out follows. Saved as one step, queued with {@link commitBox}'s saves
+ * and worked out from the shapes as the saves before it left them. Refused when they can't follow
+ * the drop any more.
+ */
+export function transformShapes(
+    boxes: readonly PlacedBox[],
+    positions: readonly {
+        readonly id: number;
+        readonly x: number;
+        readonly y: number;
+    }[],
+    queryClient: QueryClient,
+): Promise<"saved" | "refused"> {
+    if (!currentShapeField() || boxes.length === 0)
+        return Promise.resolve("refused");
+    const at: SaveAt = {
+        plan: planCanvasEdit(),
+        beat: displayedBeat(useTimelineSelectionStore.getState()),
+        waits: unsaved > 0 || historyStepsPending(),
+    };
+    unsaved++;
+    return queueHistoryStep(async () => {
+        try {
+            await timelinePositionsSettled();
+            await placedBoxesRead();
+            const field = currentShapeField();
+            if (!field) return "refused";
+            // As the saves before it left them
+            const stored = boxes
+                .filter((b) => shownStill(b, at.beat))
+                .map((b) => storedBox(b, at.beat));
+            const sim = similarityOfDrop(stored, positions);
+            if (!sim) return "refused";
+            const shown = placedBoxesAt(at.beat);
+            const edits = shapesTransformed(
+                stored,
+                sim,
+                carriedOnto(at.plan, stored[0]!)
+                    ? []
+                    : liveLinks(shown, at.beat),
+                shapeContextFor(field),
+            );
+            const [first, ...others] = edits ?? [];
+            if (!first) return "refused";
+            await saveBox(
+                first.box,
+                first.params,
+                at,
+                queryClient,
+                undefined,
+                undefined,
+                placedOrderChoice(first.box),
+                others,
+            );
+            return "saved";
+        } catch (e) {
+            console.error("Couldn't turn or scale the shapes", e);
+            return "refused";
+        } finally {
+            unsaved--;
+            if (unsaved === 0)
+                useSavingBoxStore.setState({ box: null, beats: [] });
+        }
+    }, "refused" as const);
 }
 
 /** Another placed shape saved in the same step as an edit ({@link commitBox}'s `others`) */
