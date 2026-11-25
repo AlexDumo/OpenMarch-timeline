@@ -1,4 +1,6 @@
 words:
+  # the uniform pack file's extension (.omasset), used across code, docs and test names
+  - omasset
   - autocheckpoint
   - FULLFSYNC
   - fsyncs
