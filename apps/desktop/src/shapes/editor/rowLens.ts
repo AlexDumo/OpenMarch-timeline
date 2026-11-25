@@ -163,8 +163,10 @@ export function focusUnder(
 
 /**
  * Where the lens goes as the pointer moves to `px`: while it's still opening, centered under the
- * pointer; once open, nowhere while the pointer is inside it, and dragged by its edge, the edge
- * kept under the pointer, once the pointer goes past.
+ * pointer; once open, nowhere while the pointer is inside it, dragged by its edge (the edge kept
+ * under the pointer) while the pointer is just past it, and centered under the pointer again when
+ * it points well away, at another part of the row (sim study: a lens left at one end caught a
+ * pointer aimed at the middle on its edge).
  */
 export function followPointer(
     rows: readonly LensRow[],
@@ -184,7 +186,10 @@ export function followPointer(
         else b = mid;
     }
     const at = (a + b) / 2;
-    const { flat } = lensSize(rows, width);
+    const { flat, fade } = lensSize(rows, width);
+    // Pointing well away from the lens, at another part of the row's picture, opens it there
+    if (Math.abs(at - focus) > flat + fade)
+        return focusUnder(rows, width, px, strength);
     if (at > focus + flat)
         return solve(rows, px, (f) => warp(rows, width, f, strength)(f + flat));
     if (at < focus - flat)

@@ -133,6 +133,18 @@ describe("rowLens", () => {
         },
     );
 
+    it("opens the lens where the pointer jumps to, not on the old lens's edge", () => {
+        const rows = rowsOf(50);
+        const width = 150;
+        const atEnd = focusUnder(rows, width, width - STRIP_PAD - 2, 1);
+        const middle = followPointer(rows, width, atEnd, 1, width / 2);
+        expect(
+            Math.abs(
+                spotUnder(rows, rows[0]!, width, middle, 1, width / 2) - 24.5,
+            ),
+        ).toBeLessThanOrEqual(3);
+    });
+
     it("finds the same column in a shorter or shifted row", () => {
         const long = { length: 34, shift: 0 };
         const short = { length: 33, shift: 0 };
