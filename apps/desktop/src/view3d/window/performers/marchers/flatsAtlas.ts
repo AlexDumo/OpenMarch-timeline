@@ -77,16 +77,21 @@ let geometryPromise: Promise<{
     layout: FlatsLayout;
     regions: FlatsRegions;
 }> | null = null;
+/** The geometry once loaded, for {@link peekFlatsResources} */
+let geometryLoaded: { layout: FlatsLayout; regions: FlatsRegions } | null =
+    null;
 /** `layout.json` and `regions.json`, once. */
 export function loadFlatsGeometry() {
     geometryPromise ??= Promise.all([
         fetchJson<FlatsLayout>(layoutUrl),
         fetchJson<FlatsRegions>(regionsUrl),
-    ]).then(([layout, regions]) => ({ layout, regions }));
+    ]).then(([layout, regions]) => (geometryLoaded = { layout, regions }));
     return geometryPromise;
 }
 
 const lutPromises = new Map<BodyType, Promise<THREE.DataTexture>>();
+/** The tables once loaded, for {@link peekFlatsResources} */
+const tablesLoaded = new Map<BodyType, THREE.DataTexture>();
 /** A body type's lookup table as a half-float RGBA texture, once per window. */
 export function loadFlatsLut(body: BodyType): Promise<THREE.DataTexture> {
     let p = lutPromises.get(body);
@@ -97,7 +102,11 @@ export function loadFlatsLut(body: BodyType): Promise<THREE.DataTexture> {
                 if (!r.ok) throw new Error(`3D View: flats table ${r.status}`);
                 return r.arrayBuffer();
             }),
-        ]).then(([{ layout }, buf]) => flatsLutTexture(layout, buf));
+        ]).then(([{ layout }, buf]) => {
+            const lut = flatsLutTexture(layout, buf);
+            tablesLoaded.set(body, lut);
+            return lut;
+        });
         lutPromises.set(body, p);
     }
     return p;
@@ -647,6 +656,8 @@ async function composeFrom(
 interface CacheEntry {
     promise: Promise<FlatsAtlas>;
     refs: number;
+    /** The atlas once composed */
+    done?: FlatsAtlas;
 }
 const atlases = new Map<string, CacheEntry>();
 export const flatsKey = (id: FlatsArtworkKey, body: BodyType, dpi: number) =>
@@ -664,12 +675,39 @@ export function acquireFlats(
     const key = flatsKey(id, body, dpi);
     let e = atlases.get(key);
     if (!e) {
-        e = { promise: composeAtlas(id, body, dpi), refs: 0 };
-        atlases.set(key, e);
-        e.promise.catch(() => atlases.delete(key));
+        const entry: CacheEntry = {
+            promise: composeAtlas(id, body, dpi),
+            refs: 0,
+        };
+        e = entry;
+        atlases.set(key, entry);
+        entry.promise.then(
+            (atlas) => {
+                entry.done = atlas;
+            },
+            () => atlases.delete(key),
+        );
     }
     e.refs++;
     return e.promise;
+}
+
+/**
+ * An atlas already composed, with its body type's table and the layout, or null when any of
+ * them isn't ready yet. Lets a wear that waited for its atlases (`useSettledFlatsWear`) reach the
+ * marchers in the same render as its palette, instead of a few frames later. Doesn't acquire:
+ * call {@link acquireFlats} too (a released atlas stays a moment, so it's still there).
+ */
+export function peekFlatsResources(
+    id: FlatsArtworkKey,
+    body: BodyType,
+    dpi: number,
+): { atlas: FlatsAtlas; lut: THREE.DataTexture; layout: FlatsLayout } | null {
+    const atlas = atlases.get(flatsKey(id, body, dpi))?.done;
+    const lut = tablesLoaded.get(body);
+    return atlas && lut && geometryLoaded
+        ? { atlas, lut, layout: geometryLoaded.layout }
+        : null;
 }
 
 /** Lets go of an atlas from {@link acquireFlats}; the last user frees it. */

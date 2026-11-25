@@ -18,6 +18,7 @@ import {
     acquireFlats,
     loadFlatsGeometry,
     loadFlatsLut,
+    peekFlatsResources,
     releaseFlats,
 } from "./flatsAtlas";
 import {
@@ -136,9 +137,27 @@ export function useMarcherFlats(
                 : null,
         [ready, quality, wantedKey],
     );
+    // a set whose atlases are all composed already (a wear that waited for them, fork #1257
+    // step 5) goes on the marchers in this render, with its palette: no frames of the new
+    // colors on the old art while the effect above resolves them
+    const composed = useMemo(() => {
+        if (!wantedKey) return null;
+        if (ready && ready.key === wantedKey && ready.quality === quality)
+            return null;
+        const dpi = flatsDpi(quality);
+        const out = new Map<string, FlatsResourceValue>();
+        for (const key of wantedKey.split(",")) {
+            const [id, body] = key.split("|") as [FlatsArtworkKey, BodyType];
+            const r = peekFlatsResources(id, body, dpi);
+            if (!r) return null;
+            out.set(key, r);
+        }
+        return out as FlatsResources;
+    }, [wantedKey, quality, ready]);
     if (!wantedKey) return NONE;
     if (ready && ready.key === wantedKey && ready.quality === quality)
         return ready.map;
+    if (composed) return composed;
     // composing a change: the previous art stays until the new one is ready
     return transition ?? NONE;
 }
