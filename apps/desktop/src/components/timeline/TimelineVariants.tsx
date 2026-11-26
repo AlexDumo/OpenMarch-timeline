@@ -61,6 +61,7 @@ import { holdBarPageAt } from "./TimelineHoldBars";
 import { isTyping, overlayOpen } from "./timelineHotkeys";
 import { useLatestCallback } from "./useLatestCallback";
 import {
+    attachSelectedClipEndPress,
     attachTimelineGestures,
     TIMELINE_CONTROL_SELECTOR,
     timelineTouchRegion,
@@ -436,7 +437,8 @@ const useTimelineZoom = ({
 /**
  * Fingers on the timeline (tablet 3.1, `timelineGestures.ts`): the ruler and page row scrub, bare
  * track space pans, a control takes its own press, and two fingers pan and pinch. Mouse and pen
- * presses never reach it.
+ * presses never reach it. Also sends a mouse's press on a line to the selected clip's end under it
+ * (`attachSelectedClipEndPress`, #593).
  */
 const useTimelineGestures = ({
     viewportRef,
@@ -460,7 +462,8 @@ const useTimelineGestures = ({
     useEffect(() => {
         const viewport = viewportRef.current;
         if (!viewport) return;
-        return attachTimelineGestures(viewport, {
+        const detachClipEnd = attachSelectedClipEndPress(viewport);
+        const detachGestures = attachTimelineGestures(viewport, {
             region: (event) =>
                 timelineTouchRegion({
                     onControl:
@@ -494,6 +497,10 @@ const useTimelineGestures = ({
                 latest.current.seekAt(surface, clientX);
             },
         });
+        return () => {
+            detachGestures();
+            detachClipEnd();
+        };
     }, [viewportRef]);
 };
 

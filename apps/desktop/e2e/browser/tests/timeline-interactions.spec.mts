@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
 import { test, expect } from "../fixtures.mjs";
 import { drawnMarchers, readField, waitForField } from "../app.mjs";
-import { isolate } from "../timeline.mjs";
+import { goToPage, isolate, pageBox, splitMoveIntoClip } from "../timeline.mjs";
 
 // The timeline's interactions on the field (#202; #189 user stories 18, 20,
 // 59): Escape leaving isolation (and when it doesn't, as with the shape tool
@@ -18,6 +18,10 @@ import { isolate } from "../timeline.mjs";
 // ("while a resize or move runs, Esc belongs to it, not to isolation").
 //
 // The "change:" scenarios are the rules-table changes decided in #189.
+//
+// Selecting a move's clip parks the playhead on its end, where the line is
+// painted over the clip's end handle: the selected clip's end takes a mouse's
+// press there (#593), and the playhead's line still takes it everywhere else.
 
 const desktop = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
@@ -101,4 +105,87 @@ test("Escape in isolation with a dialog open only closes the dialog", async ({
     await expect(dialog).toBeHidden();
     await page.waitForTimeout(300);
     await expect(isolationBar(page)).toBeVisible();
+});
+
+test.describe("the selected clip's end under the playhead (#593)", () => {
+    test.use({
+        appSettings: { optOutAnalytics: true, editorMode: "expert" },
+        allowedPageErrors: [/Audio worklet error/],
+        initScript: "localStorage.setItem('openmarch:inputMode', 'mouse');",
+    });
+
+    const playheadLine = (page: Page) => page.getByTestId("timeline-playhead");
+    const playheadAt = (page: Page) =>
+        playheadLine(page).getAttribute("aria-label");
+    const centerX = async (page: Page) => {
+        const box = (await playheadLine(page).boundingBox())!;
+        return box.x + box.width / 2;
+    };
+
+    test("a drag on the end resizes the move; the line is still dragged off the clip's row", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await waitForField(page);
+        await goToPage(page, 53);
+        const clip = await splitMoveIntoClip(show, 53);
+        // Zoomed in, so the clip is wide and its end handle is 6 px
+        const view = (await page
+            .getByTestId("timeline-viewport")
+            .boundingBox())!;
+        await page.mouse.move(
+            view.x + view.width / 2,
+            view.y + view.height / 2,
+        );
+        await page.keyboard.down("Control");
+        for (let i = 0; i < 3; i++) await page.mouse.wheel(0, -100);
+        await page.keyboard.up("Control");
+        await expect
+            .poll(async () => (await pageBox(page, 53).boundingBox())!.width)
+            .toBeGreaterThan(160);
+        await clip.evaluate((el) =>
+            el.scrollIntoView({ block: "nearest", inline: "center" }),
+        );
+        await page.waitForTimeout(200);
+        await clip.click();
+        await expect(clip).toHaveAttribute("data-selected", "true");
+        const box = (await clip.boundingBox())!;
+        const y = box.y + box.height / 2;
+        const end = box.x + box.width;
+        // Selecting it parked the playhead on its end, over the end handle
+        expect(Math.abs((await centerX(page)) - end)).toBeLessThan(2);
+        const playhead = await playheadAt(page);
+        await page.mouse.move(end - 2, y);
+        await page.mouse.down();
+        await page.mouse.move(end + 40, y, { steps: 6 });
+        await expect(
+            page.getByTestId("timeline-clip-resize-tag"),
+        ).toBeVisible();
+        expect(await playheadAt(page), "the playhead stayed").toBe(playhead);
+        await page.mouse.up();
+        await expect(page.getByTestId("timeline-clip-resize-tag")).toBeHidden();
+        await expect
+            .poll(async () => (await clip.boundingBox())!.width)
+            .toBeGreaterThan(box.width + 20);
+        await expect(clip).toHaveAttribute("data-selected", "true");
+        // The playhead followed the new end. Above the clip rows, at that count, its line drags it
+        await expect
+            .poll(async () => {
+                const now = (await clip.boundingBox())!;
+                return Math.abs((await centerX(page)) - (now.x + now.width));
+            })
+            .toBeLessThan(2);
+        const moved = await playheadAt(page);
+        const header = (await page
+            .getByTestId("timeline-pinned-header")
+            .boundingBox())!;
+        const above = header.y + header.height - 4;
+        const line = await centerX(page);
+        await page.mouse.move(line, above);
+        await page.mouse.down();
+        await page.mouse.move(line + 60, above, { steps: 6 });
+        await page.mouse.up();
+        await expect.poll(() => playheadAt(page)).not.toBe(moved);
+        await expect(page.getByTestId("timeline-clip-resize-tag")).toBeHidden();
+    });
 });

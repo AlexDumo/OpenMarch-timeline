@@ -811,6 +811,8 @@ export function findTouchHit(
             drawn: drawnOf(element).getBoundingClientRect(),
             selected: element.hasAttribute("data-touch-selected"),
             group: element.dataset.touchGroup,
+            line: element.hasAttribute("data-touch-line"),
+            overLines: element.hasAttribute("data-touch-over-lines"),
             // Right on it: in its own button, where a mouse would take it. Not when a control
             // that keeps its presses is painted over it there (the add-page pill over the last
             // page's flag grip, #920): a mouse would take that control
@@ -824,6 +826,88 @@ export function findTouchHit(
     const hit = pickTouchTarget(x, y, candidates, keep);
     if (hit) return { target: hit, owner: hit.parentElement ?? hit };
     return control && beneath ? { target: beneath, owner: control } : null;
+}
+
+/**
+ * The selected clip's end handle a mouse's press on a line belongs to (#593), or null to leave it
+ * on the line. `target` is where the press landed and `stack` what's under it, topmost first
+ * (`elementsFromPoint`). Selecting a move parks the playhead on its end, and the start flag and the
+ * playhead are painted over the clip rows (UI-21), so the press lands on the line: when the handle
+ * (`data-selected-clip-end`) is the first control under the lines, it takes the press. Any other
+ * control there (an unselected clip's end, a page flag's grip) leaves it to the line.
+ */
+export function selectedClipEndUnderLine(
+    target: Element,
+    stack: readonly Element[],
+): HTMLElement | null {
+    if (!target.closest(TIMELINE_LINE_SELECTOR)) return null;
+    for (const element of stack) {
+        if (element.closest(TIMELINE_LINE_SELECTOR)) continue;
+        const handle = element.closest(SELECTED_CLIP_END_SELECTOR);
+        if (handle instanceof HTMLElement) return handle;
+        if (element.closest(TIMELINE_CONTROL_SELECTOR)) return null;
+    }
+    return null;
+}
+
+const TIMELINE_LINE_SELECTOR = "[data-timeline-line]";
+const SELECTED_CLIP_END_SELECTOR = "[data-selected-clip-end]";
+
+/**
+ * Sends a mouse's or pen's press on the start flag's or the playhead's line to the selected clip's
+ * end handle under it (`selectedClipEndUnderLine`, #593), before the timeline's own handlers see
+ * it (capture phase); the line never hears it. A finger's press is the gesture adapter's, whose
+ * hit areas rank the same way (`pickTouchTarget`). Returns the detach.
+ */
+export function attachSelectedClipEndPress(viewport: HTMLElement): () => void {
+    const sent = new WeakSet<Event>();
+    /** A press sent on: its mouse down mustn't focus the line */
+    let pressed: Element | null = null;
+    const onPointerDown = (event: PointerEvent) => {
+        pressed = null;
+        if (
+            sent.has(event) ||
+            timelineGesturesOwn(event) ||
+            event.button !== 0 ||
+            !(event.target instanceof Element)
+        )
+            return;
+        const handle = selectedClipEndUnderLine(
+            event.target,
+            viewport.ownerDocument.elementsFromPoint?.(
+                event.clientX,
+                event.clientY,
+            ) ?? [],
+        );
+        if (!handle || !viewport.contains(handle)) return;
+        event.stopPropagation();
+        const press = clonePointerEvent(event);
+        sent.add(press);
+        handle.dispatchEvent(press);
+        if (press.defaultPrevented) event.preventDefault();
+        pressed = handle;
+    };
+    // The line is a button: its mouse down would focus it. The clip the handle is in takes focus,
+    // as a press on the handle itself gives it
+    const onMouseDown = (event: MouseEvent) => {
+        const handle = pressed;
+        pressed = null;
+        if (!handle) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const clip = handle.closest("button");
+        if (clip instanceof HTMLElement) clip.focus({ preventScroll: true });
+    };
+    viewport.addEventListener("pointerdown", onPointerDown, { capture: true });
+    viewport.addEventListener("mousedown", onMouseDown, { capture: true });
+    return () => {
+        viewport.removeEventListener("pointerdown", onPointerDown, {
+            capture: true,
+        });
+        viewport.removeEventListener("mousedown", onMouseDown, {
+            capture: true,
+        });
+    };
 }
 
 /** The keep group of a control with none of its own: no hit area belongs to it */

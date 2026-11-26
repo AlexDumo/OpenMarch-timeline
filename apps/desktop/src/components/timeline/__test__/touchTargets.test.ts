@@ -96,6 +96,44 @@ describe("pickTouchTarget", () => {
         expect(pickTouchTarget(90, 50, targets)).toBe("grip");
     });
 
+    it("gives a press on the selected clip's end to it where a line sits on that end (#593)", () => {
+        const end: TouchHitCandidate<string> = {
+            ...target("selected end", 100, {
+                selected: true,
+                group: "clip:1",
+            }),
+            overLines: true,
+        };
+        const playhead = { ...target("playhead", 100), line: true };
+        const startFlag = { ...target("start flag", 100), line: true };
+        // The lines are painted on top, and the press is right on them
+        expect(pickTouchTarget(100, 50, [end, playhead])).toBe("selected end");
+        expect(pickTouchTarget(100, 50, [end, startFlag, playhead])).toBe(
+            "selected end",
+        );
+        // Off both as drawn, and on the selected clip's own body
+        expect(pickTouchTarget(110, 50, [end, playhead])).toBe("selected end");
+        expect(pickTouchTarget(97, 50, [end, playhead], "clip:1")).toBe(
+            "selected end",
+        );
+        // Off the end's hit area (above the clip row), the line takes it
+        expect(
+            pickTouchTarget(100, 50, [
+                { ...end, hit: { ...end.hit, top: 60, bottom: 72 } },
+                playhead,
+            ]),
+        ).toBe("playhead");
+        // A line a count away from the end keeps its own presses
+        const away = { ...target("playhead", 116), line: true };
+        expect(pickTouchTarget(116, 50, [end, away])).toBe("playhead");
+    });
+
+    it("still gives a press on an unselected clip's end to a line on it (UI-21)", () => {
+        const end = target("unselected end", 100, { group: "clip:2" });
+        const playhead = { ...target("playhead", 100), line: true };
+        expect(pickTouchTarget(100, 50, [end, playhead])).toBe("playhead");
+    });
+
     it("breaks a tie for the one on top (later in paint order)", () => {
         const targets = [target("start flag", 100), target("playhead", 100)];
         expect(pickTouchTarget(110, 50, targets)).toBe("playhead");

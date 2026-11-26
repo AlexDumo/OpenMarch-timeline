@@ -15,7 +15,13 @@ import {
     waitForField,
 } from "../app.mjs";
 import { seedShowSql } from "../seed.mjs";
-import { goToPage, pageBox } from "../timeline.mjs";
+import {
+    goToPage,
+    pageBox,
+    selectMoveMember,
+    splitMoveIntoClip,
+    storedMoveStarts,
+} from "../timeline.mjs";
 
 // The timeline's 44 px finger hit areas (tablet plan 3.3, fork #886). In the
 // touch layout a finger that lands 15–20 px off a small target's drawn line
@@ -157,81 +163,6 @@ async function drag(page: Page, from: Point, dx: number, dy = 0) {
     await f.down(from);
     await f.move(dx, dy);
     await f.up();
-}
-
-/** Every stored move's start beat, by id */
-const moveStarts = async (query: Show["query"]) =>
-    Object.fromEntries(
-        (
-            await query<{ id: number; start: number }>(
-                "SELECT id, start_beat AS start FROM timelines ORDER BY id",
-            )
-        ).map((r) => [r.id, r.start]),
-    );
-
-/** Clicks one marcher of the beat-53 move on the field (a mouse, as the field is not under test) */
-async function selectMoveMarcher(show: Show): Promise<number> {
-    const { page, query } = show;
-    // Stored by beat id, one more than the view beat
-    const members = (
-        await query<{ marcher: number }>(
-            `SELECT a.marcher_id AS marcher
-               FROM timelines l
-               JOIN timeline_transitions t ON t.timeline_id = l.id
-               JOIN timeline_assignments a ON a.transition_id = t.id
-              WHERE l.id = (SELECT id FROM timelines WHERE start_beat = ? ORDER BY id LIMIT 1)`,
-            PAGE_START + 1,
-        )
-    ).map((r) => r.marcher);
-    const marcher = (await drawnMarchers(page)).find(
-        (m) => members.includes(m.id) && m.onScreen,
-    );
-    expect(marcher, "a member of the move is on screen").toBeTruthy();
-    await page.mouse.click(marcher!.screen.x, marcher!.screen.y);
-    await expect
-        .poll(() => page.evaluate(() => window.fieldTest!.selection()))
-        .toEqual([marcher!.id]);
-    return marcher!.id;
-}
-
-/**
- * Splits one marcher of the beat-53 move into a new move, which has a clip
- * (as `touch-timeline-gestures.spec.mts` does); returns the clip.
- */
-async function splitIntoClip(show: Show): Promise<Locator> {
-    const { page, query } = show;
-    const before = await moveStarts(query);
-    await selectMoveMarcher(show);
-    await expect(async () => {
-        await pageBox(page, PAGE_START).click({ button: "right" });
-        await page
-            .getByRole("menuitem", { name: "Split 1 selected into new move" })
-            .click({ timeout: 1000 });
-    }).toPass();
-    await expect
-        .poll(async () => Object.keys(await moveStarts(query)).length)
-        .toBe(Object.keys(before).length + 1);
-    const splitId = Math.max(
-        ...Object.keys(await moveStarts(query)).map(Number),
-    );
-    await expect(page.getByTestId("timeline-isolation-bar")).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(page.getByTestId("timeline-isolation-bar")).toBeHidden();
-    const clip = page.locator(
-        `[data-testid="timeline-clip"][data-move-id="${splitId}"]`,
-    );
-    await expect(clip).toBeVisible();
-    // Settled where it drops
-    let last = Number.NaN;
-    await expect
-        .poll(async () => {
-            const y = (await clip.boundingBox())!.y;
-            const still = Math.abs(y - last) < 0.5;
-            last = y;
-            return still;
-        })
-        .toBe(true);
-    return clip;
 }
 
 test.describe("touch layout", () => {
@@ -405,7 +336,7 @@ test.describe("touch layout", () => {
         show,
     }) => {
         const { page } = show;
-        const clip = await splitIntoClip(show);
+        const clip = await splitMoveIntoClip(show, PAGE_START);
         await ready(page);
         // Back to the page: the clip isn't selected, and the playhead is on its end
         await goToPage(page, PAGE_START);
@@ -478,7 +409,7 @@ test.describe("touch layout", () => {
         show,
     }) => {
         const { page } = show;
-        const clip = await splitIntoClip(show);
+        const clip = await splitMoveIntoClip(show, PAGE_START);
         await ready(page);
         await clip.scrollIntoViewIfNeeded();
         await tap(page, await centerOf(clip));
@@ -499,7 +430,7 @@ test.describe("touch layout", () => {
         await expect(page.getByTestId("timeline-clip-menu")).toBeHidden();
 
         // The end: 18 px past the clip's end resizes, and brought back writes nothing
-        const before = await moveStarts(show.query);
+        const before = await storedMoveStarts(show.query);
         const f = await finger(page);
         await f.down({ x: box.x + box.width + OFF, y });
         await f.move(40);
@@ -519,15 +450,63 @@ test.describe("touch layout", () => {
         await g.move(40);
         await g.up();
         await expect(page.getByTestId("timeline-clip-resize-tag")).toBeHidden();
-        expect(await moveStarts(show.query)).toEqual(before);
+        expect(await storedMoveStarts(show.query)).toEqual(before);
         expect((await clip.boundingBox())!.width).toBeCloseTo(box.width, 0);
+    });
+
+    test("right after selecting a clip, a finger on its end resizes it, though the playhead is parked there (#593)", async ({
+        show,
+    }) => {
+        const { page } = show;
+        const clip = await splitMoveIntoClip(show, PAGE_START);
+        await ready(page);
+        await clip.scrollIntoViewIfNeeded();
+        await tap(page, await centerOf(clip));
+        await expect(clip).toHaveAttribute("data-selected", "true");
+        const box = (await clip.boundingBox())!;
+        const y = box.y + box.height / 2;
+        const end = box.x + box.width;
+        // Selecting it parked the playhead on its end
+        const line = await centerX(page.getByTestId("timeline-playhead"));
+        expect(Math.abs(line - end)).toBeLessThan(4);
+        const playhead = await playheadAt(page);
+        // Right on the line, just past the end, on the clip's row: the end takes it
+        const f = await finger(page);
+        await f.down({ x: line + 1, y });
+        await f.move(40);
+        await expect(
+            page.getByTestId("timeline-clip-resize-tag"),
+        ).toBeVisible();
+        expect(await playheadAt(page), "the playhead stayed").toBe(playhead);
+        await f.up();
+        await expect(page.getByTestId("timeline-clip-resize-tag")).toBeHidden();
+        await expect
+            .poll(async () => (await clip.boundingBox())!.width)
+            .toBeGreaterThan(box.width + 20);
+        // The playhead followed the end; off the clip's row its line still drags it
+        await expect
+            .poll(async () =>
+                Math.abs(
+                    (await centerX(page.getByTestId("timeline-playhead"))) -
+                        (await clip.boundingBox())!.x -
+                        (await clip.boundingBox())!.width,
+                ),
+            )
+            .toBeLessThan(4);
+        const moved = await playheadAt(page);
+        const at = {
+            x: await centerX(page.getByTestId("timeline-playhead")),
+            y: await bareY(page),
+        };
+        await drag(page, at, 60);
+        await expect.poll(() => playheadAt(page)).not.toBe(moved);
     });
 
     test("a finger's tap 15 px off a keyframe seeks to it, as a tap on it does", async ({
         show,
     }) => {
         const { page } = show;
-        await selectMoveMarcher(show);
+        await selectMoveMember(show, PAGE_START);
         await ready(page);
         const selectedEdges = await Promise.all(
             (

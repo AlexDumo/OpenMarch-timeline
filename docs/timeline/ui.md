@@ -789,7 +789,10 @@ from it. The spec still wins on the model; this file decides presentation.
     2026-10-08; UI-16). A move by the handles inside its clip's two ends: up to 6px, at most a quarter of the clip, none on a clip
     under 8px (V-120). The ⋯ button keeps clear of the end handle. The start flag and the playhead
     run down over the clip rows and the page-box row (UI-21), and where they cross a move's end
-    handle or a page flag's grip the line wins: move the line off to drag the edge.
+    handle or a page flag's grip the line wins: move the line off to drag the edge. The selected
+    move's end handle is the exception (#593). Selecting a move parks the playhead on its end, so
+    there the handle wins over both lines, for a mouse and a finger. Off the handle, the line still
+    takes the press, at that count too.
   - **Afterwards.** A selected move's start flag and playhead follow its new start and end; an
     isolated move keeps the playhead unless it was on the end. A playhead or start flag on a moved
     flag goes with it.
@@ -1088,7 +1091,9 @@ from it. The spec still wins on the model; this file decides presentation.
     they were only drawn there. The lines are drawn on top, so they act on top (owner, 2026-10-14,
     reversing a first "handles win" build): where a line crosses a move's end handle or a page
     flag's grip, a press takes the line. A move or a page whose edge a line sits on (a selected
-    move, a page whose box was clicked) is resized after moving the line off it. A press on a clip
+    move's start, a page whose box was clicked) is resized after moving the line off it. The
+    selected move's end handle wins over the line instead (#593), since selecting a move puts the
+    playhead there. A press on a clip
     under a line takes the line too. A click on the timeline, a click on the playhead,
     and a scrub started anywhere else move only the playhead, and pass the start flag as before
     (owner). In Expert UI-26 changes this: behind the start flag they swap.
