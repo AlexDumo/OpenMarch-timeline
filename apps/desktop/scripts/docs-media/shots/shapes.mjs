@@ -899,6 +899,82 @@ const shots = [
         },
     },
     {
+        id: "shapes-split-line",
+        kind: "clip",
+        covers: ["apps/desktop/src/shapes/placed/splitShape.ts"],
+        // A placed straight line, selected: the pointer over a gap between two marchers shows
+        // the scissors, and a click on them splits the line in two, nobody moving; a click on
+        // the first marcher then selects the first piece alone (#1336)
+        async setup({ page }) {
+            const { area } = await startInArea(page, 380, 60);
+            const y = area.y + area.height / 2;
+            const a = { x: area.x, y };
+            const b = { x: area.x + area.width, y };
+            await page.keyboard.press("KeyL");
+            await page.waitForTimeout(300);
+            await quickDrag(page, a, b);
+            await page.waitForTimeout(600);
+            await page.keyboard.press("Enter");
+            await page.waitForTimeout(1500);
+            await page.mouse.move(a.x - 40, a.y - 60);
+            await page.waitForTimeout(600);
+            await tidy(page);
+            const along = (await marchers(page))
+                .filter(
+                    (m) =>
+                        Math.abs(m.y - y) < 10 &&
+                        m.x >= a.x - 10 &&
+                        m.x <= b.x + 10,
+                )
+                .sort((m, n) => m.x - n.x);
+            if (along.length < 4)
+                throw new Error(`the line has ${along.length} marchers`);
+            // Between the second and third along the line
+            this.gap = {
+                x: (along[1].x + along[2].x) / 2,
+                y: (along[1].y + along[2].y) / 2,
+            };
+            this.rest = { x: a.x - 40, y: a.y - 60 };
+            this.first = along[0];
+            return { box: await cropArea(page, area, 40) };
+        },
+        async perform({ page, film, overlay }) {
+            await film.release();
+            await overlay.enable();
+            const { gap, rest } = this;
+            await page.mouse.move(rest.x, rest.y);
+            await film.hold(0.4);
+            await film.moveTo(page, rest, gap, 0.9);
+            await page.waitForTimeout(300);
+            await film.hold(0.6);
+            const scissors = await page
+                .getByTestId("fieldSplitScissors")
+                .boundingBox();
+            if (!scissors) throw new Error("no scissors over the gap");
+            const at = {
+                x: scissors.x + scissors.width / 2,
+                y: scissors.y + scissors.height / 2,
+            };
+            await film.moveTo(page, gap, at, 0.5);
+            await film.hold(0.4);
+            await page.mouse.click(at.x, at.y);
+            await page.waitForTimeout(800);
+            await film.hold(0.6);
+            // Away and back: a click on the first marcher selects the first piece alone
+            await film.moveTo(page, at, rest, 0.5);
+            await page.mouse.click(rest.x, rest.y);
+            await page.waitForTimeout(400);
+            await film.hold(0.4);
+            const first = this.first;
+            await film.moveTo(page, rest, first, 0.6);
+            await page.mouse.click(first.x, first.y);
+            await page.waitForTimeout(600);
+            await film.hold(0.6);
+            await film.moveTo(page, first, rest, 0.4);
+            await film.hold(1.2);
+        },
+    },
+    {
         id: "shapes-take-out",
         kind: "clip",
         // A placed box with one marcher dragged out of it: the box is selected and Close up

@@ -1,6 +1,6 @@
 ---
 title: Change a placed shape
-description: Select a shape you've already placed and change it, take one marcher out of it, group marchers into a shape where they stand, or ungroup it.
+description: Select a shape you've already placed and change it, split a line in two, take one marcher out of it, group marchers into a shape where they stand, or ungroup it.
 type: how-to
 covers:
   - apps/desktop/src/shapes/placed
@@ -12,6 +12,7 @@ covers:
   - action:shapeShrink
   - action:shapeGroup
   - action:shapeUngroup
+  - action:shapeSplitHere
   - i18n:shapes.placed
   - i18n:shapes.box.left
   - i18n:shapes.edit
@@ -24,6 +25,7 @@ import Kbd from "@/components/docs/Kbd.astro";
 import Ui from "@/components/docs/Ui.astro";
 import Term from "@/components/docs/Term.astro";
 import InShort from "@/components/docs/InShort.astro";
+import { Steps } from "@astrojs/starlight/components";
 
 <InShort>Click any marcher in the shape to select the whole shape, then drag its handles or change its numbers in the floating editor. Each change saves when you let go.</InShort>
 
@@ -52,6 +54,31 @@ Move a marcher off their spot and they leave the shape; a notice says so, and th
   id="shapes-take-out"
   alt="A placed 4 × 3 box of trumpets with one spot empty: its trumpet stands outside, beside the box. Clicking the box selects it. The pointer rests on Close up at the right end of the floating editor until its tooltip reads “Close up: fill the 1 empty spot with the marchers left”, clicks it, and the eleven trumpets left fill the box again, the back row one short."
 />
+
+## Split a line in two
+
+A placed line, curve or arc can be cut in two between any two of its marchers. Each piece is a shape of the same kind, and the split is one step you can undo.
+
+<Steps>
+
+1. Click a marcher in the line to select it.
+
+2. Point at the line between the two marchers where it should split. Scissors appear beside the line, with a dashed mark where the cut falls.
+
+3. Click the scissors.
+
+</Steps>
+
+<Media
+  id="shapes-split-line"
+  alt="A placed straight line of marchers, selected. The pointer moves onto the line between the second and third marchers; scissors appear above that gap with a dashed mark across the line. The pointer clicks the scissors and the line becomes two shapes, nobody moving. Clicking empty field, then the first marcher, selects the first piece alone: its two marchers, with handles of their own."
+/>
+
+You can also right-click the line between the two marchers and choose <Ui k="actions.shape.splitHere" />. Right-clicking a marcher splits right after them. On a tablet, tap the line between two marchers to show the scissors, then tap them; a long press there opens the same menu.
+
+On a straight line, a line with corners or an arc, nobody moves. A curve's pieces can't always follow it exactly, so on a tight curve its marchers can move a little to stand on the pieces. A piece with only one marcher isn't a line: that marcher leaves the shape.
+
+Closed lines, lines with rows, boxes and circles can't be split yet; <Ui k="actions.shape.splitHere" /> is greyed and says why.
 
 ## Ungroup a shape
 
