@@ -296,10 +296,10 @@ describe("Show facing setting (fork #1316)", () => {
         expect(parseSettings("{}").facingArrows).toBe(false);
     });
 
-    it("carries the first builds' Facing choice over: Not front or Everyone on, Off off", () => {
+    it("carries the first builds' Facing choice over: Everyone on; Not front (that build's default) and Off off", () => {
         const from = (facingMarks: string) =>
             parseSettings(JSON.stringify({ facingMarks }));
-        expect(from("turned").facingArrows).toBe(true);
+        expect(from("turned").facingArrows).toBe(false);
         expect(from("everyone").facingArrows).toBe(true);
         expect(from("off").facingArrows).toBe(false);
         expect("facingMarks" in from("turned")).toBe(false);

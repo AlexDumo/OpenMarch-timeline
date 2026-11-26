@@ -124,7 +124,7 @@ export interface UiSettings {
     equipmentIconPlace?: EquipmentIconPlace;
     /**
      * Whether the field draws a caret in front of every performer's dot the way they face (fork #1316):
-     * the field display bar's Show facing. Off by default. Was `facingMarks` (Not front, Everyone
+     * Show on field's Facing. Off by default. Was `facingMarks` (Not front, Everyone
      * or Off) in early builds; `parseSettings` carries it over
      */
     facingArrows?: boolean;
@@ -288,7 +288,8 @@ export const parseSettings = (raw: string): UiSettings => {
     // `focussedComponent` went with the old timeline focus (beat editor), and `marcherOrder`
     // became `lineOrder` with Off for its default (an Always picked before carries over).
     // `facingMarks` (fork #1316's first Not front / Everyone / Off) became the `facingArrows`
-    // toggle: Not front or Everyone turn it on, Off leaves it off
+    // toggle: only Everyone turns it on. Not front was that build's default, so it says nothing
+    // about whether someone wanted facing marks, and it carries over as off like Off
     const {
         previousPaths: _previousPaths,
         focussedComponent: _focussedComponent,
@@ -304,8 +305,7 @@ export const parseSettings = (raw: string): UiSettings => {
     if (marcherOrder === "always" && parsed.lineOrder === undefined)
         parsed.lineOrder = "always";
     if (parsed.facingArrows === undefined && facingMarks !== undefined)
-        parsed.facingArrows =
-            facingMarks === "turned" || facingMarks === "everyone";
+        parsed.facingArrows = facingMarks === "everyone";
     const labels = parseMarcherLabels(parsed.marcherLabels as unknown);
     const mergedMouseSettings = {
         ...defaultSettings.mouseSettings,

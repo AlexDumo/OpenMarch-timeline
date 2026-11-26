@@ -184,7 +184,8 @@ function Row({
     return (
         <div className="flex flex-col gap-2">
             <div className="touch:min-h-44 flex min-h-32 items-center gap-8">
-                <span className="text-body flex min-w-0 flex-1 items-center gap-4">
+                {/* The name stays on one line; a choice beside it gives way instead (#1332) */}
+                <span className="text-body flex flex-1 items-center gap-4 whitespace-nowrap">
                     {name}
                     {shortcut && showKeys && <Shortcut action={shortcut} />}
                 </span>
@@ -517,7 +518,7 @@ function EquipmentWhoMenu() {
                 descriptionKey && "shrink-0 items-start",
             )}
         >
-            <span className="h-lh flex w-16 shrink-0 items-center justify-center">
+            <span className="flex h-lh w-16 shrink-0 items-center justify-center">
                 <DropdownMenu.ItemIndicator className="flex">
                     <CheckIcon size={14} />
                 </DropdownMenu.ItemIndicator>
@@ -543,8 +544,10 @@ function EquipmentWhoMenu() {
                     aria-label={t("fieldDisplay.equipmentWho", {
                         who: whoText(who, t),
                     })}
+                    // Cut off when the row is narrow: the full choice in the tooltip
+                    title={whoText(who, t)}
                     data-testid="field-display-equipment-who"
-                    className="text-body bg-fg-2 border-stroke hover:border-accent focus-visible:ring-accent data-[state=open]:border-accent touch:min-h-44 flex h-26 max-w-192 shrink-0 items-center gap-4 rounded-full border pr-6 pl-10 outline-hidden transition-colors duration-150 focus-visible:ring-2"
+                    className="text-body bg-fg-2 border-stroke hover:border-accent focus-visible:ring-accent data-[state=open]:border-accent touch:min-h-44 flex h-26 max-w-192 min-w-0 items-center gap-4 rounded-full border pr-6 pl-10 outline-hidden transition-colors duration-150 focus-visible:ring-2"
                 >
                     <span className="truncate">{whoText(who, t)}</span>
                     <CaretDownIcon size={12} aria-hidden className="shrink-0" />
