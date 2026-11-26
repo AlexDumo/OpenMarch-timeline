@@ -277,7 +277,9 @@
             "hideFieldVenue": "Hide venue on field",
             "toggleView3dCameraOnField": "Show or hide 3D View camera on field",
             "showView3dCameraOnField": "Show 3D View camera on field",
-            "hideView3dCameraOnField": "Hide 3D View camera on field"
+            "hideView3dCameraOnField": "Hide 3D View camera on field",
+            "addFlag": "Add a flag to the show",
+            "addFlagKeywords": "flag silk guard equipment import artwork asset custom design"
         },
         "items": {
             "edit": "Edit selected prop or equipment",
@@ -337,7 +339,9 @@
             "facingAngle": "Facing: Angle…",
             "facingKeywords": "facing face turn direction angle degrees spin front back side",
             "editTurn": "Edit turn…",
-            "toggleFacingLane": "Show or hide the Facing lane"
+            "toggleFacingLane": "Show or hide the Facing lane",
+            "equipmentShowFlag": "Equipment: one of the show's flags",
+            "selectHoldingShowFlag": "Select who holds one of the show's flags"
         },
         "path": {
             "pen": "Path pen",
@@ -1843,7 +1847,14 @@
                 "overTriangleCap": "Still detailed: {triangles} triangles (the aim is {cap})"
             }
         },
-        "modelMissing": "This prop's model isn't in the show any more, so it draws as a block."
+        "modelMissing": "This prop's model isn't in the show any more, so it draws as a block.",
+        "flags": {
+            "title": "Flags",
+            "add": "Add flag…",
+            "give": "Hand {name} to the selected performers",
+            "empty": "Add a flag for each silk design the show uses.",
+            "hint": "Select performers, then pick a flag to hand it to them from the playhead. It's also in the field's right-click menu: Equipment › Guard equipment."
+        }
     },
     "frontEnsemble": {
         "title": "Front ensemble and podiums",
@@ -3755,8 +3766,6 @@
             "guardUniforms": "Guard uniform",
             "brassFinish": "Brass finish",
             "tuba": "Tubas",
-            "silkShape": "Flag silk shape",
-            "silkArtwork": "Flag silk artwork",
             "tabs": {
                 "venue": "Venue",
                 "performers": "Performers",
@@ -3882,16 +3891,6 @@
             "swing": "Swing"
         },
         "silkArtwork": {
-            "none": "No artwork: the silks show the guard uniform's pattern or the section's color.",
-            "import": "Import PNG…",
-            "replace": "Replace…",
-            "remove": "Remove",
-            "template": "Template for {shape}:",
-            "preparing": "Preparing…",
-            "notPng": "That file isn't a PNG. Export your artwork as PNG and import it again.",
-            "tooLarge": "That PNG is too large. Export it at a lower resolution and import it again.",
-            "unreadable": "That PNG couldn't be read.",
-            "templateFailed": "The template couldn't be made.",
             "saveFailed": "Couldn't save the flag silk artwork"
         },
         "cameraSettings": {
@@ -5740,7 +5739,8 @@
         },
         "kind": {
             "model": "3D model",
-            "uniform": "Uniform"
+            "uniform": "Uniform",
+            "flag": "Flag"
         },
         "uses": "{count, plural, one {Used once} other {Used # times}}",
         "unused": "Not used",
@@ -5759,6 +5759,28 @@
         "olderVersions": "{count, plural, one {# older version} other {# older versions}}, {size}",
         "otherVersions": "{count, plural, one {# other version} other {# other versions}}, {size}",
         "tryAgain": "Try again",
-        "loading": "Loading…"
+        "loading": "Loading…",
+        "flags": {
+            "addTitle": "Add a flag",
+            "shape": "Silk shape",
+            "template": "Template to paint:",
+            "preparing": "Preparing…",
+            "choose": "Choose painted PNG…",
+            "chooseAnother": "Choose another PNG…",
+            "name": "Name",
+            "namePlaceholder": "Opener silk",
+            "cancel": "Cancel",
+            "add": "Add flag",
+            "needPicture": "Choose the painted PNG first",
+            "needName": "Give the flag a name",
+            "notPng": "That file isn't a PNG. Save the painted template as a PNG, then choose it.",
+            "tooLarge": "That PNG is too large. Export it at a lower resolution and import it again.",
+            "unreadable": "Couldn't read that PNG.",
+            "templateFailed": "Couldn't make the template.",
+            "menuAdd": "Add flag…",
+            "errors": {
+                "add": "Couldn't add the flag"
+            }
+        }
     }
 }

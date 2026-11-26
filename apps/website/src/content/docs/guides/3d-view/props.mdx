@@ -1,6 +1,6 @@
 ---
 title: Add props to the field
-description: Draw props such as risers, platforms, tarps, walls and backdrops on the field, or import your own 3D models, size and turn them, move them during the show, and see them in the 3D View.
+description: Draw props such as risers, platforms, tarps, walls and backdrops on the field, import your own 3D models, add your guard's flag designs, size and turn props, move them during the show, and see them in the 3D View.
 type: how-to
 covers:
   - apps/desktop/src/components/items
@@ -16,6 +16,11 @@ covers:
   - action:placeImportedModel
   - action:openAssets
   - action:removeUnusedAssets
+  - action:addFlag
+  - apps/desktop/src/showAssets/flags.ts
+  - apps/desktop/src/showAssets/flagPicture.ts
+  - apps/desktop/src/hooks/queries/useShowFlags.ts
+  - apps/desktop/src/view3d/window/performers/marchers/flagArtworkAtlas.ts
   - i18n:assets
   - i18n:props
 sidebar:
@@ -156,6 +161,30 @@ Every model you import is stored in the show file, whether or not a prop uses it
 - If an undo brings back a prop whose model you removed, the prop draws as a block, and both the note at the top and the prop's settings say its model is missing. To replace it, import the model again, place it as a new prop and delete the old one.
 - When imported models make the show file large (over 500 MB), the note says so: large shows are slower to open, save and share.
 - A custom uniform in the show ([A show with a custom uniform](/guides/3d-view/venue-and-uniforms/#a-show-with-a-custom-uniform)) is listed too. When the band can't wear its custom uniform, a note at the top says why, and <Ui k="assets.tryAgain" /> loads it again, in the 3D View too, when it couldn't be loaded the first time.
+
+## Add your guard's flags
+
+A show can have as many flags as its guard uses, each the 6-foot flag's rectangular silk painted with its own design. They're under <Ui k="props.flags.title" plain /> in the Props panel.
+
+<Steps>
+
+1. In the Props panel, under <Ui k="props.flags.title" plain />, select <Ui k="props.flags.add" />.
+2. Download the template with the **PNG**, **SVG** or **PDF** button. It's drawn at the silk's real size, with the pole side on the left. Keep anything important inside the dashed line, the safe area; the grey parts are outside the silk.
+3. Paint your design over the template in any image editor and export it as a PNG at the template's size and proportions. Painting past the silk's edge into the bleed is fine; it's cut off.
+4. Select <Ui k="assets.flags.choose" /> and choose the PNG. The picture shows the flag as it will look.
+5. Name the flag, such as "Opener silk", and select <Ui k="assets.flags.add" />.
+
+</Steps>
+
+Each flag shows as a tile with its picture. To hand one out, move the playhead to the count, select the performers and select the flag's tile. It's the same as choosing it under <Ui k="field.menu.equipment" plain />, then <Ui k="cues.family.guard" plain />, in the field's right-click menu ([Change what performers hold](/guides/marchers/equipment/#your-shows-own-flags)). On the field each holder's icon is the flag's picture, and in the 3D View their silk shows its design. The back of the silk shows it reversed, the way a one-sided print looks.
+
+<Media
+  id="3d-props-flags"
+  alt="The Props panel's Flags section: an Add flag… tile, then two flags, Opener silk (purple with a white star and a gold band) and Closer silk (teal and cream halves with a coral circle), each on a pole."
+  maxWidth={480}
+/>
+
+The flags are listed with the show's other assets ([The show's imported models](#the-shows-imported-models)), where one that nobody holds can be removed.
 
 ## Change a prop's name, color and size
 

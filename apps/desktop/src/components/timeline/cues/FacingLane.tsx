@@ -237,7 +237,8 @@ export function FacingLaneView({
         if (!drag?.edit || !show) return null;
         const cues = withEquipmentSet(show.cues, drag.edit);
         return facingLane({
-            compiled: compileShowCues(show.marchers, beats, cues).compiled,
+            compiled: compileShowCues(show.marchers, beats, cues, show.values)
+                .compiled,
             cues,
             marcherIds: show.marchers.filter(isPerformer).map((m) => m.id),
         });

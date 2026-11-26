@@ -527,7 +527,14 @@ export const TimelineShell = ({
             {header}
             {transport}
             {/* Its own stacking context: nothing on the timeline (+, the playhead) paints over a menu */}
-            <section className="relative isolate flex min-h-0 min-w-0 flex-1 flex-col px-6 pt-4">
+            <section
+                className={clsx(
+                    "relative isolate flex min-h-0 min-w-0 flex-1 flex-col px-6 pt-4",
+                    // Lane labels stick this far in, clear of `corner` (`LANE_LABEL_INSET`)
+                    corner &&
+                        "touch:[--lane-label-inset:40px] [--lane-label-inset:28px]",
+                )}
+            >
                 <div
                     ref={viewportRef}
                     data-testid="timeline-viewport"

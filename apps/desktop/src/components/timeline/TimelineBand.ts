@@ -56,12 +56,19 @@ export interface TimelineBand {
 }
 
 /**
- * Where a lane's label (its heading, a row's name) sticks while the timeline scrolls, so the corner
- * control (`TimelineBand.corner`, at the viewport's left edge) doesn't cover it. Both insets are
- * within the home page's 40 px column (`TIMELINE_INITIAL_PAGE_WIDTH`), so a label stays where it
- * is until the timeline scrolls:
+ * How far in from the viewport's left edge a lane's label (its heading, a row's name) sticks while
+ * the timeline scrolls, so the corner control (`TimelineBand.corner`) doesn't cover it. The shell
+ * sets it as `--lane-label-inset`, beside the corner:
  * - 28 px clears the 24 px control with a 4 px gap;
  * - on touch the control is 44 px, and 40 px leaves it over the label's 4–6 px padding, not its
  *   text. Clearing it fully would move every label, and its 44 px touch buttons, before a scroll.
+ *
+ * Both are within the home page's 40 px column (`TIMELINE_INITIAL_PAGE_WIDTH`), so a label stays
+ * where it is until the timeline scrolls. For inline styles (a bar's name pinned past its row's
+ * name); 0 outside a timeline shell.
  */
-export const LANE_LABEL_STICKY_CLASS = "sticky left-28 touch:left-40";
+export const LANE_LABEL_INSET = "var(--lane-label-inset, 0px)";
+
+/** A lane label that sticks at the visible left edge, `LANE_LABEL_INSET` in */
+export const LANE_LABEL_STICKY_CLASS =
+    "sticky left-[var(--lane-label-inset,0px)]";
