@@ -842,6 +842,43 @@ describe("touch hit areas (tablet 3.3)", () => {
             expect(downs).toEqual(["line mouse"]);
             detach();
         });
+
+        it("leaves a Ctrl or Cmd press with the line, which the handle turns down", () => {
+            const { viewport, handle, playhead } = lineOnClipEnd({
+                selected: true,
+            });
+            const downs: string[] = [];
+            handle.addEventListener("pointerdown", () => downs.push("handle"));
+            playhead.addEventListener("pointerdown", () => downs.push("line"));
+            const detach = attachSelectedClipEndPress(viewport);
+            for (const key of ["ctrlKey", "metaKey"] as const) {
+                const press = fingerEvent("pointerdown", 1, 97, 50, "mouse");
+                Object.defineProperty(press, key, { value: true });
+                playhead.dispatchEvent(press);
+            }
+            expect(downs).toEqual(["line", "line"]);
+            detach();
+        });
+
+        it("focuses the clip, not the line, on the press's mouse down", () => {
+            const { viewport, clip, playhead } = lineOnClipEnd({
+                selected: true,
+            });
+            const detach = attachSelectedClipEndPress(viewport);
+            playhead.dispatchEvent(
+                fingerEvent("pointerdown", 1, 97, 50, "mouse"),
+            );
+            const down = new MouseEvent("mousedown", {
+                bubbles: true,
+                cancelable: true,
+                clientX: 97,
+                clientY: 50,
+            });
+            playhead.dispatchEvent(down);
+            expect(down.defaultPrevented).toBe(true);
+            expect(document.activeElement).toBe(clip);
+            detach();
+        });
     });
 
     it("sends a finger's press near a target on to it, with its click; a mouse's stays where it landed", () => {

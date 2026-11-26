@@ -869,7 +869,11 @@ export function attachSelectedClipEndPress(viewport: HTMLElement): () => void {
             sent.has(event) ||
             timelineGesturesOwn(event) ||
             event.button !== 0 ||
-            !(event.target instanceof Element)
+            // The handle turns a Ctrl or Cmd press down (a range from the clip), so the line keeps it
+            event.ctrlKey ||
+            event.metaKey ||
+            !(event.target instanceof Element) ||
+            !event.target.closest(TIMELINE_LINE_SELECTOR)
         )
             return;
         const handle = selectedClipEndUnderLine(
