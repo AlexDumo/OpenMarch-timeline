@@ -1,4 +1,5 @@
 // The Marchers chapter (guides/marchers/*).
+import { addDemoFlags, giveFlag } from "../flags.mjs";
 import { ensureSelected } from "../select.mjs";
 
 /** Waits for the show's field, then goes to the end of Page 1 (two pages after home). */
@@ -974,6 +975,32 @@ const shots = [
             const bar = page.getByTestId("field-display-bar");
             const pop = page.getByRole("dialog", { name: "Equipment icons" });
             return { box: union(await around(bar, 12), await around(pop, 12)) };
+        },
+    },
+    {
+        id: "marchers-equipment-show-flags",
+        kind: "still",
+        // Two of the show's own flags handed out at the end of Page 1: G6–G10 carry the Opener
+        // silk and G14, G19 and G22 the Closer silk, each icon the flag's picture
+        async setup({ page, wait }) {
+            await toPage1(page, wait);
+            await addDemoFlags(page);
+            await giveFlag(page, SABRES, "Opener silk");
+            await giveFlag(page, TUBAS, "Closer silk");
+            await page.locator("#sidebar-launcher-props").click();
+            await page.keyboard.press("Escape");
+            await page.mouse.move(800, 990);
+            await wait(1000);
+            await hideToasts(page);
+            const b = bounds(named(await marchers(page), [...SABRES, ...TUBAS]));
+            return {
+                box: {
+                    x: b.left - 70,
+                    y: b.top - 50,
+                    width: b.right - b.left + 160,
+                    height: b.bottom - b.top + 90,
+                },
+            };
         },
     },
     {
