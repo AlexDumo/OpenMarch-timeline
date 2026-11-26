@@ -12,7 +12,7 @@ import type { XY } from "../../types";
 import { LiveBoxMode } from "../liveBoxMode";
 import { boxesAt, type PlacedBox, type PlacedRecipe } from "../placedBox";
 import { splitShape } from "../splitShape";
-import { useSplitPreviewStore } from "../splitPreview";
+import { SCISSORS_DWELL_MS, useSplitPreviewStore } from "../splitPreview";
 import { splitCheckAt } from "../useSplitHere";
 
 vi.mock("../commitBox", async (original) => ({
@@ -192,9 +192,41 @@ describe("scissors on a tablet", () => {
 });
 
 describe("scissors with a mouse", () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it("show once the pointer rests on a gap, not as it passes over", () => {
+        const mode = new LiveBoxMode(line, new QueryClient());
+        // Across the gap and on: nothing
+        mode.cursorAt(pointer(GAP, "mouse"));
+        vi.advanceTimersByTime(SCISSORS_DWELL_MS - 50);
+        mode.cursorAt(pointer({ x: GAP.x, y: GAP.y + 8 * STEP }, "mouse"));
+        vi.advanceTimersByTime(SCISSORS_DWELL_MS);
+        expect(shown()).toBeNull();
+        // Resting on it, a little way along the same gap: they show
+        mode.cursorAt(pointer(GAP, "mouse"));
+        vi.advanceTimersByTime(SCISSORS_DWELL_MS - 50);
+        mode.cursorAt(pointer({ x: GAP.x + 2, y: GAP.y }, "mouse"));
+        expect(shown()).toBeNull();
+        vi.advanceTimersByTime(60);
+        expect(shown()).not.toBeNull();
+        // Shown, the next gap along takes them at once
+        mode.cursorAt(pointer({ x: GAP.x + 10 * STEP, y: GAP.y }, "mouse"));
+        expect(shown()!.x).toBeCloseTo(GAP.x + 10 * STEP);
+    });
+
+    it("a press before they show keeps them away", () => {
+        const mode = new LiveBoxMode(line, new QueryClient());
+        mode.cursorAt(pointer(GAP, "mouse"));
+        mode.press(pointer(GAP, "mouse"), PRESS);
+        vi.advanceTimersByTime(SCISSORS_DWELL_MS * 2);
+        expect(shown()).toBeNull();
+    });
+
     it("light up under the pointer, and a click anywhere on the button as drawn splits", () => {
         const mode = new LiveBoxMode(line, new QueryClient());
         mode.cursorAt(pointer(GAP, "mouse"));
+        vi.advanceTimersByTime(SCISSORS_DWELL_MS);
         const at = shown()!;
         expect(useSplitPreviewStore.getState().hot).toBe(false);
         // On the ring, past a mouse's 10 px reach but on the 11 px button and its ring

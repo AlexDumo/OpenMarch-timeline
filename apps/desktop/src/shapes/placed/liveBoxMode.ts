@@ -57,6 +57,7 @@ import {
 } from "./splitShape";
 import { splitThroughAction } from "./splitAction";
 import {
+    afterDwell,
     SCISSORS_RADIUS_PX,
     SCISSORS_RING_PX,
     showScissorsHot,
@@ -258,6 +259,12 @@ export class LiveBoxMode implements FieldMode {
     private gapPress: Scissors | null = null;
     /** The scissors were shown by a tap, not a hover: they stay when the pointer leaves */
     private scissorsTapped = false;
+    /**
+     * Scissors the pointer is over a gap for but hasn't rested on yet (#1337): they show once it
+     * has stayed on that cut for `SCISSORS_DWELL_MS`, so passing over a shape doesn't flash them
+     */
+    private pendingScissors: Scissors | null = null;
+    private cancelDwell: (() => void) | null = null;
 
     constructor(
         box: PlacedBox,
@@ -367,7 +374,44 @@ export class LiveBoxMode implements FieldMode {
         );
     }
 
+    /**
+     * Scissors for where the pointer hovers (#1337): those shown stay or move straight to the next
+     * gap along; new ones wait for the pointer to rest on their cut, and none hide them at once
+     */
+    private hoverScissors(scissors: Scissors | null): void {
+        if (
+            scissors === null ||
+            this.scissors !== null ||
+            this.scissorsTapped
+        ) {
+            this.stopDwell();
+            this.showScissors(scissors);
+            return;
+        }
+        if (this.pendingScissors && sameCut(this.pendingScissors, scissors)) {
+            this.pendingScissors = scissors;
+            return;
+        }
+        this.stopDwell();
+        this.pendingScissors = scissors;
+        this.cancelDwell = afterDwell(() => {
+            const pending = this.pendingScissors;
+            this.cancelDwell = null;
+            this.pendingScissors = null;
+            if (pending && !this.live.gesture && !this.scissorsPress)
+                this.showScissors(pending);
+        });
+    }
+
+    /** Scissors waiting for the pointer to rest are forgotten */
+    private stopDwell(): void {
+        this.cancelDwell?.();
+        this.cancelDwell = null;
+        this.pendingScissors = null;
+    }
+
     private showScissors(scissors: Scissors | null): void {
+        if (scissors === null) this.stopDwell();
         this.scissorsTapped = false;
         this.scissors = scissors;
         showSplit(
@@ -416,6 +460,8 @@ export class LiveBoxMode implements FieldMode {
             this.scissorsPress = this.scissors;
             return;
         }
+        // Scissors the pointer was resting toward don't show under a press
+        this.stopDwell();
         // Any other press puts away scissors a tap showed
         if (this.scissorsTapped) this.showScissors(null);
         this.gapPress = this.gapAt(pointer);
@@ -671,6 +717,7 @@ export class LiveBoxMode implements FieldMode {
     }
 
     leave(): void {
+        this.stopDwell();
         setShapePointerOver(false);
         showScissorsHot(false);
         if (!this.scissorsPress && !this.scissorsTapped)
@@ -697,7 +744,7 @@ export class LiveBoxMode implements FieldMode {
                 : null;
         // Scissors a tap showed stay until the next press, wherever a pen hovers meanwhile
         if (!this.scissorsPress && !(this.scissorsTapped && !scissors))
-            this.showScissors(scissors);
+            this.hoverScissors(scissors);
         const onThem = this.scissors !== null && this.onScissors(pointer);
         showScissorsHot(onThem);
         if (onThem) {
@@ -793,4 +840,12 @@ export class LiveBoxMode implements FieldMode {
         setShapeDragging(this.live.gesture !== null);
         for (const listener of this.listeners) listener();
     }
+}
+
+/** Whether two scissors cut the same shape in the same place */
+function sameCut(a: Scissors, b: Scissors): boolean {
+    return (
+        a.check.box.recipe.id === b.check.box.recipe.id &&
+        JSON.stringify(a.check.cut) === JSON.stringify(b.check.cut)
+    );
 }
