@@ -1,3 +1,4 @@
+// cspell:ignore fract
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import {
@@ -159,8 +160,11 @@ float dashed(vec2 p, float shape, float amount) {
     float k = dashPosition(p, shape, small ? SMALL_CIRCLE_DASHES : CIRCLE_DASHES, side);
     float center = shape < 0.5 ? floor(k + 0.5) : clamp(floor(k + 0.5), 1.0, side - 1.0);
     float off = abs(k - center);
-    // fwidth(k) is a pixel, in dashes
-    float fw = fwidth(k);
+    // fwidth(k) is a pixel, in dashes. A circle's k wraps from 'circle' to 0 at
+    // the left (atan's seam), where fwidth(k) jumps to the whole count and smears a
+    // half-drawn line across that gap; fract(k + 0.5) wraps mid-dash instead, so
+    // the smaller of the two is a pixel everywhere
+    float fw = min(fwidth(k), fwidth(fract(k + 0.5)));
     float gapHalf = amount * min(max(0.5 * GAP, 0.5 * MIN_GAP_PX * fw), 0.35);
     return smoothstep(gapHalf - 0.5 * fw, gapHalf + 0.5 * fw, off);
 }
