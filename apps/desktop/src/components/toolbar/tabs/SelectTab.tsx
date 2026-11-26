@@ -1,35 +1,19 @@
-import Marcher from "@/global/classes/Marcher";
-import {
-    FAMILIES,
-    getSectionObjectByName,
-    getTranslatedSectionName,
-    SectionFamily,
-} from "@/global/classes/Sections";
-import {
-    allMarchersQueryOptions,
-    allMarcherRowsQueryOptions,
-    allTagsQueryOptions,
-    marcherIdsForAllTagIdsQueryOptions,
-} from "@/hooks/queries";
-import { useQuery } from "@tanstack/react-query";
-import { useUnlockedOnly } from "@/items/lockedItems";
+import { getTranslatedSectionName } from "@/global/classes/Sections";
 import ToolbarSection from "../ToolbarSection";
-import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
-import {
-    createContext,
-    useCallback,
-    useContext,
-    useEffect,
-    useState,
-} from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { CaretDownIcon } from "@phosphor-icons/react";
 import { T, useTranslate } from "@tolgee/react";
 import { ToggleGroup, ToggleGroupItem } from "@openmarch/ui";
 import ActionButton from "@/shortcuts/ActionButton";
 import { useIsTouchMode } from "@/stores/InputModeStore";
 import * as Popover from "@radix-ui/react-popover";
-import { type DatabaseTag } from "@/db-functions/tag";
 import { tagDisplayName } from "@/components/tags/tagDisplayName";
+import {
+    SELECT_BY_OPTIONS,
+    selectByLabelKey,
+    type SelectByOption,
+} from "@/selection/selectBy";
+import { useSelectBy, type SelectBy } from "@/selection/useSelectBy";
 import ChipSelector from "./ChipSelector";
 
 export default function ViewTab() {
@@ -43,17 +27,6 @@ export default function ViewTab() {
 /** A toolbar section showing only an "nothing to select" note: no box. */
 const EMPTY_SECTION = "border-transparent bg-transparent px-4";
 
-const sectionsFromMarchers = (marchers: Pick<Marcher, "section">[]) => {
-    const sectionStrings = new Set([
-        ...marchers.map((marcher) => marcher.section),
-    ]);
-    const sections = Array.from(sectionStrings)
-        .map((sectionString) => getSectionObjectByName(sectionString))
-        .sort((a, b) => a.compareTo(b));
-
-    return sections;
-};
-
 /**
  * Whether choosing a group replaces the selection or adds to it. With a
  * keyboard, Shift adds; in touch mode a Replace / Add switch does the same.
@@ -61,40 +34,13 @@ const sectionsFromMarchers = (marchers: Pick<Marcher, "section">[]) => {
 export type SelectTapMode = "replace" | "add";
 const SelectTapModeContext = createContext<SelectTapMode>("replace");
 
-const useHandleSelect = ({ allMarchers }: { allMarchers: Marcher[] }) => {
-    const { selectedMarchers, setSelectedMarchers } = useSelectedMarchers()!;
+/** Whether a chip's pick adds to the selection: Shift (keyboard or on-screen), or the Add switch */
+const useAdds = () => {
     const tapMode = useContext(SelectTapModeContext);
-
-    const selectMarcherIds = useCallback(
-        (ids: number[], options?: { shiftKey?: boolean }) => {
-            const newSelectedMarchers = allMarchers.filter((marcher) =>
-                ids.includes(marcher.id),
-            );
-
-            // Shift (keyboard or on-screen) or the Add switch adds to the selection
-            if (options?.shiftKey || tapMode === "add") {
-                const currentlySelectedIds = new Set(
-                    selectedMarchers.map((marcher) => marcher.id),
-                );
-                const newSelectedMarchersToAdd = newSelectedMarchers.filter(
-                    (marcher) => !currentlySelectedIds.has(marcher.id),
-                );
-                setSelectedMarchers([
-                    ...selectedMarchers,
-                    ...newSelectedMarchersToAdd,
-                ]);
-            } else {
-                setSelectedMarchers(newSelectedMarchers);
-            }
-        },
-        [allMarchers, selectedMarchers, setSelectedMarchers, tapMode],
-    );
-
-    return { selectMarcherIds };
+    return (options?: { shiftKey?: boolean }) =>
+        Boolean(options?.shiftKey) || tapMode === "add";
 };
 
-const SelectByOptions = ["section", "tag", "family", "drillPrefix"] as const;
-type SelectByOption = (typeof SelectByOptions)[number];
 function SelectByPopover({
     selectByOptionState,
 }: {
@@ -114,13 +60,13 @@ function SelectByPopover({
                     <CaretDownIcon size={18} />
                     <span className="text-text-subtitle px-4">
                         <T
-                            keyName={`toolbar.select.selectBy.${selectByOptionStateValue}`}
+                            keyName={selectByLabelKey(selectByOptionStateValue)}
                         />
                     </span>
                 </Popover.Trigger>
                 <Popover.Portal>
                     <Popover.Content className="bg-modal text-text rounded-6 shadow-modal backdrop-blur-32 border-stroke z-50 m-8 flex flex-col items-start gap-0 border p-8">
-                        {SelectByOptions.map((option) => (
+                        {SELECT_BY_OPTIONS.map((option) => (
                             <button
                                 key={option}
                                 className="hover:text-accent touch:min-h-44 flex items-center gap-8 outline-hidden duration-150 ease-out focus-visible:-translate-y-4 disabled:opacity-50"
@@ -129,9 +75,7 @@ function SelectByPopover({
                                     setOpen(false);
                                 }}
                             >
-                                <T
-                                    keyName={`toolbar.select.selectBy.${option}`}
-                                />
+                                <T keyName={selectByLabelKey(option)} />
                             </button>
                         ))}
                     </Popover.Content>
@@ -141,25 +85,10 @@ function SelectByPopover({
     );
 }
 
-function SectionSelector({ marchers }: { marchers: Marcher[] }) {
+function SectionSelector({ by }: { by: SelectBy }) {
     const { t } = useTranslate();
-    const sections = sectionsFromMarchers(marchers ?? []);
-    const { selectMarcherIds } = useHandleSelect({
-        allMarchers: marchers ?? [],
-    });
-
-    const handleSelectBySection = useCallback(
-        (
-            section: (typeof sections)[number],
-            options?: { shiftKey?: boolean },
-        ) => {
-            const marcherIds = marchers
-                .filter((marcher) => marcher.section === section.name)
-                .map((marcher) => marcher.id);
-            selectMarcherIds(marcherIds, options);
-        },
-        [marchers, selectMarcherIds],
-    );
+    const adds = useAdds();
+    const { sections } = by;
 
     return (
         <ToolbarSection
@@ -173,7 +102,9 @@ function SectionSelector({ marchers }: { marchers: Marcher[] }) {
                 getSearchText={(section) =>
                     getTranslatedSectionName(section.name, t)
                 }
-                onSelect={handleSelectBySection}
+                onSelect={(section, options) =>
+                    by.selectSection(section.name, adds(options))
+                }
                 emptyMessage={
                     <p className="text-sub text-text-subtitle italic">
                         <T keyName="toolbar.select.noSectionsToSelect" />
@@ -186,34 +117,10 @@ function SectionSelector({ marchers }: { marchers: Marcher[] }) {
     );
 }
 
-function TagSelector({ marchers }: { marchers: Marcher[] }) {
+function TagSelector({ by }: { by: SelectBy }) {
     const { t } = useTranslate();
-    const { data: tags, isSuccess: tagsLoaded } = useQuery(
-        allTagsQueryOptions(),
-    );
-    const { data: marcherIdsForTags, isSuccess: marcherIdsForTagsLoaded } =
-        useQuery(marcherIdsForAllTagIdsQueryOptions());
-    const { selectMarcherIds } = useHandleSelect({
-        allMarchers: marchers ?? [],
-    });
-
-    const handleSelectByTag = useCallback(
-        (tag: DatabaseTag, options?: { shiftKey?: boolean }) => {
-            if (!marcherIdsForTagsLoaded) {
-                console.error("Marcher IDs for tags not loaded");
-                return false;
-            }
-            const marcherIds = marcherIdsForTags.get(tag.id);
-            if (marcherIds == null) {
-                console.error(`Marcher IDs for tag ${tag.id} not found`);
-                return false;
-            }
-            selectMarcherIds(marcherIds, options);
-        },
-        [marcherIdsForTags, marcherIdsForTagsLoaded, selectMarcherIds],
-    );
-
-    const tagItems = tagsLoaded && marcherIdsForTagsLoaded ? (tags ?? []) : [];
+    const adds = useAdds();
+    const tagItems = by.tags;
     return (
         <ToolbarSection
             aria-label={t("toolbar.select.tagsLabel")}
@@ -229,7 +136,14 @@ function TagSelector({ marchers }: { marchers: Marcher[] }) {
                 getSearchText={(tag) =>
                     tagDisplayName({ tag_id: tag.id, name: tag.name }, t)
                 }
-                onSelect={handleSelectByTag}
+                onSelect={(tag, options) => {
+                    if (!by.selectTag(tag.id, adds(options))) {
+                        console.error(
+                            `Marcher IDs for tag ${tag.id} not found`,
+                        );
+                        return false;
+                    }
+                }}
                 emptyMessage={
                     <p className="text-sub text-text-subtitle italic">
                         <T keyName="toolbar.select.noTagsToSelect" />
@@ -242,24 +156,10 @@ function TagSelector({ marchers }: { marchers: Marcher[] }) {
     );
 }
 
-function DrillPrefixSelector({ marchers }: { marchers: Marcher[] }) {
+function DrillPrefixSelector({ by }: { by: SelectBy }) {
     const { t } = useTranslate();
-    const drillPrefixes = Array.from(
-        new Set(marchers.map((marcher) => marcher.drill_prefix)),
-    ).sort();
-    const { selectMarcherIds } = useHandleSelect({
-        allMarchers: marchers ?? [],
-    });
-
-    const handleSelectByDrillPrefix = useCallback(
-        (drillPrefix: string, options?: { shiftKey?: boolean }) => {
-            const marcherIds = marchers
-                .filter((marcher) => marcher.drill_prefix === drillPrefix)
-                .map((marcher) => marcher.id);
-            selectMarcherIds(marcherIds, options);
-        },
-        [marchers, selectMarcherIds],
-    );
+    const adds = useAdds();
+    const { drillPrefixes } = by;
 
     return (
         <ToolbarSection
@@ -271,7 +171,9 @@ function DrillPrefixSelector({ marchers }: { marchers: Marcher[] }) {
                 getId={(drillPrefix) => drillPrefix}
                 getLabel={(drillPrefix) => drillPrefix}
                 getSearchText={(drillPrefix) => drillPrefix}
-                onSelect={handleSelectByDrillPrefix}
+                onSelect={(drillPrefix, options) =>
+                    by.selectDrillPrefix(drillPrefix, adds(options))
+                }
                 emptyMessage={
                     <p className="text-sub text-text-subtitle italic">
                         <T keyName="toolbar.select.noDrillPrefixesToSelect" />
@@ -284,37 +186,20 @@ function DrillPrefixSelector({ marchers }: { marchers: Marcher[] }) {
     );
 }
 
-function FamilySelector({ marchers }: { marchers: Marcher[] }) {
+function FamilySelector({ by }: { by: SelectBy }) {
     const { t } = useTranslate();
-    const sections = sectionsFromMarchers(marchers ?? []);
-    const { selectMarcherIds } = useHandleSelect({
-        allMarchers: marchers ?? [],
-    });
-    const families = Object.values(FAMILIES);
-    const handleSelectByFamily = useCallback(
-        (family: SectionFamily, options?: { shiftKey?: boolean }) => {
-            const sectionsToSelect = sections.filter(
-                (section) => section.family.name === family.name,
-            );
-            const sectionNames = new Set(
-                sectionsToSelect.map((section) => section.name),
-            );
-            const marcherIdsToSelect = marchers
-                .filter((marcher) => sectionNames.has(marcher.section))
-                .map((marcher) => marcher.id);
-            selectMarcherIds(marcherIdsToSelect, options);
-        },
-        [marchers, sections, selectMarcherIds],
-    );
+    const adds = useAdds();
 
     return (
         <ToolbarSection aria-label={t("toolbar.select.familiesLabel")}>
             <ChipSelector
-                items={families}
+                items={by.families}
                 getId={(family) => family.name}
                 getLabel={(family) => <T keyName={family.tName} />}
                 getSearchText={(family) => t(family.tName)}
-                onSelect={handleSelectByFamily}
+                onSelect={(family, options) =>
+                    by.selectFamily(family.name, adds(options))
+                }
                 ariaLabel={t("toolbar.select.familiesLabel")}
             />
         </ToolbarSection>
@@ -351,13 +236,7 @@ function SelectTapModeSwitch({
 }
 
 function SelectTabContents() {
-    // Sections, prefixes and tags take props too (props epic, fork #1239), never a locked item;
-    // families are the performers'
-    const { data: marchers, isSuccess: marchersLoaded } = useQuery(
-        allMarchersQueryOptions(),
-    );
-    const { data: rows } = useQuery(allMarcherRowsQueryOptions());
-    const tagged = useUnlockedOnly(rows ?? marchers);
+    const by = useSelectBy();
     const isTouch = useIsTouchMode();
     const [tapModeChoice, setTapModeChoice] =
         useState<SelectTapMode>("replace");
@@ -365,7 +244,7 @@ function SelectTabContents() {
     const tapMode: SelectTapMode = isTouch ? tapModeChoice : "replace";
     const [selectByOption, setSelectByOption] = useState<SelectByOption>(() => {
         const stored = localStorage.getItem(SELECT_BY_STORAGE_KEY);
-        if (stored && SelectByOptions.includes(stored as SelectByOption)) {
+        if (stored && SELECT_BY_OPTIONS.includes(stored as SelectByOption)) {
             return stored as SelectByOption;
         }
         return "section";
@@ -375,7 +254,7 @@ function SelectTabContents() {
         localStorage.setItem(SELECT_BY_STORAGE_KEY, selectByOption);
     }, [selectByOption]);
 
-    if (!marchersLoaded) {
+    if (!by.loaded) {
         return (
             <div>
                 <T keyName="toolbar.select.loading" />
@@ -385,16 +264,16 @@ function SelectTabContents() {
     let Selector: React.JSX.Element;
     switch (selectByOption) {
         case "section":
-            Selector = <SectionSelector marchers={tagged} />;
+            Selector = <SectionSelector by={by} />;
             break;
         case "tag":
-            Selector = <TagSelector marchers={tagged} />;
+            Selector = <TagSelector by={by} />;
             break;
         case "drillPrefix":
-            Selector = <DrillPrefixSelector marchers={tagged} />;
+            Selector = <DrillPrefixSelector by={by} />;
             break;
         case "family":
-            Selector = <FamilySelector marchers={marchers ?? []} />;
+            Selector = <FamilySelector by={by} />;
             break;
         default:
             // Every option has a selector above

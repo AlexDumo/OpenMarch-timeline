@@ -5,6 +5,7 @@ import {
 } from "@openmarch/core";
 import {
     insideOutline,
+    nearOutline,
     outlineShape,
     PIXELS_PER_METER,
     placeOutline,
@@ -222,17 +223,24 @@ export class FieldItems implements FieldItemSource {
         return outlines;
     }
 
-    /** The topmost item drawn whose Outline holds `point`, or null. */
+    /**
+     * The topmost item drawn under `point`, or null. An item drawn as a model is hit on the
+     * model's silhouette, not on the rest of its footprint; any other item anywhere inside its
+     * Outline. With a `reach`, an item none holds whose silhouette is that near: so thin parts
+     * stay easy to press, without taking a press that lands on another item.
+     */
     itemAt(
         point: Pt,
         accept: (id: number) => boolean = () => true,
+        reach = 0,
     ): number | null {
         const outlines = this.outlines();
         for (let i = outlines.length - 1; i >= 0; i--)
-            if (
-                accept(outlines[i].id) &&
-                insideOutline(outlines[i].points, point)
-            )
+            if (accept(outlines[i].id) && hits(outlines[i], point, 0))
+                return outlines[i].id;
+        if (reach <= 0) return null;
+        for (let i = outlines.length - 1; i >= 0; i--)
+            if (accept(outlines[i].id) && hits(outlines[i], point, reach))
                 return outlines[i].id;
         return null;
     }
@@ -336,4 +344,15 @@ export class FieldItems implements FieldItemSource {
     private emit() {
         for (const listener of this.listeners) listener();
     }
+}
+
+/** Whether `point` lands on `outline`: on its model's silhouette when it's drawn as one. */
+function hits(outline: DrawnItemOutline, point: Pt, reach: number): boolean {
+    const silhouette = outline.plan?.outlines;
+    if (!silhouette?.length) return insideOutline(outline.points, point);
+    return silhouette.some(
+        (ring) =>
+            insideOutline(ring, point) ||
+            (reach > 0 && nearOutline(ring, point, reach)),
+    );
 }

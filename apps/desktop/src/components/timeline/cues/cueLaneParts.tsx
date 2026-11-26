@@ -1,9 +1,11 @@
 /**
- * What the cue lanes share (fork #992, #993): their sizes, and a finger's long press for a cue's
- * menu.
+ * What the cue lanes share (fork #992, #993): their sizes, a finger's long press for a cue's
+ * menu, and the width of a row's pinned name.
  */
 import {
+    useLayoutEffect,
     useRef,
+    useState,
     type MouseEvent as ReactMouseEvent,
     type PointerEvent as ReactPointerEvent,
 } from "react";
@@ -71,4 +73,29 @@ export function useLongPressMenu(
             },
         },
     };
+}
+
+/** The room between a row's pinned name and a bar's own name, in px */
+export const ROW_NAME_GAP = 4;
+
+/**
+ * A row's name is pinned at the lane's left edge, over the start of whatever bar is there (fork
+ * #985). Its width, kept current, so a bar can pin its own name just past it: a cue at the show's
+ * start, or one scrolled past, still shows its whole name. 0 where nothing measures (jsdom).
+ */
+export function useRowNameWidth<T extends HTMLElement>() {
+    const ref = useRef<T>(null);
+    const [width, setWidth] = useState(0);
+    useLayoutEffect(() => {
+        const element = ref.current;
+        if (!element) return;
+        setWidth(element.offsetWidth);
+        if (typeof ResizeObserver === "undefined") return;
+        const observer = new ResizeObserver(() =>
+            setWidth(element.offsetWidth),
+        );
+        observer.observe(element);
+        return () => observer.disconnect();
+    }, []);
+    return { ref, width };
 }

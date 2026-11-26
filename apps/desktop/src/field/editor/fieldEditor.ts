@@ -36,6 +36,7 @@ import {
     itemSelectionFrame,
     type ItemFrame,
     type ItemSize,
+    insideItemFrame,
 } from "./itemTransform";
 import { PropTool, type PropToolShape, type PropToolStamp } from "./propTool";
 import type { OutlineType } from "@/db-functions/items";
@@ -209,8 +210,15 @@ export type FieldEditorPorts = {
      * and moved. A right-click on it offers to unlock it ({@link LOCKED_ITEM_MENU}).
      */
     isLocked?(id: number): boolean;
-    /** The topmost item whose Outline holds `point` among those `accept` takes, or null. */
-    itemAt?(point: FieldPoint, accept?: (id: number) => boolean): number | null;
+    /**
+     * The topmost item under `point` among those `accept` takes, or null. `reach` (field units)
+     * is how far outside a model's silhouette a press still lands on it.
+     */
+    itemAt?(
+        point: FieldPoint,
+        accept?: (id: number) => boolean,
+        reach?: number,
+    ): number | null;
     /**
      * Whether item `id`'s resize and turn handles are shown: only once asked for (its right-click
      * menu's Resize and turn), since a prop is usually drawn at its real size and a click on it
@@ -2554,10 +2562,17 @@ export class FieldEditor {
     }
 
     /** The topmost locked item drawn under `pointer` that can be selected, or null */
-    private lockedItemAt({ field }: FieldPointer): number | null {
+    private lockedItemAt({ field, kind }: FieldPointer): number | null {
         const isLocked = this.ports.isLocked;
         if (!isLocked) return null;
-        const item = this.ports.itemAt?.(field, isLocked) ?? null;
+        const item =
+            this.ports.itemAt?.(field, isLocked) ??
+            this.ports.itemAt?.(
+                field,
+                isLocked,
+                itemReach(this.ports.zoom(), kind),
+            ) ??
+            null;
         return item !== null && this.ports.canSelect(item) ? item : null;
     }
 
@@ -2615,7 +2630,19 @@ export class FieldEditor {
         );
         if (performer !== null) return performer;
         const isLocked = this.ports.isLocked ?? (() => false);
-        const item = this.ports.itemAt?.(point, (id) => !isLocked(id)) ?? null;
+        const unlocked = (id: number) => !isLocked(id);
+        // On an item's silhouette, else inside the frame of the one whose handles are shown,
+        // else near a silhouette
+        const shown = this.selectedItem();
+        const item =
+            this.ports.itemAt?.(point, unlocked) ??
+            (shown && insideItemFrame(shown.frame, point) ? shown.id : null) ??
+            this.ports.itemAt?.(
+                point,
+                unlocked,
+                itemReach(this.ports.zoom(), kind),
+            ) ??
+            null;
         return item !== null && this.ports.canSelect(item) ? item : null;
     }
 
@@ -2722,3 +2749,12 @@ const sameIds = (a: readonly number[], b: readonly number[]) => {
     const set = new Set(b);
     return a.every((id) => set.has(id));
 };
+
+/**
+ * How far outside a model's silhouette a press by `kind` still lands on its item, in field
+ * units: the pointer's reach on screen, with no dot-sized floor, so the empty corners of the
+ * footprint stay empty when zoomed in.
+ */
+function itemReach(zoom: number, kind: PointerKind): number {
+    return thresholdsFor(kind).hitRadius / zoom;
+}

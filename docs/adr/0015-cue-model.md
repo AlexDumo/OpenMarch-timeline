@@ -123,7 +123,7 @@ Each type is a lane on the timeline (D-6).
 | Equipment | Position  | How it is held           | Horn up, down, trail; sticks playing, in, down; set, port, present; tosses | Up, playing or set     |
 | Equipment | Silk      | A held flag's design     | Plain color; artwork later                                                 | The section's color    |
 | Looks     | Look      | Which uniform look       | A look from #972                                                           | The band or guard look |
-| Facing    | Facing    | Where the performer faces | Front, back, side 1, side 2, direction of travel, an angle, toward a point | Front                  |
+| Facing    | Facing    | Where the performer faces | Front, back, side 1, side 2, direction of travel, an angle, toward a point | Front (bass drums: side 2) |
 | Body      | Posture   | The body's posture       | Neutral, kneel; body visuals later                                         | Neutral                |
 
 - **Lights** is its own on/off type under Looks, added later. Lights are not
@@ -361,7 +361,11 @@ Facing row.
     left), Turn left 45° and Turn right 45° from it, and an angle exactly.
   - Facing cues are lasting only, and a snap unless given a transition (the
     2-count default above no longer holds for Facing).
-  - Before a performer's first Facing cue they face front (0°).
+  - Before a performer's first Facing cue they face their section's default:
+    front (0°) unless the section gives another. Bass drum and flub drum
+    sections give side 2 (90°, the right side toward the front), set on the
+    section (`Section.defaultFacing`), not stored as a cue (2026-11-26). Parade
+    sections can give their own the same way.
   - Direction of travel and toward a point stay in the library, not yet
     offered.
 - **The feet follow the path for any facing.** A facing that differs from
@@ -375,3 +379,37 @@ Facing row.
 - A transition's length as people see it (the counts before the cue) is one
   less than the stored `transition`, which counts the cue's own count too.
 - Equipment stays an instant swap on its count.
+
+## Amendment 2026-11-25: the show's flags are Equipment
+
+Owner, 2026-11-25: designers import as many flags as the show uses and hand
+them out as equipment ("select those flags as equipment"), with the 2D field
+showing who holds which.
+
+- **A show's flag is an Equipment value.** Each flag is a show asset of kind
+  `flag` (fork #985: a name, a built-in silk shape, its painted Artwork and a
+  small picture). An Equipment cue hands it out by its asset reference,
+  `library:<id>@<version hash>` (ADR 0004), and compile knows it as a value
+  the show adds (`CompileInput.values`): Guard family, holding it counts as
+  holding a flag. Changing silks is therefore an equipment change, as it is
+  on the floor, where a performer picks up another pole.
+- **The Silk type stays for colors.** D-3's Silk row (a plain silk in the
+  section's color) is unchanged; a show's flag carries its own design, so it
+  needs no Silk cue.
+- **Where it shows.** The field menu's Equipment › Guard equipment lists the
+  show's flags after the catalog's, with their pictures; the 2D field's
+  equipment icon for a show's flag is its picture in its own colors; the
+  Equipment lane names it by its name; the 3D View hands its holders the
+  6 ft flag in the flag's shape.
+
+### Consequences
+
+- An Equipment value may now be a show asset reference, so its name comes
+  from the show's assets, not the translations. A build that doesn't know
+  the asset (or a show missing it) treats the cue as an unknown value and
+  ignores it (D-9).
+- A flag nothing hands out is unused and may be removed (Remove unused…),
+  unless an undo or redo step names it.
+- Still to come: each flag's own Artwork on its silks in the 3D View (today
+  they show the guard's one Artwork, or a plain silk), and editing a flag
+  after it's added.

@@ -5,7 +5,13 @@ import {
 } from "@/shortcuts/useActionHandler";
 import { useEditorReadiness } from "@/shortcuts/handlers/useEditorReadiness";
 import { useShapeShown } from "../tool/shapeToolStore";
-import { copyFormation, pasteFormation } from "./copyPaste";
+import {
+    copyFormation,
+    pasteFormation,
+    reopenPaste,
+    switchPasteMode,
+} from "./copyPaste";
+import { pasteModeOf, useOpenPasteMode } from "./pasteModeStore";
 import {
     clearPicture,
     setPasteAs,
@@ -21,6 +27,9 @@ import { pictureSummary } from "./picture";
  * showing:
  * that one is placed or discarded first. The pastes also need something copied. Unavailable,
  * their keys are left alone, so Ctrl/Cmd+C and V keep working on text.
+ *
+ * While a paste is open and showing, the three pastes switch it to their mode instead (owner
+ * 2026-11-25): Ctrl/Cmd+V starts pasting, and any paste's key or button picks how.
  */
 export function useClipboardActions(): void {
     const { ready, selectedEditable } = useEditorReadiness();
@@ -51,15 +60,23 @@ export function useClipboardActions(): void {
                         )
                       : undefined)),
     });
+    // The open paste's mode, while it's showing
+    const openMode = useOpenPasteMode();
+    const pasting = ready && shapeShown && openMode !== null && copied;
     useActionHandlerGroup(
         ["pasteFormation", "pasteFormationInPlace", "pasteMirrored"],
-        (id) =>
+        (id) => {
+            if (pasting) {
+                switchPasteMode(pasteModeOf(id));
+                return;
+            }
             void pasteFormation(ids(), {
                 inPlace: id === "pasteFormationInPlace",
                 mirrored: id === "pasteMirrored",
-            }),
+            });
+        },
         {
-            enabled: selected && copied,
+            enabled: (selected && copied) || pasting,
             ignoreRepeat: true,
             disabledReason: () =>
                 !ready
@@ -98,7 +115,11 @@ export function useClipboardActions(): void {
         pictureSummary(picture, stepPx).type === "shape";
     useActionHandler(
         "pasteAsPositions",
-        () => setPasteAs(asPositions ? "shape" : "positions"),
+        () => {
+            setPasteAs(asPositions ? "shape" : "positions");
+            // An open paste shows the switch at once
+            reopenPaste();
+        },
         {
             enabled: ready && shapeCopied,
             ignoreRepeat: true,

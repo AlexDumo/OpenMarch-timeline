@@ -12,7 +12,7 @@ import { utilityKeys } from "@/hooks/queries/useUtility";
 import { addPageFlag } from "@/db-functions/pageFlags";
 import type { DatabasePage, DatabaseUtility } from "@/db-functions";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
-import { pageAtPlayhead } from "../timelinePlayhead";
+import { pageAtPlayhead, pageFlags } from "../timelinePlayhead";
 import { useTimelinePageBridge } from "../useTimelinePageBridge";
 
 /**
@@ -221,6 +221,67 @@ describeDbTests("timeline page bridge", (it) => {
             ).toBe(1),
         );
         expect(result.current.selectedPage?.id).toBe(1);
+    });
+
+    it("in Expert, a page selected elsewhere (undo's page jump) selects that page's box", async ({
+        db,
+        wrapper,
+    }) => {
+        const result = await renderBridge(db, wrapper as never);
+        store().setStartStays(true);
+        const flags = pageFlags(result.current.timing.pages);
+        const box = (index: number) => flags[index]!.range!;
+        act(() => {
+            store().selectRange(box(3).start, box(3).end);
+        });
+        await waitFor(() =>
+            expect(result.current.selectedPage?.id).toBe(flags[3]!.page.id),
+        );
+        // The page before: its flag is the start flag's own beat, where a seek would make a
+        // one-count window
+        act(() => {
+            result.current.setSelectedPage({ id: flags[2]!.page.id } as never);
+        });
+        await waitFor(() =>
+            expect(store().selection).toEqual({
+                kind: "range",
+                start: box(2).start,
+                end: box(2).end,
+            }),
+        );
+        expect(store().startBeat).toBe(box(2).start);
+        expect(store().playheadBeat).toBe(box(2).end);
+    });
+
+    it("while a move is isolated, a page selected elsewhere keeps the isolation", async ({
+        db,
+        wrapper,
+    }) => {
+        const result = await renderBridge(db, wrapper as never);
+        store().setStartStays(true);
+        const flags = pageFlags(result.current.timing.pages);
+        const box = flags[3]!.range!;
+        act(() => {
+            store().selectRange(box.start, box.end);
+        });
+        await waitFor(() =>
+            expect(result.current.selectedPage?.id).toBe(flags[3]!.page.id),
+        );
+        act(() => {
+            useTimelineSelectionStore.setState({
+                isolation: {
+                    timelineId: 99,
+                    start: box.start,
+                    end: box.end,
+                    restore: { startBeat: box.start, playheadBeat: box.end },
+                },
+            });
+            result.current.setSelectedPage({ id: flags[1]!.page.id } as never);
+        });
+        // The playhead seeks toward the page, inside the isolated move
+        await waitFor(() => expect(store().playheadBeat).toBeLessThan(box.end));
+        expect(store().isolation?.timelineId).toBe(99);
+        expect(store().startBeat).toBe(box.start);
     });
 
     it("shows the new pages and last page length together, over a fetch already running", async ({

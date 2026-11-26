@@ -639,7 +639,7 @@
         "bindings": []
     },
     "equipmentIconsChanged": {
-        "label": "Equipment icons: Changed only",
+        "label": "Equipment icons: Holding something else",
         "category": "field",
         "bindings": []
     },
@@ -648,18 +648,23 @@
         "category": "field",
         "bindings": []
     },
+    "toggleEquipmentIcons": {
+        "label": "Show or hide equipment icons",
+        "category": "field",
+        "bindings": []
+    },
     "equipmentIconsBeside": {
-        "label": "Equipment icons: Next to the number",
+        "label": "Equipment icons: After the drill number",
         "category": "field",
         "bindings": []
     },
     "equipmentIconsOnDot": {
-        "label": "Equipment icons: In place of the dot",
+        "label": "Equipment icons: Instead of the dot",
         "category": "field",
         "bindings": []
     },
     "equipmentIconsOnNumber": {
-        "label": "Equipment icons: In place of the number",
+        "label": "Equipment icons: Instead of the drill number",
         "category": "field",
         "bindings": []
     },
@@ -1132,6 +1137,21 @@
             }
         ]
     },
+    "toggleMarcherLabels": {
+        "label": "Show or hide drill numbers",
+        "category": "ui",
+        "bindings": []
+    },
+    "toggleShapeOutlines": {
+        "label": "Show or hide shape outlines",
+        "category": "ui",
+        "bindings": []
+    },
+    "toggleFacingArrows": {
+        "label": "Show or hide which way performers face",
+        "category": "ui",
+        "bindings": []
+    },
     "toggleFieldVenue": {
         "label": "Show or hide venue on field",
         "category": "ui",
@@ -1270,6 +1290,21 @@
     "openAssets": {
         "label": "Open the show's assets",
         "category": "ui",
+        "bindings": []
+    },
+    "addFlag": {
+        "label": "Add a flag to the show",
+        "category": "ui",
+        "bindings": []
+    },
+    "equipmentShowFlag": {
+        "label": "Equipment: one of the show's flags",
+        "category": "batchEdit",
+        "bindings": []
+    },
+    "selectHoldingShowFlag": {
+        "label": "Select who holds one of the show's flags",
+        "category": "select",
         "bindings": []
     },
     "removeUnusedAssets": {
@@ -1685,6 +1720,11 @@
             }
         ]
     },
+    "shapeSplitHere": {
+        "label": "Shape: Split here",
+        "category": "shape",
+        "bindings": []
+    },
     "pathPen": {
         "label": "Path pen",
         "category": "path",
@@ -2088,6 +2128,11 @@
                 }
             }
         ]
+    },
+    "selectSameSection": {
+        "label": "Select same section",
+        "category": "select",
+        "bindings": []
     },
     "toggleLassoSelect": {
         "label": "Switch between box and lasso select",

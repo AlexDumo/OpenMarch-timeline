@@ -25,6 +25,7 @@ import {
     type GuardUniformPresetId,
     type UniformPresetId,
 } from "@/view3d/core/marchers/uniformPresets";
+import type { FlatsArtworkKey } from "@/view3d/core/marchers/uniformArtwork";
 
 export type VenueChange =
     | { kind: "kit"; kit: VenueKitId }
@@ -32,6 +33,8 @@ export type VenueChange =
     | { kind: "crowd"; crowd: boolean }
     | { kind: "params"; params: Partial<VenueParams> }
     | { kind: "uniforms"; uniforms: UniformPresetId }
+    | { kind: "uniformArtwork"; uniformArtwork: FlatsArtworkKey }
+    | { kind: "uniformMode"; uniformMode: string }
     | { kind: "guardUniforms"; guardUniforms: GuardUniformPresetId }
     | { kind: "brassFinish"; brassFinish: Finish }
     | { kind: "tuba"; tuba: TubaModelId }
@@ -74,10 +77,25 @@ export function applyVenueChange(
                 ...current,
                 fieldLines: change.fieldLines,
             });
-        case "uniforms":
+        case "uniforms": {
+            // a preset takes the band out of any flats uniform, and its mode
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars -- left out
+            const { uniformArtwork, uniformMode, ...rest } = current;
+            return parseVenueSettings({ ...rest, uniforms: change.uniforms });
+        }
+        case "uniformArtwork": {
+            // another uniform starts in its default mode
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars -- left out
+            const { uniformMode, ...rest } = current;
+            return parseVenueSettings({
+                ...rest,
+                uniformArtwork: change.uniformArtwork,
+            });
+        }
+        case "uniformMode":
             return parseVenueSettings({
                 ...current,
-                uniforms: change.uniforms,
+                uniformMode: change.uniformMode,
             });
         case "guardUniforms":
             return parseVenueSettings({
@@ -111,6 +129,8 @@ export function venueChanged(a: VenueSettings, b: VenueSettings): boolean {
         a.lighting !== b.lighting ||
         a.crowd !== b.crowd ||
         uniformPresetOf(a.uniforms) !== uniformPresetOf(b.uniforms) ||
+        (a.uniformArtwork ?? null) !== (b.uniformArtwork ?? null) ||
+        (a.uniformMode ?? null) !== (b.uniformMode ?? null) ||
         guardUniformPresetOf(a.guardUniforms) !==
             guardUniformPresetOf(b.guardUniforms) ||
         brassFinishOf(a.brassFinish) !== brassFinishOf(b.brassFinish) ||

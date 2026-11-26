@@ -15,6 +15,7 @@ import {
     SILK_PATTERN_IDS,
     SILK_PATTERN_SIZE,
     SilkSet,
+    flagArtworkPattern,
     silkGrid,
     silkMaterial,
     silkPatternTexture,
@@ -400,6 +401,23 @@ describe("SilkSet", () => {
         const cued = read({ ...guard(), silkColor: 0xcc2233 });
         expect(cued.pattern).toBe(-1);
         expect(cued.color).toEqual(linear(0xcc2233));
+        // one of the show's flags (fork #985) paints its own design: its tile in the flags' texture
+        const showFlag = (tile: number): MarcherSlotLook => ({
+            body: defaultPerformerBody(1),
+            uniform: sectionUniform(
+                "Color Guard",
+                "up",
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                { carry: { ...guardCarry("flag6"), artwork: tile } },
+            ),
+        });
+        expect(read(showFlag(0)).pattern).toBe(flagArtworkPattern(0));
+        expect(read(showFlag(3)).pattern).toBe(flagArtworkPattern(3));
+        expect(flagArtworkPattern(3)).toBe(-5);
     });
 
     it("splits near and far silks by distance from the camera", async () => {

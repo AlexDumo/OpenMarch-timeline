@@ -514,11 +514,26 @@ export const timeline_routes = sqliteTable(
     "timeline_routes",
     {
         id: integer().primaryKey(),
-        /** JSON geometry `{v, from, to, points}` (spec §5.2, I-R1) */
+        /**
+         * JSON geometry `{v, from, to, points}` (spec §5.2, I-R1). For an exact path, no points
+         * and the path's ends, so a build or reader that doesn't know exact paths sees a plain
+         * own path
+         */
         geometry: text().notNull(),
+        /**
+         * An exact path (ADR 0018 step 3, spec Appendix M): one marcher's walk as fixed shapes
+         * plus timing keys, JSON `{v, from, shapes, keys}` in field units with y down, walked in
+         * place of `geometry` through the route's own lane. NULL for a drawn path. Migration
+         * 0029; a file is written as version 19 with its first one (`fileVersion.ts`).
+         */
+        exact_path: text(),
     },
     (_table) => [
         check("timeline_routes_geometry_check", sql`json_valid(geometry)`),
+        check(
+            "timeline_routes_exact_path_check",
+            sql`exact_path IS NULL OR json_valid(exact_path)`,
+        ),
     ],
 );
 

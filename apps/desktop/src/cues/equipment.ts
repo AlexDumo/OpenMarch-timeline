@@ -15,10 +15,12 @@ import type {
     NewCueArgs,
 } from "@/db-functions/cues";
 import { itemValueId } from "./equipmentItems";
+import { SHOW_ASSET_REF_PREFIX } from "@/showAssets/ref";
 
 /**
  * What an Equipment command sets: a catalog item's key ("trumpet", "rifle"), "usual" for the
- * performer's own instrument (their section's default) or "none".
+ * performer's own instrument (their section's default), "none", or one of the show's flags by its
+ * asset reference (`library:<id>@<hash>`, fork #985).
  */
 export type EquipmentChoice = string;
 
@@ -28,7 +30,9 @@ export const equipmentValueOfChoice = (choice: EquipmentChoice): string =>
         ? EQUIPMENT_USUAL
         : choice === "none"
           ? EQUIPMENT_NONE
-          : itemValueId(choice);
+          : choice.startsWith(SHOW_ASSET_REF_PREFIX)
+            ? choice
+            : itemValueId(choice);
 
 /**
  * The cue that sets `choice` for `marcherIds` on `beatId`, lasting, as Equipment naturally is
@@ -93,12 +97,20 @@ export function editedPerformers(
 /** How many recent Equipment choices the field menu keeps. */
 export const RECENT_EQUIPMENT_LIMIT = 4;
 
-/** The recent catalog items after choosing `key`: it goes first, at most four, no repeats. */
+/**
+ * The recent catalog items after choosing `key`: it goes first, at most four, no repeats. A show's
+ * own flag isn't one: the recent list is kept across shows, and the flags are listed anyway.
+ */
 export function withRecent(
     recent: readonly string[],
     key: EquipmentChoice,
 ): string[] {
-    if (key === "usual" || key === "none") return [...recent];
+    if (
+        key === "usual" ||
+        key === "none" ||
+        key.startsWith(SHOW_ASSET_REF_PREFIX)
+    )
+        return [...recent];
     return [key, ...recent.filter((k) => k !== key)].slice(
         0,
         RECENT_EQUIPMENT_LIMIT,

@@ -86,7 +86,8 @@ export interface CueCommands {
     /** Who holds any of the Equipment `values` at the playhead. */
     readonly holders: (values: readonly string[]) => readonly number[];
     /** Selects who holds any of the Equipment `values` at the playhead, whatever their section. */
-    readonly selectHolding: (values: readonly string[]) => void;
+    /** Selects whoever holds one of `values`; with `add`, keeps the selection and adds them */
+    readonly selectHolding: (values: readonly string[], add?: boolean) => void;
     /** The cue the cue commands act on (`useCueSelectionStore`), or null. */
     readonly cue: DatabaseCue | null;
     /** The cue's performers after adding or removing the selection; null when nothing changes. */
@@ -212,11 +213,17 @@ export function useCueCommands(): CueCommands {
             performers: (n) => t("cues.label.performers", { count: n }),
         };
         // Everyone holding one catalog item at the playhead, by its plural name ("Rifles")
-        const labelHolders = (): LabelHolders[] =>
-            equipmentCatalog().map((item) => ({
+        const labelHolders = (): LabelHolders[] => [
+            ...equipmentCatalog().map((item) => ({
                 name: t(`cues.plural.${itemKeyOf(item.id)}`),
                 ids: holders([item.id]),
-            }));
+            })),
+            // the show's flags by their own names ("Ballad silk")
+            ...(show?.flags ?? []).map((flag) => ({
+                name: flag.name,
+                ids: holders([flag.value]),
+            })),
+        ];
 
         const onBeat = show && beat ? equipmentCuesOn(show.cues, beat.id) : [];
         const picked = show
@@ -321,8 +328,13 @@ export function useCueCommands(): CueCommands {
                 });
             },
             holders,
-            selectHolding: (values) => {
-                activeFieldEditor()?.select(holders(values));
+            selectHolding: (values, add) => {
+                const editor = activeFieldEditor();
+                editor?.select(
+                    add
+                        ? [...editor.selected(), ...holders(values)]
+                        : holders(values),
+                );
             },
             cue,
             edited,

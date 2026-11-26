@@ -31,6 +31,7 @@ import {
     type RoutePath,
     type RouteWalk,
 } from "./geom";
+import { exactWalker, type ExactPath, type ExactWalker } from "./exactPath";
 import type {
     Beat,
     FtlEntryInfo,
@@ -470,6 +471,76 @@ function legPieces(pa: number, pb: number, leg: GroupLeg): Piece[] {
     return [cubicPiece(pa, pb, S, piece.c1, piece.c2, E, piece.e)];
 }
 
+/**
+ * An exact path's walk (ADR 0018 step 3) from `A` to `B` as pieces: between two keys, or a key
+ * and a joint, the marcher walks one piece at a steady speed along its real length, so a line is a
+ * line and an arc an arc, exactly. A cubic is walked by its true length (DE-3), which R-20's cubic
+ * (timed on R-14's 64 chords) can't say, so it comes as points within the tolerance. Holds draw
+ * nothing. A path that can't play walks straight, as the resolver does.
+ */
+function exactLanePieces(walker: ExactWalker, A: XY, B: XY): Piece[] {
+    const player = walker.playerFor(A, B);
+    if (!player) return [linePiece(0, 1, A, B)];
+    const keys = walker.path.keys;
+    const L = keys[keys.length - 1]!.tick;
+    const D = keys.map((k) => player.distanceOf(k.u));
+    const at = (p: number): XY => walker.at(A, B, p);
+    const out: Piece[] = [];
+    for (let k = 0; k + 1 < keys.length; k++) {
+        const d0 = D[k]!;
+        const d1 = D[k + 1]!;
+        if (!(d1 > d0)) continue; // a hold
+        const p0 = keys[k]!.tick / L;
+        const p1 = keys[k + 1]!.tick / L;
+        const progressOf = (d: number) =>
+            p0 + ((d - d0) / (d1 - d0)) * (p1 - p0);
+        // the joints this stretch crosses
+        const cuts = [d0];
+        for (const c of player.cum) if (c > d0 && c < d1) cuts.push(c);
+        cuts.push(d1);
+        for (let c = 0; c + 1 < cuts.length; c++) {
+            const s0 = cuts[c]!;
+            const s1 = cuts[c + 1]!;
+            if (!(s1 > s0)) continue;
+            const pa = progressOf(s0);
+            const pb = c + 2 === cuts.length ? p1 : progressOf(s1);
+            const piece = player.pieces[player.placeAt((s0 + s1) / 2) | 0]!;
+            const from =
+                c === 0 ? at(pa) : player.pointAtPlace(player.placeAt(s0));
+            const to = at(pb);
+            if (piece.kind === "line") out.push(linePiece(pa, pb, from, to));
+            else if (piece.kind === "arc" && piece.circle) {
+                const { center, radius, sweep } = piece.circle;
+                const start = Math.atan2(
+                    from[1] - center[1],
+                    from[0] - center[0],
+                );
+                const dir = Math.sign(sweep);
+                out.push(
+                    ...arcPieces(
+                        pa,
+                        pb,
+                        center,
+                        radius,
+                        start,
+                        (dir * (s1 - s0)) / radius,
+                        (f) =>
+                            f <= 0
+                                ? from
+                                : f >= 1
+                                  ? to
+                                  : at(pa + (pb - pa) * f),
+                    ),
+                );
+            } else
+                out.push(
+                    sampledPiece(pa, pb, (u) => at(pa + (pb - pa) * u), []),
+                );
+        }
+    }
+    return out;
+}
+
 /** A group lane's walk (R-14 group schedule, R-14′ Adjust) as pieces (R-20 items 4 and 5). */
 function groupPieces(walk: GroupMemberWalk): Piece[] {
     const { schedule, A, B, offset, first, last, adjust } = walk;
@@ -723,6 +794,12 @@ export function createWalkedPaths(
     const trails = new Map<number, FtlTrail>();
     const schedules = new Map<number, GroupSchedule>();
     const adjusts = new Map<LaneRow, ResolvedAdjust>();
+    const exactWalkers = new WeakMap<ExactPath, ExactWalker>(); // a replaced path's walker goes with it
+    const exactWalkerOf = (path: ExactPath): ExactWalker => {
+        let w = exactWalkers.get(path);
+        if (!w) exactWalkers.set(path, (w = exactWalker(path)));
+        return w;
+    };
     let lanes: Map<string, LaneRow> | null = null;
 
     const spansOf = (marcherId: number): SpanInfo[] => {
@@ -1001,6 +1078,8 @@ export function createWalkedPaths(
                     `lane on ${t.id}:${lane.slot} has no route ${lane.route} (I-D3)`,
                 );
             const route: RouteWalk = geometry;
+            const exact = host.routes?.[lane.route]?.exact;
+            if (exact) return exactLanePieces(exactWalkerOf(exact), A, B);
             if (lane.offset) {
                 const schedule = scheduleOf(lane.route, route);
                 return groupPieces(

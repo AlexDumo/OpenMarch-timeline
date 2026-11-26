@@ -4,6 +4,9 @@ import { formatSignedSteps, formatSteps, parseSteps } from "../editor/format";
 import type {
     RowsView,
     RowView,
+    ToolChoice,
+    ToolChoicePicture,
+    ToolChoicePictureLine,
     ToolEnv,
     ToolKind,
     ToolParam,
@@ -17,8 +20,14 @@ import {
     rowsOf,
     type LineRow,
     type LineRows,
+    type RowsGo,
 } from "./rowsParams";
-import { lineInterval, lineOutline, type LineParams } from "./lineGeometry";
+import {
+    bends,
+    lineInterval,
+    lineOutline,
+    type LineParams,
+} from "./lineGeometry";
 import { lineFillSpots } from "./lineFill";
 
 /**
@@ -46,22 +55,91 @@ const FIRST_STEPS = 2;
  * it (the field's y runs toward the front sideline), and `sign`: +1 when its left-hand side is
  * behind (or to the left, as the audience sees it) and its own way is to the right (or toward the
  * back), −1 when both are the other way. Rows across the field (closer to side to side than front
- * to back) are named behind and in front, up and down it left and right.
+ * to back) are named behind and in front, up and down it left and right. `step` is the way one row
+ * moves from the one before it in the list ({@link LineRows.go}): the line's left-hand side when
+ * the rows slide it, straight back or forward when they go front to back (behind and in front
+ * whatever the line's slope), straight left or right side to side (left and right), each on the
+ * left-hand side's side of the field; null when they follow the line, square to it wherever it is.
  */
 export function rowFrame(p: P): {
     along: XY;
     left: XY;
     sign: 1 | -1;
     words: "across" | "upDown";
+    step: XY | null;
 } {
     const outline = lineOutline(p);
     const d = sub(outline[outline.length - 1]!, outline[0]!);
     const len = Math.hypot(d.x, d.y);
     const along = len > 1e-9 ? scale(d, 1 / len) : { x: 1, y: 0 };
     const left = { x: along.y, y: -along.x };
+    const go = rowsOf(p)?.go;
+    if (go === "back") {
+        const behind = left.y <= 0;
+        return {
+            along,
+            left,
+            sign: behind ? 1 : -1,
+            words: "across",
+            step: { x: 0, y: behind ? -1 : 1 },
+        };
+    }
+    if (go === "side") {
+        const toLeft = left.x <= 0;
+        return {
+            along,
+            left,
+            sign: toLeft ? 1 : -1,
+            words: "upDown",
+            step: { x: toLeft ? -1 : 1, y: 0 },
+        };
+    }
     const across = Math.abs(along.x) >= Math.abs(along.y);
     const sign = (across ? along.x > 0 : along.y < 0) ? 1 : -1;
-    return { along, left, sign, words: across ? "across" : "upDown" };
+    return {
+        along,
+        left,
+        sign,
+        words: across ? "across" : "upDown",
+        step: go === "follow" ? null : left,
+    };
+}
+
+/**
+ * The line's left-hand side where it passes nearest `point`, square to it there: at a corner, half
+ * way between its two stretches'
+ */
+function normalNear(outline: readonly XY[], point: XY): XY {
+    const normalOf = (i: number): XY => {
+        const d = sub(outline[i + 1]!, outline[i]!);
+        const len = Math.hypot(d.x, d.y);
+        return len > 1e-9 ? { x: d.y / len, y: -d.x / len } : { x: 0, y: 0 };
+    };
+    let best = 0;
+    let bestT = 0;
+    let bestD = Infinity;
+    for (let i = 0; i + 1 < outline.length; i++) {
+        const a = outline[i]!;
+        const d = sub(outline[i + 1]!, a);
+        const len2 = dot(d, d);
+        const t =
+            len2 > 0
+                ? Math.max(0, Math.min(1, dot(sub(point, a), d) / len2))
+                : 0;
+        const q = add(a, scale(d, t));
+        const dist = Math.hypot(point.x - q.x, point.y - q.y);
+        if (dist < bestD - 1e-9) {
+            best = i;
+            bestT = t;
+            bestD = dist;
+        }
+    }
+    let n = normalOf(best);
+    const last = outline.length - 2;
+    if (bestT < 1e-6 && best > 0) n = add(n, normalOf(best - 1));
+    else if (bestT > 1 - 1e-6 && best < last) n = add(n, normalOf(best + 1));
+    const len = Math.hypot(n.x, n.y);
+    return len > 1e-9 ? scale(n, 1 / len) : { x: 0, y: -1 };
 }
 
 /** The rows from the front (or the right) to the back (or the left) */
@@ -80,7 +158,67 @@ export interface RowLayout {
     readonly count: number;
     readonly spots: readonly Slot[];
     readonly filled: readonly boolean[];
+    /**
+     * Where the row runs, end spot to end spot, following the drawn line's bends between its spots
+     * (its spots alone would cut the corners): what the field draws for it
+     */
+    readonly path: readonly XY[];
 }
+
+/** How far along `line` each of its points is */
+function lengthsOf(line: readonly XY[]): number[] {
+    const out = [0];
+    for (let i = 1; i < line.length; i++)
+        out.push(
+            out[i - 1]! +
+                Math.hypot(
+                    line[i]!.x - line[i - 1]!.x,
+                    line[i]!.y - line[i - 1]!.y,
+                ),
+        );
+    return out;
+}
+
+/** How far along `line` its point nearest `q` is */
+function lengthNear(
+    line: readonly XY[],
+    lengths: readonly number[],
+    q: XY,
+): number {
+    let best = 0;
+    let bestD = Infinity;
+    for (let i = 0; i + 1 < line.length; i++) {
+        const a = line[i]!;
+        const d = sub(line[i + 1]!, a);
+        const len2 = dot(d, d);
+        const f =
+            len2 > 0 ? Math.max(0, Math.min(1, dot(sub(q, a), d) / len2)) : 0;
+        const c = add(a, scale(d, f));
+        const dist = Math.hypot(q.x - c.x, q.y - c.y);
+        if (dist < bestD - 1e-9) {
+            bestD = dist;
+            best = lengths[i]! + f * (lengths[i + 1]! - lengths[i]!);
+        }
+    }
+    return best;
+}
+
+/** The point `l` along `line` */
+function pointAlong(
+    line: readonly XY[],
+    lengths: readonly number[],
+    l: number,
+): XY {
+    let i = 1;
+    while (i < line.length - 1 && lengths[i]! < l) i++;
+    const span = lengths[i]! - lengths[i - 1]!;
+    const f =
+        span > 0 ? Math.max(0, Math.min(1, (l - lengths[i - 1]!) / span)) : 0;
+    return add(line[i - 1]!, scale(sub(line[i]!, line[i - 1]!), f));
+}
+
+/** Samples of a row's path between one spot and the next */
+const PATH_STEPS = 8;
 
 /** A row's empty spots that fit in it, holding `count` marchers */
 function emptiesOf(row: LineRow, count: number): number[] {
@@ -143,6 +281,7 @@ export function layRows(
                 count: n,
                 spots,
                 filled: spots.map(() => true),
+                path: spots,
             },
         ];
     }
@@ -156,11 +295,41 @@ export function layRows(
             base[i]!.y - base[i - 1]!.y,
         );
     const interval = base.length > 1 ? path / (base.length - 1) : rows.apart;
-    const { left } = rowFrame(p);
+    const frame = rowFrame(p);
+    const outline = lineOutline(p);
+    const lengths = lengthsOf(outline);
+    const baseAt = base.map((b) => lengthNear(outline, lengths, b));
+    // The drawn line `u` spots along it: on it between its spots, going on straight past its ends
+    const onLine = (u: number): XY => {
+        const last = base.length - 1;
+        if (last < 1 || u <= 0 || u >= last) return at(base, u);
+        const i = Math.floor(u);
+        const f = u - i;
+        if (f < 1e-9) return base[i]!;
+        return pointAlong(
+            outline,
+            lengths,
+            baseAt[i]! + f * (baseAt[i + 1]! - baseAt[i]!),
+        );
+    };
+    // Which way the rows step there: square to the line where it is when they follow it
+    const ends = frame.step
+        ? null
+        : [
+              normalNear(outline, base[0]!),
+              normalNear(outline, base[base.length - 1]!),
+          ];
+    const stepAt = (u: number): XY => {
+        if (frame.step || !ends) return frame.step ?? { x: 0, y: -1 };
+        if (u <= 0) return ends[0]!;
+        if (u >= base.length - 1) return ends[1]!;
+        return normalNear(outline, onLine(u));
+    };
+    const placed = (u: number, offset: number): XY =>
+        add(onLine(u), scale(stepAt(u), offset * rows.apart));
     return rows.list.map((row, index) => {
         const offset = index - rows.drawn;
         const { count, empty, length } = sizes[index]!;
-        const across = scale(left, offset * rows.apart);
         const start =
             (k - 1) / 2 -
             (length - 1) / 2 +
@@ -169,10 +338,17 @@ export function layRows(
         const spots: Slot[] = [];
         for (let j = 0; j < length; j++) {
             const t = start + j;
-            spots.push({ ...add(at(base, t), across), s: t * interval });
+            spots.push({ ...placed(t, offset), s: t * interval });
         }
         const filled = spots.map((_, j) => !empty.includes(j));
-        return { index, offset, count, spots, filled };
+        const path: XY[] = [];
+        for (let j = 0; j < length; j++) {
+            path.push(spots[j]!);
+            if (j + 1 < length)
+                for (let q = 1; q < PATH_STEPS; q++)
+                    path.push(placed(start + j + q / PATH_STEPS, offset));
+        }
+        return { index, offset, count, spots, filled, path };
     });
 }
 
@@ -246,13 +422,28 @@ const withCounts = (rows: LineRows, counts: readonly number[]): LineRows => ({
     list: rows.list.map((row, i) => ({ ...row, count: counts[i]! })),
 });
 
+/**
+ * Which way the first rows of a line go (owner, #1193): in rings round an arc and along a
+ * curve's bends, as a designer draws them; a straight or bent line's slide. Rows already made
+ * keep theirs, a missing way being a slide.
+ */
+function firstGo(p: P): RowsGo | undefined {
+    const sort = lineSort(p);
+    return sort === "arc" || sort === "curve" ? "follow" : undefined;
+}
+
 /** The rows of `p`, or the drawn line alone as one */
-const rowsOrOne = (p: P, env: ToolEnv): LineRows =>
-    rowsOf(p) ?? {
+const rowsOrOne = (p: P, env: ToolEnv): LineRows => {
+    const rows = rowsOf(p);
+    if (rows) return rows;
+    const go = firstGo(p);
+    return {
         list: [{}],
         drawn: 0,
         apart: FIRST_STEPS * env.stepPx,
+        ...(go ? { go } : {}),
     };
+};
 
 /**
  * One marcher moved into row `to` from the longest other row, or out of row `from` to the
@@ -629,7 +820,8 @@ export function rowsGap(
         rows.drawn
     ]!;
     if (drawn.spots.length === 0) return null;
-    const { along, left, sign } = rowFrame(p);
+    const frame = rowFrame(p);
+    const { sign } = frame;
     // Row +1 is on the line's left-hand side: behind (or to the left) when `sign` is +1
     const offset =
         rows.drawn + sign < rows.list.length && rows.drawn + sign >= 0
@@ -637,6 +829,7 @@ export function rowsGap(
             : -sign;
     // How far the next row starts further along the line's own way
     const lean = offset * (rows.slant ?? 0);
+    const { along } = frame;
     const last =
         Math.abs(lean) > 1e-9
             ? lean < 0
@@ -645,10 +838,220 @@ export function rowsGap(
               : along.y < 0;
     const spot = last ? drawn.spots[drawn.spots.length - 1]! : drawn.spots[0]!;
     const from = { x: spot.x, y: spot.y };
-    const corner = add(from, scale(left, offset * rows.apart));
-    const to = add(corner, scale(along, lean));
-    return { from, corner, to, outward: last ? along : scale(along, -1) };
+    // Following the line, the gap is square to it at that end, and the slant along it there
+    const normal = frame.step ?? normalNear(lineOutline(p), from);
+    const way = frame.step ? along : { x: -normal.y, y: normal.x };
+    const corner = add(from, scale(normal, offset * rows.apart));
+    const to = add(corner, scale(way, lean));
+    return { from, corner, to, outward: last ? way : scale(way, -1) };
 }
+
+// ── Which way the rows go ───────────────────────────────────────────────────────────────
+
+/** Which way the rows step, as the menu names it: absent {@link LineRows.go} is `slide` */
+type GoValue = "slide" | RowsGo;
+
+/** What the drawn line is, for the names of the ways its rows can go */
+function lineSort(p: P): "straight" | "arc" | "curve" | "bent" {
+    const outline = lineOutline(p);
+    if (outline.length === 2) return "straight";
+    if (p.points.some(bends)) return "arc";
+    return outline.length > p.points.length ? "curve" : "bent";
+}
+
+/** The ways the rows can go for the drawn line, in the menu's order: a straight line's follow it */
+function goValues(p: P): GoValue[] {
+    return lineSort(p) === "straight"
+        ? ["slide", "back", "side"]
+        : ["follow", "slide", "back", "side"];
+}
+
+function goWords(p: P, value: GoValue): { label: string; detail: string } {
+    const sort = lineSort(p);
+    switch (value) {
+        case "follow":
+            return sort === "arc"
+                ? {
+                      label: tolgee.t("shapes.rows.goRings", "Rings"),
+                      detail: tolgee.t(
+                          "shapes.rows.goRingsDetail",
+                          "Round the arc's center",
+                      ),
+                  }
+                : {
+                      label: tolgee.t(
+                          "shapes.rows.goFollow",
+                          "Follow the bends",
+                      ),
+                      detail:
+                          sort === "curve"
+                              ? tolgee.t(
+                                    "shapes.rows.goFollowCurveDetail",
+                                    "Each row square to the curve",
+                                )
+                              : tolgee.t(
+                                    "shapes.rows.goFollowLineDetail",
+                                    "Each row square to the line",
+                                ),
+                  };
+        case "slide":
+            if (sort === "straight")
+                return {
+                    label: tolgee.t("shapes.rows.goOut", "Out from the line"),
+                    detail: tolgee.t(
+                        "shapes.rows.goOutDetail",
+                        "Each row square to the line",
+                    ),
+                };
+            if (sort === "arc")
+                return {
+                    label: tolgee.t(
+                        "shapes.rows.goSlideArc",
+                        "Slide the whole arc",
+                    ),
+                    detail: tolgee.t(
+                        "shapes.rows.goSlideArcDetail",
+                        "The same arc, moved",
+                    ),
+                };
+            if (sort === "curve")
+                return {
+                    label: tolgee.t(
+                        "shapes.rows.goSlideCurve",
+                        "Slide the whole curve",
+                    ),
+                    detail: tolgee.t(
+                        "shapes.rows.goSlideCurveDetail",
+                        "The same curve, moved",
+                    ),
+                };
+            return {
+                label: tolgee.t(
+                    "shapes.rows.goSlideLine",
+                    "Slide the whole line",
+                ),
+                detail: tolgee.t(
+                    "shapes.rows.goSlideLineDetail",
+                    "The same line, moved",
+                ),
+            };
+        case "back":
+            return {
+                label: tolgee.t("shapes.rows.goBack", "Front to back"),
+                detail: tolgee.t(
+                    "shapes.rows.goBackDetail",
+                    "Straight back on the grid",
+                ),
+            };
+        case "side":
+            return {
+                label: tolgee.t("shapes.rows.goSide", "Side to side"),
+                detail: tolgee.t(
+                    "shapes.rows.goSideDetail",
+                    "Straight across on the grid",
+                ),
+            };
+    }
+}
+
+/** `k` points evenly along `outline`, its ends among them */
+function evenAlong(outline: readonly XY[], k: number): XY[] {
+    const lengths = [0];
+    for (let i = 1; i < outline.length; i++)
+        lengths.push(
+            lengths[i - 1]! +
+                Math.hypot(
+                    outline[i]!.x - outline[i - 1]!.x,
+                    outline[i]!.y - outline[i - 1]!.y,
+                ),
+        );
+    const total = lengths[lengths.length - 1]!;
+    const out: XY[] = [];
+    let i = 1;
+    for (let j = 0; j < k; j++) {
+        const want = k > 1 ? (total * j) / (k - 1) : 0;
+        while (i < outline.length - 1 && lengths[i]! < want) i++;
+        const span = lengths[i]! - lengths[i - 1]!;
+        const f = span > 0 ? (want - lengths[i - 1]!) / span : 0;
+        out.push(
+            add(outline[i - 1]!, scale(sub(outline[i]!, outline[i - 1]!), f)),
+        );
+    }
+    return out;
+}
+
+/**
+ * The drawn line with a row on either side going `value`'s way, as a sketch: the rows set well
+ * apart so their way shows at the menu's small size
+ */
+function goPicture(p: P, value: GoValue): ToolChoicePicture {
+    const outline = lineOutline(p);
+    const d = sub(outline[outline.length - 1]!, outline[0]!);
+    const apart = Math.max(Math.hypot(d.x, d.y) * 0.3, 1e-6);
+    const sample: P = {
+        ...p,
+        rows: {
+            list: [{}, {}, {}],
+            drawn: 1,
+            apart,
+            ...(value === "slide" ? {} : { go: value }),
+        },
+    };
+    const frame = rowFrame(sample);
+    const dirAt = (q: XY) => frame.step ?? normalNear(outline, q);
+    const dotsOn = evenAlong(outline, 3);
+    const lines: ToolChoicePictureLine[] = [];
+    const dots: XY[] = [];
+    for (const o of [-1, 0, 1]) {
+        lines.push({
+            points: outline.map((q) => add(q, scale(dirAt(q), o * apart))),
+            ...(o === 0 ? {} : { faint: true }),
+        });
+        for (const q of dotsOn) dots.push(add(q, scale(dirAt(q), o * apart)));
+    }
+    return { lines, dots };
+}
+
+/** The Rows menu's "Rows go" (#1193): which way the rows step from the drawn line */
+const GO_CHOICE: ToolChoice<P> = {
+    key: "rowsGo",
+    get label() {
+        return tolgee.t("shapes.rows.go", "Rows go");
+    },
+    get tip() {
+        return tolgee.t(
+            "shapes.rows.goTip",
+            "Which way each row steps from the line you drew",
+        );
+    },
+    options: (p) =>
+        goValues(p).map((value) => ({
+            value,
+            ...goWords(p, value),
+            picture: goPicture(p, value),
+        })),
+    current: (p) => {
+        const rows = rowsOf(p);
+        const go = (rows ? rows.go : firstGo(p)) ?? "slide";
+        return goValues(p).includes(go) ? go : "slide";
+    },
+    pick: (p, n, value) => {
+        const rows = rowsOf(p);
+        if (!rows || !goValues(p).includes(value as GoValue)) return p;
+        const { go: _was, ...rest } = rows;
+        const next: LineRows =
+            value === "slide" ? rest : { ...rest, go: value as RowsGo };
+        const picked = withRowsSet(p, next);
+        // Marchers shared out evenly: which row is short goes by front and back, which a new
+        // way may swap, so they're written down first
+        if (
+            rows.list[0]?.count === undefined &&
+            rowFrame(picked).sign !== rowFrame(p).sign
+        )
+            return withRowsSet(p, withCounts(next, counted(p, rows, n)));
+        return picked;
+    },
+};
 
 /** The Rows menu (spec #1190) */
 export const LINE_ROWS: ToolRows<P> = {
@@ -662,6 +1065,7 @@ export const LINE_ROWS: ToolRows<P> = {
     clear: (p) => withRowsSet(p, undefined),
     apart: stepsParam("apart"),
     slant: stepsParam("slant"),
+    go: GO_CHOICE,
     gap: rowsGap,
 };
 
@@ -759,7 +1163,7 @@ export function rowsShape(shape: ShapeKind<P>): ShapeKind<P> {
             if (!rowsOf(p)) return own;
             const rows = layRows(p, n, spotsFor(shape, p, ctx))
                 .filter((r) => r.offset !== 0 && r.spots.length > 0)
-                .map((r) => r.spots.map(({ x, y }) => ({ x, y })));
+                .map((r) => r.path.map(({ x, y }) => ({ x, y })));
             return [...own, ...rows];
         },
         generate: (p, n, ctx) => {
@@ -788,14 +1192,14 @@ export function rowsShape(shape: ShapeKind<P>): ShapeKind<P> {
         orderKey: (p, point, ctx, n) => {
             const rows = rowsOf(p);
             if (!rows) return shape.orderKey(p, point, ctx, n);
-            const { along, left, sign } = rowFrame(p);
+            const { along, left, sign, step } = rowFrame(p);
             const from = sub(point, lineOutline(p)[0]!);
             // A spot knows its row; worked out from where it is, the bow of a curve would put
             // the middle of one row in the next
             const slot = point as Slot;
             if (slot.row !== undefined && slot.col !== undefined)
                 return [(slot.row - rows.drawn) * sign, slot.col * sign];
-            const offset = Math.round(dot(from, left) / rows.apart);
+            const offset = Math.round(dot(from, step ?? left) / rows.apart);
             return [offset * sign, dot(from, along) * sign];
         },
     };
@@ -966,7 +1370,7 @@ export function withRows(kind: ToolKind<P>): ToolKind<P> {
                 ? Math.max(Math.min(half, env.stepPx), env.hitRadius)
                 : half;
             return layRows(p, n, (k) => lineFillSpots(p, k, env?.stepPx)).some(
-                (r) => nearRun(r.spots, point, reach),
+                (r) => nearRun(r.path, point, reach),
             );
         },
         move: (b, n, delta, env) =>
@@ -1045,7 +1449,7 @@ export function withRows(kind: ToolKind<P>): ToolKind<P> {
             if (!rowsOf(p)) return [];
             return layRows(p, n, (k) => lineFillSpots(p, k, stepPx))
                 .filter((r) => r.offset !== 0 && r.spots.length > 0)
-                .map((r) => r.spots.map(({ x, y }) => ({ x, y })));
+                .map((r) => r.path.map(({ x, y }) => ({ x, y })));
         },
     };
 }

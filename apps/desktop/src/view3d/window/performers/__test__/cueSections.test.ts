@@ -24,4 +24,31 @@ describe("cueSectionsOf", () => {
         expect(sections[1]!.equipment).toMatchObject({ holds: "flag" });
         expect(sections[0]!.equipment).toMatchObject({ holds: "winds" });
     });
+
+    it("gives bass drum sections their side 2 Facing default, with or without one usual equipment", () => {
+        const sections = cueSectionsOf([
+            { section: "Bass Drum", model: "bass" },
+            { section: "Bass Drum", model: "bass" },
+            { section: "Flub Drum", model: "bass" },
+            { section: "Trumpet", model: "trumpet" },
+        ]);
+
+        expect(sections.map((s) => [s.name, s.facing])).toEqual([
+            ["Bass Drum", "builtin:facing.side2"],
+            ["Flub Drum", "builtin:facing.side2"],
+            ["Trumpet", undefined],
+        ]);
+        expect(sections[2]!.equipment?.id).toBe("builtin:equipment.trumpet");
+    });
+
+    it("gives a bass section its Facing default even when its performers mix models", () => {
+        const sections = cueSectionsOf([
+            { section: "bass drum", model: "bass" },
+            { section: "Bass Drum", model: null },
+        ]);
+
+        expect(sections).toEqual([
+            { name: "bass drum", facing: "builtin:facing.side2" },
+        ]);
+    });
 });

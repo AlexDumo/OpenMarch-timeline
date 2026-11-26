@@ -23,6 +23,7 @@ const PUBLISH_CHANNELS: readonly View3dPublishChannel[] = [
     "view3d:hidden-props",
     "view3d:camera-wanted",
     "view3d:camera-move",
+    "view3d:uniform-pack-result",
 ];
 
 const isPublishChannel = (channel: unknown): channel is View3dPublishChannel =>
@@ -87,11 +88,13 @@ const VIEW3D_API = {
 
     /**
      * Asks the editor to store new venue settings. The editor validates them,
-     * writes them with history, and then invalidates the venue query.
+     * writes them with history, and then invalidates the venue query. `base` is
+     * the band's uniform the settings were built against (`VenuePickBase`).
      */
-    requestVenueChange: (settings: unknown) =>
+    requestVenueChange: (settings: unknown, base?: unknown) =>
         ipcRenderer.send("view3d:venue-change-request", {
             settings,
+            base,
         } satisfies View3dVenueChangeRequest),
 
     /**
@@ -112,6 +115,17 @@ const VIEW3D_API = {
     requestSilkArtwork: (artwork: unknown) =>
         ipcRenderer.send("view3d:venue-change-request", {
             silkArtwork: artwork,
+        } satisfies View3dVenueChangeRequest),
+
+    /**
+     * Asks the editor to store a uniform pack file in the show and dress the band in it
+     * (fork #1257), as `{ id, bytes }`. The editor reads it in its uniform pack worker, stores it
+     * as a show asset and points the venue at it with history, then answers on
+     * `view3d:uniform-pack-result` with the same `id`.
+     */
+    requestUniformPack: (request: unknown) =>
+        ipcRenderer.send("view3d:venue-change-request", {
+            uniformPack: request,
         } satisfies View3dVenueChangeRequest),
 
     /**

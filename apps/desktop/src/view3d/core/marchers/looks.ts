@@ -35,7 +35,6 @@ import {
 } from "../instruments/catalog";
 import { bassSizesFor } from "../instruments/battery";
 import type { GuardModelId, ModelOptions } from "../instruments/model";
-import { DEFAULT_SILK_SHAPE, type SilkShapeId } from "../sizes/silkShapes";
 import type { HoldState } from "../instruments/holds";
 import {
     DEFAULT_GUARD_UNIFORM_PRESET,
@@ -45,6 +44,7 @@ import {
     type GuardUniformPresetId,
     type UniformPresetId,
 } from "./uniformPresets";
+import type { FlatsArtworkKey, FlatsWear } from "./uniformArtwork";
 
 const withOptions = (
     carry: Carry | null,
@@ -75,17 +75,56 @@ export function bassOptions(
     return out;
 }
 
-/** om-pose's seven body types (`assets/body-v4u/<type>.glb`). */
+/**
+ * om-pose's body types (`assets/body-v4u/<type>.glb`): a feminine and a
+ * masculine frame, each in four builds, plus `neutral-average`. No performer
+ * gets `neutral-average` by default: it is the median body the uniform
+ * artwork template is drawn on, and the low quality tier's flats use it.
+ */
 export const BODY_TYPES = [
-    "neutral-slim",
     "neutral-average",
-    "neutral-athletic",
-    "neutral-broad",
-    "neutral-full",
+    "feminine-slim",
     "feminine-average",
+    "feminine-athletic",
+    "feminine-full",
+    "masculine-slim",
     "masculine-average",
+    "masculine-athletic",
+    "masculine-full",
 ] as const;
 export type BodyType = (typeof BODY_TYPES)[number];
+
+/** The two frames a performer gets by default, half each. */
+export const BODY_FRAMES = ["feminine", "masculine"] as const;
+
+/**
+ * The builds a performer gets by default, out of 100: most performers are
+ * average, with slim, full and athletic around them.
+ */
+export const BODY_BUILD_WEIGHTS = [
+    ["slim", 25],
+    ["average", 40],
+    ["athletic", 15],
+    ["full", 20],
+] as const;
+
+/** The body types performers get by default: every frame in every build. */
+export const DEFAULT_BODY_TYPES: readonly BodyType[] = BODY_FRAMES.flatMap(
+    (frame) =>
+        BODY_BUILD_WEIGHTS.map(
+            ([build]) => `${frame}-${build}` as const satisfies BodyType,
+        ),
+);
+
+/** The build for a hash value: `BODY_BUILD_WEIGHTS` over 0 ... 99. */
+function buildFor(n: number): (typeof BODY_BUILD_WEIGHTS)[number][0] {
+    let left = n % 100;
+    for (const [build, weight] of BODY_BUILD_WEIGHTS) {
+        if (left < weight) return build;
+        left -= weight;
+    }
+    return "average";
+}
 
 /** The skin tones om-pose's viewers use, light to dark. */
 export const SKIN_TONES = [
@@ -155,7 +194,8 @@ export function defaultPerformerBody(
     const b = hash32(a ^ 0x9e3779b9);
     const c = hash32(b ^ 0x85ebca6b);
     return {
-        bodyType: BODY_TYPES[a % BODY_TYPES.length],
+        // frame from the top bit, build from the bits below it
+        bodyType: `${BODY_FRAMES[a >>> 31]}-${buildFor(a >>> 8)}`,
         skinTone: SKIN_TONES[b % SKIN_TONES.length],
         // high bits: this chained hash's low two bits are uneven
         heightClass: varyHeight
@@ -224,14 +264,14 @@ export interface UniformLook {
          * silks in `carryColor`.
          */
         silk: UniformPresetId | null;
-        /**
-         * The show's imported silk Artwork paints the flag's silks, over
-         * any pattern or fill (fork #973). Not part of the uniform.
-         */
-        silkArtwork: boolean;
         /** Gold lacquer ("brass") or silver lacquer. */
         finish: Finish;
         hold: HoldState;
+        /**
+         * The flats artwork painted over the palette (`uniformArtwork.ts`): a
+         * built-in's id or a show's pack; absent or null for palette only.
+         */
+        artwork?: FlatsArtworkKey | null;
     };
 }
 
@@ -255,11 +295,11 @@ export function fillToNumber(c: RgbaColor): number {
  * section carries instead of its own (the settings' guard equipment). `winds`
  * holds the show's other choices: for its wind players, the brass line's
  * finish and whether the tubas carry marching tubas or sousaphones
- * (woodwinds keep the finish they are made in); for the 6 ft flag, the
- * shape of its silk and whether the show's Artwork paints it (fork #973);
- * and `carry`, when given, the piece an Equipment cue puts in the hands
+ * (woodwinds keep the finish they are made in); and `carry`, when given, the piece an Equipment cue puts in the hands
  * instead of the section's (null for nothing), colored and finished as the
- * section's own would be.
+ * section's own would be. `artwork`, when set, dresses the band (not the
+ * guard) in that flats uniform instead of the band preset's look
+ * (docs/3d/uniform-artwork.md).
  */
 export function sectionUniform(
     section: string,
@@ -272,15 +312,19 @@ export function sectionUniform(
     winds: {
         finish?: Finish;
         tuba?: TubaModelId;
-        silkShape?: SilkShapeId;
-        silkArtwork?: boolean;
         carry?: Carry | null;
     } = {},
+    artwork: FlatsWear | null = null,
 ): UniformLook {
     const inGuard = isGuard(section);
     const dressedBy: UniformPresetId = inGuard ? guardPreset : preset;
     const dress = UNIFORM_PRESETS[dressedBy];
-    const base = inGuard ? guardLookOf(guardPreset) : dress.band;
+    const flats = !inGuard && artwork ? artwork : null;
+    const base = inGuard
+        ? guardLookOf(guardPreset)
+        : flats
+          ? flats.look
+          : dress.band;
     const carry =
         winds.carry !== undefined
             ? winds.carry
@@ -289,15 +333,6 @@ export function sectionUniform(
               : winds.tuba && isTuba(section)
                 ? tubaCarry(winds.tuba)
                 : withOptions(carryForSection(section), options);
-    // the show's silk shape and Artwork go on the 6 ft flag
-    const flag6 = carry?.model === "flag6";
-    const shaped =
-        flag6 && winds.silkShape && winds.silkShape !== DEFAULT_SILK_SHAPE
-            ? withOptions(carry, {
-                  ...carry.options,
-                  silkShape: winds.silkShape,
-              })
-            : carry;
     return {
         style: base.style,
         colors: { ...base.colors },
@@ -307,12 +342,12 @@ export function sectionUniform(
             hat: carry?.model === "sousaphone" ? false : base.options.hat,
             hatType: "shako",
             instrument: "none",
-            carry: shaped,
+            carry,
             carryColor: carry ? (fill ?? dress.carry) : null,
             silk: carry && fill === undefined && dress.silk ? dressedBy : null,
-            silkArtwork: flag6 && winds.silkArtwork === true,
             finish: finishFor(carry, winds.finish ?? "brass"),
             hold,
+            ...(flats ? { artwork: flats.key } : {}),
         },
     };
 }
@@ -358,7 +393,6 @@ export function uniformKey(look: UniformLook): string {
  */
 export function bodyKey(look: UniformLook): string {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars -- left out of the key
-    const { carry, carryColor, silk, silkArtwork, finish, hold, ...drawn } =
-        look.options;
+    const { carry, carryColor, silk, finish, hold, ...drawn } = look.options;
     return JSON.stringify([look.style, look.colors, drawn]);
 }

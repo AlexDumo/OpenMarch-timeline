@@ -23,6 +23,12 @@
         "width": 900,
         "height": 132
     },
+    "3d-flag-silks": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 1600,
+        "height": 270
+    },
     "3d-front-ensemble-3d": {
         "chapter": "3d-view",
         "kind": "still",
@@ -105,6 +111,12 @@
         "width": 996,
         "height": 1260
     },
+    "3d-props-flags": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 936,
+        "height": 404
+    },
     "3d-props-handles": {
         "chapter": "3d-view",
         "kind": "clip",
@@ -148,18 +160,6 @@
         "kind": "still",
         "width": 752,
         "height": 928
-    },
-    "3d-silk-artwork": {
-        "chapter": "3d-view",
-        "kind": "still",
-        "width": 1600,
-        "height": 586
-    },
-    "3d-silk-settings": {
-        "chapter": "3d-view",
-        "kind": "still",
-        "width": 684,
-        "height": 1048
     },
     "3d-uniforms": {
         "chapter": "3d-view",
@@ -362,8 +362,8 @@
     "marchers-equipment-icons-setting": {
         "chapter": "marchers",
         "kind": "still",
-        "width": 480,
-        "height": 712
+        "width": 920,
+        "height": 1424
     },
     "marchers-equipment-lane": {
         "chapter": "marchers",
@@ -375,7 +375,19 @@
         "chapter": "marchers",
         "kind": "still",
         "width": 1468,
-        "height": 1404
+        "height": 1468
+    },
+    "marchers-equipment-show-flags": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 1472,
+        "height": 592
+    },
+    "marchers-facing-field": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 1472,
+        "height": 592
     },
     "marchers-facing-keys": {
         "chapter": "marchers",
@@ -401,6 +413,12 @@
         "kind": "still",
         "width": 1600,
         "height": 396
+    },
+    "marchers-facing-setting": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 920,
+        "height": 652
     },
     "marchers-facing-stretch": {
         "chapter": "marchers",
@@ -455,6 +473,12 @@
         "width": 1120,
         "height": 720,
         "seconds": 5
+    },
+    "marchers-select-menu": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 1100,
+        "height": 1328
     },
     "marchers-select-tab": {
         "chapter": "marchers",
@@ -709,6 +733,24 @@
         "width": 800,
         "height": 800
     },
+    "shapes-rows-front-to-back": {
+        "chapter": "shapes",
+        "kind": "still",
+        "width": 760,
+        "height": 600
+    },
+    "shapes-rows-go-arc": {
+        "chapter": "shapes",
+        "kind": "still",
+        "width": 1600,
+        "height": 732
+    },
+    "shapes-rows-menu": {
+        "chapter": "shapes",
+        "kind": "still",
+        "width": 1600,
+        "height": 708
+    },
     "shapes-snap-button": {
         "chapter": "shapes",
         "kind": "still",
@@ -721,6 +763,13 @@
         "width": 1280,
         "height": 800,
         "seconds": 5.8
+    },
+    "shapes-split-line": {
+        "chapter": "shapes",
+        "kind": "clip",
+        "width": 1280,
+        "height": 800,
+        "seconds": 8.3
     },
     "shapes-tab": {
         "chapter": "shapes",

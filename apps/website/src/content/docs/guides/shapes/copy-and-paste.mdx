@@ -13,7 +13,7 @@ covers:
   - action:mirrorBoth
   - i18n:shapes.clipboard
 sidebar:
-  order: 6
+  order: 7
 ---
 
 import Media from "@/components/docs/Media.astro";
@@ -56,6 +56,10 @@ Placing is one step you can undo. Each marcher takes a spot by least travel, as 
 Once you copy, a small clipboard chip appears in the bottom-left corner of the field, across from the zoom controls. It shows a small picture of the formation, what it is (a shape's name, or <Ui k="shapes.clipboard.positions" plain /> for marchers copied where they stand) and how many marchers it has. On a tablet it also has a <Ui k="actions.edit.paste" /> button. Its second line says how the copy fits the marchers you have selected now, including a warning when some copied spots would stay empty, or why you can't paste yet. The same warning shows under the paste's floating editor while the paste is open. Right after you copy, it says <Ui k="shapes.clipboard.chipCopied" plain /> for a moment. A copied shape is drawn laid out for the marchers you have selected. A few seconds after you last use it, the chip shrinks to its picture, so it stays out of the way while you still know something is copied; point at it to see what (on a tablet, tap it). It shows whole again when you select other marchers, copy or paste. While you drag near it, it fades. To empty the clipboard, point at the chip and select <Ui k="actions.edit.clearClipboard" /> on its corner (on a tablet, it's in the chip itself, at the far end from Paste), or choose <Ui k="actions.edit.clearClipboard" plain /> in the command palette; the chip then goes away until you copy again.
 
 Select the chip, or its picture once it has shrunk, to open the <Ui k="shapes.clipboard.title" /> card. On a tablet, tapping the picture shows the whole chip first. With no marchers selected, the card says whether you can paste onto any number of marchers or need to select a certain number. It has <Ui k="actions.edit.paste" />, <Ui k="actions.edit.pasteInPlace" /> and <Ui k="actions.edit.pasteMirrored" /> buttons that do the same as the menu. Select the card's caret, or press <Kbd keys="Escape" /> while you're in it, to fold it back into the chip. It also folds when a paste opens, and it always starts folded.
+
+### Switch how an open paste pastes
+
+While a paste is open, the clipboard chip shows which way it pastes: <Ui k="actions.edit.paste" plain />, <Ui k="actions.edit.pasteInPlace" plain /> or <Ui k="actions.edit.pasteMirrored" plain />. Select another to switch the open paste to it, or press that paste's keys: <Kbd action="pasteFormation" /> goes back to <Ui k="actions.edit.paste" plain />, <Kbd action="pasteFormationInPlace" /> to <Ui k="actions.edit.pasteInPlace" plain /> and <Kbd action="pasteMirrored" /> to <Ui k="actions.edit.pasteMirrored" plain />. The paste opens again on the same marchers, so a move you made to it before switching isn't kept. Nobody moves until you place it, and switching adds nothing to undo. Changing <Ui k="shapes.clipboard.pasteAs" plain /> on the card while a paste is open shows on the paste at once too.
 
 <Media
   id="shapes-clipboard-card"
@@ -118,7 +122,7 @@ You can't yet choose in the pasted formation which spots stay empty. To leave ce
 
 ## On a tablet
 
-Touch and hold the field, then lift, to open the same menu with <Ui k="actions.edit.copy" />, <Ui k="actions.edit.paste" />, <Ui k="actions.edit.pasteInPlace" /> and <Ui k="actions.edit.pasteMirrored" />. Drag a mirrored paste's mirror point with your finger, or tap where it should go. Once something is copied, the clipboard chip also has a <Ui k="actions.edit.paste" /> button, for pasting in one tap, and its own <Ui k="actions.edit.clearClipboard" /> button. When the chip has shrunk to its picture, tap it first to show them.
+Touch and hold the field, then lift, to open the same menu with <Ui k="actions.edit.copy" />, <Ui k="actions.edit.paste" />, <Ui k="actions.edit.pasteInPlace" /> and <Ui k="actions.edit.pasteMirrored" />. While a paste is open, tap <Ui k="actions.edit.paste" plain />, <Ui k="actions.edit.pasteInPlace" plain /> or <Ui k="actions.edit.pasteMirrored" plain /> on the clipboard chip to switch how it pastes. Drag a mirrored paste's mirror point with your finger, or tap where it should go. Once something is copied, the clipboard chip also has a <Ui k="actions.edit.paste" /> button, for pasting in one tap, and its own <Ui k="actions.edit.clearClipboard" /> button. When the chip has shrunk to its picture, tap it first to show them.
 
 ## Related
 

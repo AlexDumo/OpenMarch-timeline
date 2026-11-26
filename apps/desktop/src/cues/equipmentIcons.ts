@@ -11,9 +11,23 @@ import {
 } from "@/components/marcher/sectionIcons/SectionIcon";
 import { heldValueAt } from "./equipment";
 import { itemKeyOf } from "./equipmentItems";
+import { SHOW_ASSET_REF_PREFIX } from "@/showAssets/ref";
 
-/** An icon the field can draw: a section's, the marching (bell-front) tuba, or the sabre. */
-export type EquipmentIconKey = SectionKey | "MarchingTuba" | "Sabre";
+/**
+ * An icon the field can draw: a section's, the marching (bell-front) tuba, the sabre, or one of
+ * the show's flags by its Equipment value (`library:<id>@<hash>`, fork #985), drawn as its picture.
+ */
+export type EquipmentIconKey =
+    | SectionKey
+    | "MarchingTuba"
+    | "Sabre"
+    | `${typeof SHOW_ASSET_REF_PREFIX}${string}`;
+
+/** Whether an icon is one of the show's flags, drawn as its own picture */
+export const isPictureIcon = (
+    key: EquipmentIconKey,
+): key is `${typeof SHOW_ASSET_REF_PREFIX}${string}` =>
+    key.startsWith(SHOW_ASSET_REF_PREFIX);
 
 /**
  * Each catalog item's icon. Swing flags take the Flag icon, the nearest drawn; the sabre has its
@@ -58,6 +72,9 @@ export const ITEMS_WITHOUT_ICON: readonly string[] = [
 
 /** The icon of an Equipment value (a catalog item, or Nothing for null); "Other" without one. */
 export function iconOfValue(valueId: string | null): EquipmentIconKey {
+    // One of the show's flags: its own picture (the Flag icon until it's drawn)
+    if (valueId?.startsWith(SHOW_ASSET_REF_PREFIX))
+        return valueId as `${typeof SHOW_ASSET_REF_PREFIX}${string}`;
     const key = valueId === null ? "none" : itemKeyOf(valueId);
     return (key && ITEM_ICON[key]) || "Other";
 }
@@ -95,6 +112,7 @@ export function equipmentIconsAt({
     sectionOf,
     count,
     shown,
+    sections,
 }: {
     compiled: CompiledCues;
     usualValue: ReadonlyMap<number, string | null>;
@@ -102,13 +120,20 @@ export function equipmentIconsAt({
     sectionOf: (id: number) => string | undefined;
     count: number;
     shown: EquipmentIcons;
+    /**
+     * Only these sections (by stored name), everyone in them, whatever `shown` says other than
+     * off (Show on field's Equipment icons for some sections, fork #1332). Empty or left out: all
+     */
+    sections?: ReadonlySet<string>;
 }): Map<number, EquipmentIconKey> {
     const icons = new Map<number, EquipmentIconKey>();
     if (shown === "off") return icons;
+    const some = sections !== undefined && sections.size > 0;
     for (const [id, usual] of usualValue) {
+        if (some && !sections.has(sectionOf(id) ?? "")) continue;
         const held = heldValueAt(compiled, id, count);
         if (held !== usual) icons.set(id, iconOfValue(held));
-        else if (shown === "everyone") {
+        else if (some || shown === "everyone") {
             const own = iconOfValue(usual);
             icons.set(
                 id,

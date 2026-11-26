@@ -261,6 +261,17 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
     27: () => {},
     // Route sources, pathways step 3c: a new table only
     28: (db) => dropTables(db, ["timeline_route_sources"]),
+    // Exact paths (ADR 0018 step 3): the column goes, once the change-log and history triggers
+    // that name it are off the table (they are rebuilt on open)
+    29: (db) =>
+        db.exec(`
+            DROP TRIGGER IF EXISTS timeline_log_routes_ins;
+            DROP TRIGGER IF EXISTS timeline_log_routes_upd;
+            DROP TRIGGER IF EXISTS timeline_log_routes_del;
+            DROP TRIGGER IF EXISTS timeline_routes_ut;
+            DROP TRIGGER IF EXISTS timeline_routes_dt;
+            ALTER TABLE timeline_routes DROP COLUMN exact_path;
+        `),
 };
 
 /**

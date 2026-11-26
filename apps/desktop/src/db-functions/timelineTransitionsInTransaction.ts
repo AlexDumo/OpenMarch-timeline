@@ -26,6 +26,7 @@ import {
     deleteLanesFromSlotInTransaction,
     deleteLanesOfTransitionsInTransaction,
     lanesOfTransitions,
+    retimeExactPathsInTransaction,
     sweepOrphanRoutesInTransaction,
 } from "./timelineLanes";
 import { text } from "@/timeline/timelineText";
@@ -457,6 +458,9 @@ export const setTimelineRangeInTransaction = async ({
             await setTransitions(start, end);
             row = await setTimeline(start, end);
         }
+        // 4. EP-T: an exact path keeps its move's length in ticks (ADR 0018 §5, retime)
+        if (end - start !== e0 - s0)
+            await retimeExactPathsInTransaction(tx, ids);
         return row;
     });
 };

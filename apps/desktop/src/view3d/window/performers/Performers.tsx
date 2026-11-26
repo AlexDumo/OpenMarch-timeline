@@ -40,9 +40,10 @@ import { pickMarchers } from "../camera/inputMath";
 import { pickPerformerIndex } from "../camera/followMath";
 import { useFollowStore } from "../camera/followStore";
 import { performersMoved, setPerformerSource } from "../camera/performerTrack";
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { recheckUniformPack } from "@/hooks/queries/useUniformPack";
 import {
     heldAt,
     type CueHoldStyle,
@@ -67,8 +68,6 @@ import { marcherAppearancesQueryOptions } from "@/hooks/queries/useMarcherAppear
 import { allSectionAppearancesQueryOptions } from "@/hooks/queries/useSectionAppearances";
 import { useVenueSettings } from "@/hooks/queries/useVenueSettings";
 import { brassFinishOf, tubaModelOf } from "@/view3d/core/venueSettings";
-import { silkShapeOf } from "@/view3d/core/sizes/silkShapes";
-import { useSilkArtworkTexture } from "./marchers/useSilkArtworkTexture";
 import { cueSectionsOf } from "./cueSections";
 import {
     guardUniformPresetOf,
@@ -135,7 +134,14 @@ import {
     useMarcherAssets,
     useMarcherBodies,
 } from "./marchers/useMarcherBodies";
-import { clipsToLoad } from "./marchers/marcherBodies";
+import { useMarcherFlats } from "./marchers/useMarcherFlats";
+import { useFlatsWear } from "@/view3d/window/uniformPack/useFlatsWear";
+import { clipsToLoad, flatsBody } from "./marchers/marcherBodies";
+import {
+    flatsDpi,
+    type UniformPackValue,
+} from "@/view3d/core/marchers/uniformArtwork";
+import { useSettledFlatsWear } from "@/view3d/window/uniformPack/useSettledFlatsWear";
 import { hornRowsOf } from "./marchers/hornRows";
 import { sectionCueCarry } from "@/view3d/core/marchers/hornChannel";
 import { DEFAULT_HOLD, windowHornEvents } from "./windowHorn";
@@ -143,9 +149,13 @@ import type { Carry } from "@/view3d/core/instruments/catalog";
 import {
     heldHornEvents,
     slotEquipment,
+    type FlagOf,
     type SlotEquipment,
 } from "@/view3d/core/marchers/equipmentSpans";
 import { useStoredCues } from "./useStoredCues";
+import { useShowFlags } from "@/hooks/queries/useShowFlags";
+import { flagCueValues } from "@/showAssets/flags";
+import { useFlagArtworkAtlas } from "./marchers/flagArtworkAtlas";
 import { SilkMotion } from "./marchers/silkMotion";
 
 const CYLINDER_SEGMENTS = 20;
@@ -190,14 +200,34 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     // (ADR 0010 D-18)
     const { data: venue } = useVenueSettings();
     const uniformPreset = uniformPresetOf(venue?.uniforms);
+    // the band's flats uniform, a preview (docs/3d/uniform-artwork.md): a
+    // built-in, or the show's imported pack (fork #1257)
+    const wantedArtwork = useFlatsWear(
+        venue?.uniformArtwork,
+        venue?.uniformMode,
+    );
+    // the body types wearing flats now, as their atlases are keyed: a new
+    // wear (a mode switch, an edit) waits for its atlases on these, so its
+    // art and palette arrive together (fork #1257 step 5)
+    const [flatsBodies, setFlatsBodies] = useState("");
+    const uniformArtwork = useSettledFlatsWear(
+        wantedArtwork,
+        flatsBodies,
+        flatsDpi(quality),
+    );
+    // a saved pack whose art the worker refused to draw: this window reads it again with every
+    // image decoded, and if that's refused twice too, its settings and picker say it can't be
+    // read (the editor's Assets view decodes on its own read; nothing here reaches it)
+    const onUniformArtDamaged = useCallback(
+        (pack: UniformPackValue, error: unknown) => {
+            recheckUniformPack(queryClient, pack, error);
+        },
+        [queryClient],
+    );
     const guardUniformPreset = guardUniformPresetOf(venue?.guardUniforms);
     // the brass line's finish and the tubas' horn, from the same settings
     const brassFinish = brassFinishOf(venue?.brassFinish);
     const tuba = tubaModelOf(venue?.tuba);
-    // the guard's flag silks' shape (fork #973)
-    const silkShape = silkShapeOf(venue?.silkShape);
-    // and the Artwork they're painted with, once it's decoded
-    const silkArtwork = useSilkArtworkTexture(venue?.silkArtwork, silkShape);
     // om-pose marchers (ADR 0010 D-7); the cylinders stand in until they load.
     const { data: sectionAppearances } = useQuery(
         allSectionAppearancesQueryOptions(),
@@ -245,10 +275,9 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 {
                     finish: brassFinish,
                     tuba,
-                    silkShape,
-                    silkArtwork,
                     ...(carry !== undefined ? { carry } : {}),
                 },
+                uniformArtwork,
             );
         };
     }, [
@@ -257,8 +286,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         guardUniformPreset,
         brassFinish,
         tuba,
-        silkShape,
-        silkArtwork,
+        uniformArtwork,
     ]);
     const marcherLooks = useMemo<MarcherSlotLook[] | null>(() => {
         if (!looksKey || !uniformOf) return null;
@@ -357,6 +385,20 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     // up; the Show settings' step-off foot. `carries` decides each marcher's
     // Position default.
     const storedCues = useStoredCues();
+    // The show's flags (fork #985): Equipment values the cues hand out, each the 6 ft flag painted
+    // with its own design, its tile in the flags' texture
+    const flags = useShowFlags();
+    useFlagArtworkAtlas(flags);
+    const flagValues = useMemo(() => flagCueValues(flags), [flags]);
+    const flagOf = useMemo<FlagOf>(() => {
+        const byValue = new Map(
+            flags.map((flag, tile) => [
+                flag.value,
+                { shape: flag.shape, artwork: tile },
+            ]),
+        );
+        return (value: string) => byValue.get(value);
+    }, [flags]);
     const cues = useMemo(() => {
         if (!marchers || !carriesKey || !cueSectionsKey || !storedCues)
             return null;
@@ -373,6 +415,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             holdWhileBandMoves,
             holdStyles: JSON.parse(holdStylesKey) as CueHoldStyle[],
             carries: (id) => carries.get(id) ?? "none",
+            values: flagValues,
         });
     }, [
         marchers,
@@ -380,6 +423,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         carriesKey,
         cueSectionsKey,
         storedCues,
+        flagValues,
         bandMovingKey,
         stepOffFoot,
         holdWhileBandMoves,
@@ -396,10 +440,11 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                     cues.compiled.segments(id, "equipment"),
                     (c) => heldAt(cues.compiled, id, c),
                     marcherLooks[i]?.uniform.options.carry ?? null,
+                    flagOf,
                 ),
             ),
         );
-    }, [marcherLooks, cues, slots.ids]);
+    }, [marcherLooks, cues, slots.ids, flagOf]);
     const equipment = useMemo(
         () =>
             equipmentKey
@@ -522,6 +567,18 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             if (h) for (const r of hornRowsOf(h.events, h.family)) out.add(r);
         return [...out];
     }, [hornSlots]);
+    const marcherFlats = useMarcherFlats(
+        marcherLooks,
+        quality,
+        onUniformArtDamaged,
+    );
+    useEffect(() => {
+        const bodies = new Set<string>();
+        for (const look of marcherLooks ?? [])
+            if (look.uniform.options.artwork)
+                bodies.add(flatsBody(look.body.bodyType, quality));
+        setFlatsBodies([...bodies].sort().join(","));
+    }, [marcherLooks, quality]);
     const marcherBodies = useMarcherBodies(
         marcherAssets,
         clipNames,
@@ -530,6 +587,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         "left",
         bakeRows,
         hornRows,
+        marcherFlats,
     );
     // Meshes, bakes and plans land outside React's props: draw them.
     useEffect(() => requestDraw(1000));
@@ -792,6 +850,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         selected: new Set<number>(),
         /** The slot left out for the camera's point of view, or -1. */
         hidden: -1,
+        /** The marcher bodies the last frame posed */
+        bodies: null as typeof marcherBodies,
     });
     // The camera for instrument detail, and where it was when last applied.
     const cameraRef = useRef<[number, number, number]>([0, 0, 0]);
@@ -834,7 +894,12 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         const closed =
             !sync.clock?.playing &&
             useView3dSceneStore.getState().pausedPose === "closed";
+        // new bodies (a look changed) have no poses yet: write them before their first draw,
+        // or the marchers vanish until an effect marks the frame dirty (fork #1287)
+        const freshBodies = marcherBodies !== frame.bodies;
+        frame.bodies = marcherBodies;
         const moved =
+            freshBodies ||
             dirtyRef.current ||
             hiddenChanged ||
             ms !== frame.lastMs ||

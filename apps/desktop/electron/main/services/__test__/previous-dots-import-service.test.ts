@@ -229,6 +229,32 @@ describeDbTests("readPreviousDotsFile on unusual sources", (it) => {
         });
     });
 
+    it("reads a timeline source from before migration 0029 (no exact paths)", async ({
+        db,
+        marchersAndPages: _,
+        task,
+    }) => {
+        await convertPagesToTimeline(db);
+        const page = await lastPage(db);
+        const resolver = await acquireExportResolver(db);
+        await withSourceCopy(task, async (copy) => {
+            editFile(copy, (raw) => {
+                dropTriggers(raw);
+                raw.exec("ALTER TABLE timeline_routes DROP COLUMN exact_path");
+            });
+
+            const { coordinates } = await readPreviousDotsFile(copy);
+
+            const imported = await byMarcherId(db, coordinates);
+            expect(imported.size).toBe(resolver.marcherIds().length);
+            for (const id of resolver.marcherIds()) {
+                const [x, y] = resolver.positionAt(id, pageEndBeat(page));
+                expect(imported.get(id)!.x).toBeCloseTo(x, 9);
+                expect(imported.get(id)!.y).toBeCloseTo(y, 9);
+            }
+        });
+    });
+
     it("returns only the marcher fields the import uses", async ({
         db: _db,
         marchersAndPages: _,

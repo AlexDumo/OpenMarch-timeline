@@ -145,6 +145,27 @@
                     "separator": true
                 },
                 {
+                    "label": "Show on field"
+                },
+                {
+                    "label": "Drill numbers"
+                },
+                {
+                    "label": "Equipment icons"
+                },
+                {
+                    "label": "Facing"
+                },
+                {
+                    "label": "Shape outlines"
+                },
+                {
+                    "label": "Venue"
+                },
+                {
+                    "separator": true
+                },
+                {
                     "label": "Show or Hide Moves Lane"
                 },
                 {
@@ -393,6 +414,27 @@
             "items": [
                 {
                     "label": "Open 3D View"
+                },
+                {
+                    "separator": true
+                },
+                {
+                    "label": "Show on field"
+                },
+                {
+                    "label": "Drill numbers"
+                },
+                {
+                    "label": "Equipment icons"
+                },
+                {
+                    "label": "Facing"
+                },
+                {
+                    "label": "Shape outlines"
+                },
+                {
+                    "label": "Venue"
                 },
                 {
                     "separator": true

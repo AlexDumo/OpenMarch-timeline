@@ -38,6 +38,19 @@ it.
 - On macOS the shortcut is part of the label rather than right-aligned, so it doesn't look native.
 - Actions that only apply in timeline mode do nothing from the menu in page mode, as their keys do.
 
+## Amendment: ticked items (2026-11-25, fork #1332)
+
+The View menu's **Show on field** group (Drill numbers, Equipment icons, Facing, Shape outlines,
+Venue) are ticked items. The main process can't read the renderer's settings, so:
+
+- **A second channel, `menu:checked`** (renderer to main), carries `{ [action]: boolean }` for
+  those items (`SHOW_ON_FIELD_MENU_ACTIONS`). Main keeps only those actions, as booleans
+  (`parseMenuChecked`), and rebuilds the menu when one changes. The preload exposes
+  `setMenuChecked(checked)`.
+- The renderer sends the actions' own checked state (`useActionHandler`'s `checked`), so the
+  tick, the panel's switch and the palette's Show/Hide name always agree.
+- Clicking an item still sends `menu:action`; the tick changes when the renderer reports back.
+
 ## Verification
 
 - `apps/desktop/src/components/timeline/__test__/transportShortcuts.test.ts`: every menu action

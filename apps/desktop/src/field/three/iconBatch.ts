@@ -22,7 +22,7 @@ import {
     SabreIcon,
     SECTION_ICONS,
 } from "@/components/marcher/sectionIcons/SectionIcon";
-import type { EquipmentIconKey } from "@/cues/equipmentIcons";
+import { isPictureIcon, type EquipmentIconKey } from "@/cues/equipmentIcons";
 
 /** Each icon's cell in the atlas, in pixels: drawn small on the field, so mipmapped down. */
 const CELL = 128;
@@ -155,11 +155,14 @@ attribute vec4 aRect;  // left, top, width, height in field units from the ancho
 attribute vec4 aUv;    // u0, v0, u1, v1
 attribute vec4 aColor;
 attribute float aScaled; // 1 for an icon in place of a dot: it grows as dots do when zoomed out
+attribute float aPicture; // 1 for a picture in its own colors (a show's flag), 0 for a tinted icon
 uniform vec2 uOffset;
 uniform float uDotScale;
 varying vec2 vUv;
 varying vec4 vColor;
+varying float vPicture;
 void main() {
+    vPicture = aPicture;
     vec2 local = (aRect.xy + position.xy * aRect.zw) * mix(1.0, uDotScale, aScaled);
     // y runs down on the field and up in the texture
     vUv = vec2(mix(aUv.x, aUv.z, position.x), mix(aUv.w, aUv.y, position.y));
@@ -169,10 +172,19 @@ void main() {
 
 const FRAGMENT = /* glsl */ `
 uniform sampler2D uAtlas;
+uniform sampler2D uPictures;
 uniform float uOpacity;
 varying vec2 vUv;
 varying vec4 vColor;
+varying float vPicture;
 void main() {
+    if (vPicture > 0.5) {
+        vec4 p = texture2D(uPictures, vUv);
+        float pa = p.a * vColor.a * uOpacity;
+        if (pa < 0.01) discard;
+        gl_FragColor = vec4(p.rgb, pa);
+        return;
+    }
     float a = texture2D(uAtlas, vUv).a * vColor.a * uOpacity;
     if (a < 0.01) discard;
     gl_FragColor = vec4(vColor.rgb, a);
@@ -195,6 +207,83 @@ export interface FieldIcon {
 }
 
 /**
+ * The show's flags' pictures (fork #985) in one texture, by the Equipment value that hands each
+ * out: the 2D field draws a performer holding one of the show's flags with its picture, in its own
+ * colors, where the catalog's items get a tinted icon.
+ */
+export interface PictureAtlas {
+    readonly texture: CanvasTexture;
+    /** Each picture's `[u0, v0, u1, v1]` in the texture, by value */
+    readonly uv: ReadonlyMap<string, readonly number[]>;
+}
+
+/** A picture to put in the atlas: its value and its PNG bytes */
+export interface AtlasPicture {
+    readonly value: string;
+    readonly png: Uint8Array;
+}
+
+/**
+ * Draws `pictures` into one mipmapped texture, a cell each. A picture that doesn't decode is left
+ * out: its performers get the tinted Flag icon.
+ */
+export async function drawPictureAtlas(
+    pictures: readonly AtlasPicture[],
+): Promise<PictureAtlas | null> {
+    if (pictures.length === 0) return null;
+    const columns = Math.ceil(Math.sqrt(pictures.length));
+    const rows = Math.ceil(pictures.length / columns);
+    const canvas = document.createElement("canvas");
+    canvas.width = columns * CELL;
+    canvas.height = rows * CELL;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("No 2D canvas for the flag pictures");
+    const uv = new Map<string, readonly number[]>();
+    await Promise.all(
+        pictures.map(async ({ value, png }, i) => {
+            let bitmap: ImageBitmap;
+            try {
+                bitmap = await createImageBitmap(
+                    new Blob([png as Uint8Array<ArrayBuffer>], {
+                        type: "image/png",
+                    }),
+                );
+            } catch (error) {
+                console.warn("A flag's picture didn't decode", error);
+                return;
+            }
+            const x = (i % columns) * CELL;
+            const y = Math.floor(i / columns) * CELL;
+            context.drawImage(
+                bitmap,
+                x + PAD,
+                y + PAD,
+                CELL - PAD * 2,
+                CELL - PAD * 2,
+            );
+            bitmap.close();
+            uv.set(value, [
+                x / canvas.width,
+                1 - (y + CELL) / canvas.height,
+                (x + CELL) / canvas.width,
+                1 - y / canvas.height,
+            ]);
+        }),
+    );
+    const texture = new CanvasTexture(canvas);
+    texture.generateMipmaps = true;
+    texture.minFilter = LinearMipmapLinearFilter;
+    texture.magFilter = LinearFilter;
+    texture.anisotropy = 4;
+    return { texture, uv };
+}
+
+let blank: CanvasTexture | null = null;
+/** An empty texture for a batch without pictures, made the first time one is needed */
+const blankPictures = () =>
+    (blank ??= new CanvasTexture(document.createElement("canvas")));
+
+/**
  * Many icons in one draw call, each an instance anchored at its marcher, so moving marchers
  * rewrites one vec2 per icon ({@link setAnchors}) and allocates nothing.
  */
@@ -203,6 +292,7 @@ export class IconBatch {
     private anchors = new Float32Array(0);
     private anchorAttr: InstancedBufferAttribute | null = null;
     private owner = new Int32Array(0);
+    private pictures: PictureAtlas | null = null;
 
     constructor(private readonly atlas: IconAtlas) {
         const geometry = new InstancedBufferGeometry();
@@ -222,6 +312,7 @@ export class IconBatch {
                 fragmentShader: FRAGMENT,
                 uniforms: {
                     uAtlas: { value: atlas.texture },
+                    uPictures: { value: blankPictures() },
                     uOpacity: { value: 1 },
                     uOffset: { value: [0, 0] },
                     uDotScale: { value: 1 },
@@ -235,6 +326,16 @@ export class IconBatch {
         this.mesh.frustumCulled = false;
     }
 
+    /**
+     * The show's flags' pictures, for icons that name a flag by its value; lay the icons out
+     * again after ({@link setIcons}). The batch doesn't own them: whoever drew them disposes them.
+     */
+    setPictures(pictures: PictureAtlas | null) {
+        this.pictures = pictures;
+        this.mesh.material.uniforms.uPictures.value =
+            pictures?.texture ?? blankPictures();
+    }
+
     /** Lays out `icons`. Their anchors are all (0, 0) until {@link setAnchors}. */
     setIcons(icons: readonly FieldIcon[]) {
         this.mesh.geometry.dispose();
@@ -243,6 +344,7 @@ export class IconBatch {
         const uv = new Float32Array(count * 4);
         const color = new Float32Array(count * 4);
         const scaled = new Float32Array(count);
+        const picture = new Float32Array(count);
         this.owner = new Int32Array(count);
         this.anchors = new Float32Array(count * 2);
         icons.forEach((icon, i) => {
@@ -255,8 +357,16 @@ export class IconBatch {
                 ],
                 i * 4,
             );
+            // One of the show's flags: its picture, or the Flag icon until it's drawn
+            const pictureUv = isPictureIcon(icon.icon)
+                ? this.pictures?.uv.get(icon.icon)
+                : undefined;
+            if (pictureUv) picture[i] = 1;
             uv.set(
-                this.atlas.uv.get(icon.icon) ??
+                pictureUv ??
+                    this.atlas.uv.get(
+                        isPictureIcon(icon.icon) ? "Flag" : icon.icon,
+                    ) ??
                     this.atlas.uv.get("Other") ?? [0, 0, 0, 0],
                 i * 4,
             );
@@ -271,6 +381,10 @@ export class IconBatch {
         geometry.setAttribute(
             "aScaled",
             new InstancedBufferAttribute(scaled, 1),
+        );
+        geometry.setAttribute(
+            "aPicture",
+            new InstancedBufferAttribute(picture, 1),
         );
         this.anchorAttr = new InstancedBufferAttribute(this.anchors, 2);
         this.anchorAttr.setUsage(DynamicDrawUsage);

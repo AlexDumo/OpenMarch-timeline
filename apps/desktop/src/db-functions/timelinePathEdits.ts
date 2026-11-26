@@ -40,6 +40,7 @@ import {
 import { isGroupLane, laneOffset, lanesOfRoute } from "./timelineLanes";
 import {
     lastLegBulge,
+    writeExactPathInTransaction,
     writeRouteGeometryInTransaction,
     type RehomeReport,
 } from "./timelineRouteGeometry";
@@ -251,8 +252,12 @@ export async function redrawPathInTransaction({
     const fresh = points.map(({ at, tension }) =>
         tension === undefined ? { at } : { at, tension },
     );
-    if (!(await isGroupRoute(tx, routeId)))
+    if (!(await isGroupRoute(tx, routeId))) {
+        // Drawing an exact path again replaces it with a drawn one (ADR 0018 §5); its stored
+        // geometry is only its ends, from which the new points are drawn
+        await writeExactPathInTransaction(tx, routeId, null);
         return await editOwnRoutePointsInTransaction(tx, routeId, fresh);
+    }
     const resolver = createResolver((await readTimelineTables(tx)).snapshot);
     const seenLanes = new Set<number>();
     const founders: { w: Walker; A: XY; B: XY }[] = [];

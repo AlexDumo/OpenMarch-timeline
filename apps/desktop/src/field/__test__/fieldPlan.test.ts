@@ -101,6 +101,42 @@ describe("planField2d", () => {
         );
         expect(roles(false, false)).toEqual(new Set(["yardLine", "hash"]));
     });
+
+    it("leaves out what the venue paints, and keeps the step grid, half lines and labels", () => {
+        const plan = planField2d(base, {
+            gridLines: true,
+            halfLines: true,
+            painted: {
+                kinds: new Set(["yardLine", "yardNumber", "border"] as const),
+                hashRows: new Set(
+                    base.yCheckpoints.map((c) => c.stepsFromCenterFront),
+                ),
+            },
+        });
+        expect(new Set(plan.lines.map((l) => l.role))).toEqual(
+            new Set(["grid", "halfLine"]),
+        );
+        expect(plan.shapes).toEqual([]);
+        expect(plan.texts.filter((t) => t.role === "yardNumber")).toEqual([]);
+        expect(plan.texts.some((t) => t.role === "checkpointLabel")).toBe(true);
+        expect(plan.border).toBeNull();
+    });
+
+    it("keeps the hashes the venue doesn't paint", () => {
+        const [painted, ...kept] = base.yCheckpoints.filter((c) => c.visible);
+        const plan = planField2d(base, {
+            gridLines: false,
+            halfLines: false,
+            painted: {
+                kinds: new Set(),
+                hashRows: new Set([painted.stepsFromCenterFront]),
+            },
+        });
+        const hashYs = new Set(
+            plan.lines.filter((l) => l.role === "hash").map((l) => l.y1),
+        );
+        expect(hashYs.size).toBe(kept.length);
+    });
 });
 
 describe("planField2d yard numbers", () => {

@@ -31,6 +31,8 @@ import {
     type ClipboardView,
 } from "./ClipboardCard";
 import type { PictureFit } from "./picture";
+import { useOpenPasteMode } from "./pasteModeStore";
+import { PasteModeSwitch } from "./PasteModeSwitch";
 import {
     announceClipboard,
     useClipboardAnnouncementStore,
@@ -56,7 +58,8 @@ const REST_AFTER = 5000;
  * - A copy says "Copied" on the chip's second line for a moment, with an accent ring: no toast.
  * - A live region, always there, has screen readers say each copy, clear and paste preview.
  * - A paste preview opening folds the card and takes the focus off it, so Enter places the
- *   paste and Escape discards it instead of reaching a button.
+ *   paste and Escape discards it instead of reaching a button. While it's open the chip shows
+ *   which way it pastes (`PasteModeSwitch`), a press switching it (owner 2026-11-25).
  * - A drag on the field near it fades it and lets the pointer through, so it never blocks a
  *   marquee or a marcher at the field's front edge.
  * - In the touch layout it's a `control` layer: the pill and the shape editor bar keep off it.
@@ -118,6 +121,8 @@ function ChipOrCard({
     const faded = useFadeWhileDraggingNear(box);
     const touch = useIsTouchMode();
     const pasteReason = useActionReason("pasteFormation");
+    // An open paste: the chip shows which way it pastes, to switch it (owner 2026-11-25)
+    const pasteMode = useOpenPasteMode();
 
     // A new copy shows the whole chip
     useEffect(() => {
@@ -182,7 +187,14 @@ function ChipOrCard({
         wakeFocus.current = false;
     }, [rested]);
 
-    const status = chipStatus(t, view.fit, pasteReason, copiedNow, shapeShown);
+    const status = chipStatus(
+        t,
+        view.fit,
+        pasteReason,
+        copiedNow,
+        shapeShown,
+        pasteMode !== null,
+    );
     const countText = t("shapes.clipboard.marchers", {
         count: view.summary.count,
     });
@@ -331,9 +343,12 @@ function ChipOrCard({
                             aria-hidden
                         />
                     </button>
+                    {/* While a paste is open: which way it pastes, Paste | Paste exactly |
+                        Paste mirrored, a press switching it (owner 2026-11-25) */}
+                    {pasteMode && <PasteModeSwitch mode={pasteMode} />}
                     {/* Touch only (owner 2026-11-22): desktop pastes with Ctrl/Cmd+V or the
                         right-click menu; a tablet has no key, and this is its one-tap paste */}
-                    {touch && (
+                    {touch && !pasteMode && (
                         <ActionButton
                             action="pasteFormation"
                             data-testid="clipboard-chip-paste"
@@ -386,6 +401,8 @@ function chipStatus(
     copiedNow: boolean,
     /** A shape is open (a paste being placed, or a shape being drawn) */
     shapeOpen: boolean,
+    /** The open shape is a paste */
+    pasting = false,
 ): ChipStatus {
     if (copiedNow)
         return {
@@ -398,7 +415,9 @@ function chipStatus(
         return {
             kind: "shapeOpen",
             tone: "plain",
-            text: t("shapes.clipboard.chipShapeOpen"),
+            text: pasting
+                ? t("shapes.clipboard.chipPasting")
+                : t("shapes.clipboard.chipShapeOpen"),
         };
     if (pasteReason)
         return { kind: "reason", tone: "plain", text: pasteReason };

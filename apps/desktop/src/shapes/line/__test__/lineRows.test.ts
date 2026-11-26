@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lineTool, lineToolBase } from "../lineTool";
+import { curveTool, lineTool, lineToolBase } from "../lineTool";
 import { arcTool } from "../../arc/arcTool";
 import { isLineParams, type LineParams } from "../lineGeometry";
 import { boxesAt, type PlacedRecipe } from "../../placed/placedBox";
@@ -7,6 +7,7 @@ import { placementOf } from "../../tool/shapePlacement";
 import type { ToolEnv } from "../../tool/toolKind";
 import {
     edit,
+    finishPoints,
     openTool,
     pointerMove,
     press,
@@ -387,9 +388,10 @@ describe("rows stored", () => {
 });
 
 describe("rows of an arc", () => {
-    it("repeat the arc's spots across its chord", () => {
+    it("repeat the arc's spots across its chord when the whole arc slides", () => {
         let t = drawn(6, { x: 100, y: 200 }, { x: 180, y: 200 }, arcTool);
         t = edit(t, arcTool.rows!.add(t.params, 6, "far", env), ctx);
+        t = edit(t, arcTool.rows!.go.pick(t.params, 6, "slide", env), ctx);
         expect(slotsOf(t, ctx)).toHaveLength(6);
         const { rows: _rows, ...plain } = paramsOf(t);
         const own = arcTool.shape
@@ -536,5 +538,221 @@ describe("rows kept through other edits", () => {
                 env,
             ),
         ).toBe(false);
+    });
+});
+
+describe("which way rows go (#1193)", () => {
+    const pick = (t: ToolState, value: string, kind = lineTool) =>
+        edit(t, kind.rows!.go.pick(t.params, t.spots, value, env), ctx);
+    /** Every row's spots, by row index, along it */
+    const byRow = (t: ToolState, kind = lineTool) => {
+        const out = new Map<number, XY[]>();
+        for (const s of kind.shape.generate(t.params, t.spots, ctx)) {
+            const row = out.get(s.row!) ?? [];
+            row[s.col!] = { x: s.x, y: s.y };
+            out.set(s.row!, row);
+        }
+        return out;
+    };
+    const values = (t: ToolState, kind = lineTool) =>
+        kind.rows!.go.options(t.params, t.spots).map((o) => o.value);
+
+    it("slide the line by default, a straight line offering out from it, front to back and side to side", () => {
+        const t = added(across(16), "far");
+        expect(rows.go.current(t.params, 16)).toBe("slide");
+        expect(values(t)).toEqual(["slide", "back", "side"]);
+        expect(
+            rows.go.options(t.params, 16).every((o) => o.picture && o.detail),
+        ).toBe(true);
+        expect(paramsOf(t).rows!.go).toBeUndefined();
+    });
+
+    it("step straight back on the grid from a slanted line, named behind and in front", () => {
+        let t = added(drawn(16, { x: 100, y: 200 }, { x: 160, y: 140 }), "far");
+        t = pick(t, "back");
+        expect(paramsOf(t).rows!.go).toBe("back");
+        const rowsNow = byRow(t);
+        const drawnRow = rowsNow.get(paramsOf(t).rows!.drawn)!;
+        const other = [...rowsNow].find(
+            ([i]) => i !== paramsOf(t).rows!.drawn,
+        )![1];
+        expect(other).toHaveLength(drawnRow.length);
+        other.forEach((s, j) => {
+            expect(s.x).toBeCloseTo(drawnRow[j]!.x, 6);
+            expect(s.y).toBeCloseTo(drawnRow[j]!.y - 2 * STEP, 6);
+        });
+        expect(rows.view(t.params, 16)!.words).toBe("across");
+        const gap = rows.gap(t.params, 16, STEP)!;
+        expect(gap.corner.x - gap.from.x).toBeCloseTo(0, 6);
+        expect(Math.abs(gap.corner.y - gap.from.y)).toBeCloseTo(2 * STEP, 6);
+    });
+
+    it("step straight across the grid from a steep line, named left and right", () => {
+        let t = added(drawn(16, { x: 100, y: 200 }, { x: 110, y: 120 }), "far");
+        t = pick(t, "side");
+        const rowsNow = byRow(t);
+        const d = paramsOf(t).rows!.drawn;
+        const drawnRow = rowsNow.get(d)!;
+        const other = [...rowsNow].find(([i]) => i !== d)![1];
+        other.forEach((s, j) => {
+            expect(Math.abs(s.x - drawnRow[j]!.x)).toBeCloseTo(2 * STEP, 6);
+            expect(s.y).toBeCloseTo(drawnRow[j]!.y, 6);
+        });
+        expect(rows.view(t.params, 16)!.words).toBe("upDown");
+    });
+
+    it("make an arc's rows rings round its center, each file along a radius", () => {
+        let t = drawn(12, { x: 100, y: 200 }, { x: 200, y: 200 }, arcTool);
+        t = edit(t, arcTool.rows!.add(t.params, 12, "far", env), ctx);
+        expect(values(t, arcTool)).toEqual(["follow", "slide", "back", "side"]);
+        t = pick(t, "follow", arcTool);
+        const d = paramsOf(t).rows!.drawn;
+        const rowsNow = byRow(t, arcTool);
+        const drawnRow = rowsNow.get(d)!;
+        const other = [...rowsNow].find(([i]) => i !== d)![1];
+        // The circle through three of the drawn row's spots
+        const [a, b, c] = [
+            drawnRow[0]!,
+            drawnRow[2]!,
+            drawnRow[drawnRow.length - 1]!,
+        ];
+        const dd =
+            2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+        const sq = (p: XY) => p.x * p.x + p.y * p.y;
+        const center = {
+            x:
+                (sq(a) * (b.y - c.y) +
+                    sq(b) * (c.y - a.y) +
+                    sq(c) * (a.y - b.y)) /
+                dd,
+            y:
+                (sq(a) * (c.x - b.x) +
+                    sq(b) * (a.x - c.x) +
+                    sq(c) * (b.x - a.x)) /
+                dd,
+        };
+        const radius = Math.hypot(a.x - center.x, a.y - center.y);
+        const dist = (p: XY) => Math.hypot(p.x - center.x, p.y - center.y);
+        for (const s of drawnRow) expect(dist(s)).toBeCloseTo(radius, 3);
+        const ring = dist(other[0]!);
+        expect(Math.abs(ring - radius)).toBeCloseTo(2 * STEP, 1);
+        for (const s of other) expect(dist(s)).toBeCloseTo(ring, 1);
+        // Same counts: each marcher straight out from the one on the drawn arc
+        if (other.length === drawnRow.length)
+            other.forEach((s, j) => {
+                const p = drawnRow[j]!;
+                const cross =
+                    (p.x - center.x) * (s.y - center.y) -
+                    (p.y - center.y) * (s.x - center.x);
+                expect(cross / (radius * ring)).toBeCloseTo(0, 2);
+            });
+        expect(arcTool.rows!.go.options(t.params, 12)[0]!.label).toBe("Rings");
+        // Drawn along the ring between its spots too, never cutting across it
+        const drawnLines = arcTool.shape.outline(t.params, 12, ctx);
+        const ringLine = drawnLines[drawnLines.length - 1]!;
+        expect(ringLine.length).toBeGreaterThan(other.length);
+        for (const q of ringLine) expect(dist(q)).toBeCloseTo(ring, 0);
+    });
+
+    it("start in rings on a new arc, rows an arc already had still sliding", () => {
+        let t = drawn(12, { x: 100, y: 200 }, { x: 200, y: 200 }, arcTool);
+        expect(arcTool.rows!.go.current(t.params, 12)).toBe("follow");
+        t = edit(t, arcTool.rows!.add(t.params, 12, "far", env), ctx);
+        expect(paramsOf(t).rows!.go).toBe("follow");
+        expect(arcTool.rows!.go.current(t.params, 12)).toBe("follow");
+        // Made before rows could go any other way: no way stored, so they slide as they did
+        const { go: _go, ...older } = paramsOf(t).rows!;
+        const before = { ...paramsOf(t), rows: older };
+        expect(arcTool.rows!.go.current(before, 12)).toBe("slide");
+        // A straight line's first rows still go out from it, nothing stored
+        expect(paramsOf(added(across(16), "far")).rows!.go).toBeUndefined();
+    });
+
+    it("follow a new curve's bends, each marcher stepping square to the curve", () => {
+        let c = openTool(curveTool, marchers(14));
+        for (const at of [
+            { x: 100, y: 200 },
+            { x: 150, y: 140 },
+            { x: 200, y: 200 },
+        ]) {
+            c = pointerMove(c, at, env);
+            c = press(c, at, env);
+            c = release(c, ctx, { double: false });
+        }
+        c = finishPoints(c, ctx);
+        c = edit(c, curveTool.rows!.add(c.params, 14, "far", env), ctx);
+        expect(paramsOf(c).rows!.go).toBe("follow");
+        expect(curveTool.rows!.go.options(c.params, 14)[0]!.label).toBe(
+            "Follow the bends",
+        );
+        const d = paramsOf(c).rows!.drawn;
+        const rowsNow = byRow(c, curveTool);
+        const drawnRow = rowsNow.get(d)!;
+        const other = [...rowsNow].find(([i]) => i !== d)![1];
+        expect(other).toHaveLength(drawnRow.length);
+        const steps = other.map((s, j) => ({
+            x: s.x - drawnRow[j]!.x,
+            y: s.y - drawnRow[j]!.y,
+        }));
+        for (const v of steps)
+            expect(Math.hypot(v.x, v.y)).toBeCloseTo(2 * STEP, 6);
+        // Out from the hump: up and left at one end, up and right at the other
+        const [first, last] = [steps[0]!, steps[steps.length - 1]!];
+        expect(Math.sign(first.x)).toBe(-Math.sign(last.x));
+        expect(first.y).toBeLessThan(0);
+        expect(last.y).toBeLessThan(0);
+        // Sliding the whole curve instead: every marcher the same step
+        const slid = pick(c, "slide", curveTool);
+        const slidRows = byRow(slid, curveTool);
+        const sd = paramsOf(slid).rows!.drawn;
+        const sOther = [...slidRows].find(([i]) => i !== sd)![1];
+        const sDrawn = slidRows.get(sd)!;
+        const v0 = {
+            x: sOther[0]!.x - sDrawn[0]!.x,
+            y: sOther[0]!.y - sDrawn[0]!.y,
+        };
+        sOther.forEach((s, j) => {
+            expect(s.x - sDrawn[j]!.x).toBeCloseTo(v0.x, 6);
+            expect(s.y - sDrawn[j]!.y).toBeCloseTo(v0.y, 6);
+        });
+    });
+
+    it("stay behind on the field going front to back when the line is flipped across", () => {
+        let t = added(drawn(16, { x: 100, y: 200 }, { x: 160, y: 140 }), "far");
+        t = pick(t, "back");
+        const behindOf = (s: ToolState) => {
+            const r = byRow(s);
+            const d = paramsOf(s).rows!.drawn;
+            const drawnRow = r.get(d)!;
+            const other = [...r].find(([i]) => i !== d)![1];
+            return other[0]!.y - drawnRow[0]!.y;
+        };
+        expect(behindOf(t)).toBeCloseTo(-2 * STEP, 6);
+        const f = edit(
+            t,
+            flipShape(
+                lineTool,
+                t.params,
+                t.spots,
+                "across",
+                pivotOf(t.params),
+                env,
+            ),
+            ctx,
+        );
+        expect(paramsOf(f).rows!.go).toBe("back");
+        expect(behindOf(f)).toBeCloseTo(-2 * STEP, 6);
+        expect(names(f)).toEqual(names(t));
+    });
+
+    it("are stored, and only as ways this build knows", () => {
+        const t = pick(added(across(16), "far"), "back");
+        const p = paramsOf(t);
+        expect(isLineParams(p)).toBe(true);
+        expect(
+            isLineParams({ ...p, rows: { ...p.rows, go: "diagonal" } }),
+        ).toBe(false);
+        // Back to sliding takes the field off
+        expect(paramsOf(pick(t, "slide")).rows!.go).toBeUndefined();
     });
 });

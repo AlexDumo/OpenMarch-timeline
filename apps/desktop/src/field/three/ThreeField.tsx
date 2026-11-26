@@ -9,6 +9,7 @@ import {
     type RefObject,
 } from "react";
 import clsx from "clsx";
+import type { PointerKind } from "@/field/editor/pointerThresholds";
 import { useFieldTopInset } from "@/components/canvas/fieldLayers";
 import { useShallow } from "zustand/react/shallow";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
@@ -98,7 +99,11 @@ import {
 import { PIXELS_PER_METER } from "@/items/itemOutlines";
 import { PIT_MANIFEST, pitModelName } from "@/view3d/core/pit/pitModels";
 import { isMacPlatform } from "@/shortcuts/platform";
-import { planFieldImage } from "@/field/fieldPlan";
+import {
+    NOTHING_PAINTED,
+    planFieldImage,
+    type PaintedMarkings,
+} from "@/field/fieldPlan";
 import { dropMarchersOnTimeline } from "@/field/fieldDrop";
 import {
     fieldViewSize,
@@ -154,7 +159,11 @@ import { shownKit } from "@/view3d/core/venueSettings";
 import MarchersLayer from "./layers/MarchersLayer";
 import ItemsLayer from "./layers/ItemsLayer";
 import LabelsLayer, { type LabelStyle } from "./layers/LabelsLayer";
+import FacingCaretsLayer from "./layers/FacingCaretsLayer";
 import { useEquipmentIcons } from "@/cues/useEquipmentIcons";
+import { useFieldFacing } from "@/cues/useFieldFacing";
+import { useShowCues } from "@/cues/useShowCues";
+import { useFlagPictures } from "./useFlagPictures";
 import OverlayLayer from "./layers/OverlayLayer";
 import StartFlagLayers from "./StartFlagLayers";
 import { ModeMarchers } from "./ModeMarchers";
@@ -283,6 +292,10 @@ function ThreeFieldView() {
         : KIT_FIELD_STYLE[venueKit];
     const venue3d = venueLook(fieldVenue, venueStyle);
     useFieldVenueAction(venueStyle);
+    // What the venue paints in Full color (its yard lines, hashes and numbers on turf): the grid
+    // leaves those out, so the field's own markings show once
+    const [venuePainted, setVenuePainted] =
+        useState<PaintedMarkings>(NOTHING_PAINTED);
     // Full color draws the grid in light ink over the dark turf
     const lineFieldProperties = useMemo(
         () =>
@@ -344,17 +357,25 @@ function ThreeFieldView() {
     const startOver = useCallback(() => setCanvasKey((key) => key + 1), []);
 
     const marchers = useMemo(() => new FieldMarchers(), []);
-    // The View tab's label form: full drill numbers ("OT12"), or the number only ("12")
+    // Show on field's Drill numbers: full drill numbers ("OT12"), the number only ("12"), or off;
+    // Settings › Field's size (Auto shrinks them where crowded) and position
     const { labelForm, labelSize, labelPosition } = useUiSettingsStore(
         useShallow((s) => ({
-            labelForm: s.uiSettings.marcherLabels ?? "auto",
-            labelSize: s.uiSettings.marcherLabelSize ?? "normal",
+            labelForm: s.uiSettings.marcherLabels ?? "names",
+            labelSize: s.uiSettings.marcherLabelSize ?? "auto",
             labelPosition: s.uiSettings.marcherLabelPosition ?? "above",
         })),
     );
     const numbersOnly = labelForm === "numbers";
+    // The show's cues, compiled once for the equipment icons and the facing carets
+    const showCues = useShowCues();
     // What a performer holds, by their drill number, when it isn't their section's usual (#992)
-    const equipmentIcons = useEquipmentIcons();
+    const equipmentIcons = useEquipmentIcons(showCues);
+    const flagPictures = useFlagPictures(equipmentIcons !== null);
+    // Which way each performer faces at the playhead, as a caret in front of their dot (#1316)
+    const facing = useFieldFacing(showCues);
+    // Where the labels layer anchors each label as drawn, for the field test API
+    const labelAnchors = useRef<Float64Array | null>(null);
     const equipmentIconPlace = useUiSettingsStore(
         (s) => s.uiSettings.equipmentIconPlace ?? "beside",
     );
@@ -379,10 +400,10 @@ function ThreeFieldView() {
     const labelStyle = useMemo(
         (): LabelStyle => ({
             form:
-                labelForm === "auto"
-                    ? "auto"
-                    : labelForm === "off"
-                      ? "off"
+                labelForm === "off"
+                    ? "off"
+                    : labelSize === "auto"
+                      ? "auto"
                       : "fixed",
             scale: LABEL_SIZE_SCALE[labelSize],
             beside: labelPosition === "beside",
@@ -492,6 +513,7 @@ function ThreeFieldView() {
         theme: fieldProperties?.theme,
         fieldProperties,
         equipmentIcons,
+        facing,
     });
     latest.current = {
         saveItem,
@@ -505,6 +527,7 @@ function ThreeFieldView() {
         moveMarchers,
         fieldProperties,
         equipmentIcons,
+        facing,
     };
     // #315: where a right-click opens the field's menu (`useFieldMenu`, below
     // the editor), and the press that closes it, which does nothing more
@@ -513,6 +536,7 @@ function ThreeFieldView() {
             _at: { x: number; y: number },
             _marcher: number | null,
             _actions?: readonly string[],
+            _kind?: PointerKind,
         ) => {},
     );
     const takeMenuPress = useRef((): boolean => false);
@@ -572,11 +596,12 @@ function ThreeFieldView() {
                         ),
                     reachesInside: canReachInside,
                     doubleClickMarcher: enterBox,
-                    // C2.1: items are hit anywhere inside their Outline
+                    // C2.1: items are hit inside their Outline, or a model's silhouette
                     isItem: (id) => items.isItem(id),
                     // Locked items (the pit's equipment): no click, drag or marquee takes them
                     isLocked: (id) => items.isLocked(id),
-                    itemAt: (point, accept) => items.itemAt(point, accept),
+                    itemAt: (point, accept, reach) =>
+                        items.itemAt(point, accept, reach),
                     // Shown once asked for, with an item's Resize and turn (props epic step 2)
                     itemHandlesShown,
                     lockedItemClicked: (id, at) =>
@@ -599,7 +624,7 @@ function ThreeFieldView() {
                     propDrawn: (outline) => latest.current.propDrawn(outline),
                     // #315: a right-click opens the field's menu there
                     openMenu: (at, hit, actions) =>
-                        openMenuAt.current(at.screen, hit, actions),
+                        openMenuAt.current(at.screen, hit, actions, at.kind),
                 },
                 {
                     isMac: isMacPlatform(),
@@ -687,6 +712,16 @@ function ThreeFieldView() {
                 equipmentIcons: () =>
                     latest.current.equipmentIcons?.at(marchers.drawnBeat)
                         .icons ?? new Map(),
+                facing: (id) => {
+                    const beat = marchers.drawnBeat;
+                    const source = latest.current.facing;
+                    // A hidden performer's caret isn't drawn
+                    const i = marchers.ids.indexOf(id);
+                    return beat === null || !source || marchers.hidden[i]
+                        ? null
+                        : source.degreesAt(id, beat);
+                },
+                labelAnchors: () => labelAnchors.current,
                 view: () => useFieldViewStore.getState(),
                 element: () => element.current,
                 pageId: () => latest.current.pageId,
@@ -850,6 +885,7 @@ function ThreeFieldView() {
                             fieldProperties={fieldProperties}
                             look={venue3d}
                             around={venueAround(fieldVenueAround, venueStyle)}
+                            onPainted={setVenuePainted}
                         />
                         <CameraMarkerLayer fieldProperties={fieldProperties} />
                         <FieldLayer
@@ -858,6 +894,13 @@ function ThreeFieldView() {
                                 lineFieldProperties ?? fieldProperties
                             }
                             strips={strips}
+                            // Only while a look paints markings: off, the grid's come back
+                            // with the venue gone, not an effect later
+                            painted={
+                                venue3d?.keepMarkings
+                                    ? venuePainted
+                                    : NOTHING_PAINTED
+                            }
                             numberAtlas={atlases.number}
                             labelAtlas={atlases.checkpoint}
                         />
@@ -896,6 +939,15 @@ function ThreeFieldView() {
                             icons={equipmentIcons}
                             iconPlace={equipmentIconPlace}
                         />
+                        {/* Which way each performer faces, as a caret in front of their dot (#1316) */}
+                        <FacingCaretsLayer
+                            marchers={marchers}
+                            dimming={dimming}
+                            theme={fieldProperties.theme}
+                            facing={facing}
+                            icons={equipmentIcons}
+                            iconPlace={equipmentIconPlace}
+                        />
                         <LabelsLayer
                             marchers={marchers}
                             dimming={dimming}
@@ -906,8 +958,11 @@ function ThreeFieldView() {
                             style={labelStyle}
                             holdAutoSize={isPlaying}
                             icons={equipmentIcons}
+                            pictures={flagPictures}
                             iconPlace={equipmentIconPlace}
                             hovered={hoveredMarcher}
+                            facing={facing}
+                            placed={labelAnchors}
                         />
                         <OverlayLayer
                             plan={timeline.collisions}

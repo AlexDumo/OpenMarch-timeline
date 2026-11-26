@@ -31,6 +31,7 @@ import {
     type Rect,
 } from "@/components/canvas/fieldLayers";
 import { usePlacedBoxPreviewStore } from "../placed/boxSelectionStore";
+import { useMenuOffShape } from "./useMenuOffShape";
 import { keepInView } from "./keepInView";
 import { glideTo, isGliding } from "@/field/three/fieldNavigation";
 import { activeFieldEditor } from "@/field/editor/activeFieldEditor";
@@ -120,6 +121,12 @@ import { GlyphText } from "./GlyphText";
 import { useShapePointerOver } from "../tool/shapeToolMode";
 import "./ShapeEditorSurface.css";
 import {
+    createRowLens,
+    RowSpots,
+    RowSpotsCount,
+    RowSpotsReadout,
+} from "./RowSpots";
+import {
     Divider,
     EDITOR_BAR,
     EditorButton,
@@ -144,7 +151,7 @@ import { LayoutMenu } from "./LayoutPicker";
 import { ReshuffleButton } from "./ReshuffleButton";
 import { EdgeToggle } from "./EdgeToggle";
 import { ModeMenu } from "./ModeMenu";
-import { ChoiceMenus, GuidesMenu } from "./ChoiceMenu";
+import { ChoiceMenu, ChoiceMenus, GuidesMenu } from "./ChoiceMenu";
 import { GroupChips } from "./GroupChips";
 import { GROUP_MENU_ATTRIBUTE, GroupMenu } from "./GroupMenu";
 import { useFocusCarry } from "./focusCarry";
@@ -1635,6 +1642,7 @@ function RowsMenu({ target }: { target: ShapeEditTarget }) {
     });
     const rows = target.kind.rows;
     const said = useRef<string | null>(null);
+    const lens = useMemo(createRowLens, []);
     const actions = useMemo(() => {
         const base = numberActions(target, run, chips);
         const step = (param: Param, by: -1 | 1) => {
@@ -1649,8 +1657,27 @@ function RowsMenu({ target }: { target: ShapeEditTarget }) {
             more: (param: Param) => step(param, 1),
         };
     }, [target]);
+    // A placed shape's number drag is previewed until it's saved on release: the menu shows the
+    // preview meanwhile, so Rows apart and Slant count along with the drag (owner)
+    const previewed = usePlacedBoxPreviewStore((s) =>
+        s.held ? s.params : null,
+    );
+    const params =
+        !target.place && previewed !== null ? previewed : target.params;
+    const { spots } = target;
+    const dragging = useDraggedNumberStore((s) => s.key) !== null;
+    // Off the shape: under the editor, else above it or beside it (owner)
+    const placement = useMenuOffShape({
+        open,
+        trigger: focus.trigger.ref,
+        content: focus.content.ref,
+        kind: target.kind,
+        params,
+        spots,
+        stepPx: envFor()?.stepPx,
+        hold: dragging,
+    });
     if (!rows) return null;
-    const { params, spots } = target;
     const view = rows.view(params, spots);
     if (!view) return null;
     const env = envFor();
@@ -1679,8 +1706,10 @@ function RowsMenu({ target }: { target: ShapeEditTarget }) {
               "shapes.rows.addNone",
               "No room for another row: every row needs a marcher",
           );
-    const longest = Math.max(...view.rows.map((r) => r.spots.length));
-    const dot = Math.max(4, Math.min(8, Math.floor(132 / longest) - 3));
+    lens.setRows(
+        view.rows.map((r) => ({ length: r.spots.length, shift: r.shift })),
+    );
+    const names = view.rows.map((r) => rowName(r, across));
     const removable = many || view.empty > 0;
     return (
         <Popover.Root open={open} onOpenChange={setOpen}>
@@ -1706,13 +1735,17 @@ function RowsMenu({ target }: { target: ShapeEditTarget }) {
             </Tip>
             <Popover.Portal>
                 <Popover.Content
-                    side="bottom"
-                    align="start"
-                    sideOffset={6}
+                    side={placement.side}
+                    align={placement.align}
+                    sideOffset={placement.sideOffset}
+                    collisionBoundary={placement.collisionBoundary}
+                    collisionPadding={placement.collisionPadding}
+                    style={placement.style}
                     {...focus.content}
                     onPointerDown={(e) => e.stopPropagation()}
-                    className="rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal z-50 flex w-[360px] flex-col gap-2 border p-8"
+                    className="rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal z-50 flex w-360 flex-col gap-2 border p-8"
                     data-testid="shape-rows-content"
+                    data-where={placement.where}
                 >
                     <div className="flex min-h-24 items-center justify-between gap-8 px-4">
                         <span
@@ -1880,7 +1913,9 @@ function RowsMenu({ target }: { target: ShapeEditTarget }) {
                             data-testid="shape-rows-columns"
                         >
                             <span />
-                            <span />
+                            <span className="relative self-stretch">
+                                <RowSpotsCount lens={lens} across={across} />
+                            </span>
                             <span className="truncate">
                                 {tolgee.t(
                                     "shapes.rows.colMarchers",
@@ -1913,73 +1948,30 @@ function RowsMenu({ target }: { target: ShapeEditTarget }) {
                                     >
                                         {name}
                                     </span>
-                                    <span
-                                        className="flex items-center justify-center overflow-hidden"
-                                        style={{
-                                            transform: `translateX(${(row.shift * (dot + 2)) / 2}px)`,
-                                        }}
-                                    >
-                                        {row.spots.map((filled, j) => (
-                                            <button
-                                                key={j}
-                                                type="button"
-                                                aria-label={
-                                                    filled
-                                                        ? tolgee.t(
-                                                              "shapes.rows.leaveEmpty",
-                                                              "Leave this spot empty",
-                                                          )
-                                                        : tolgee.t(
-                                                              "shapes.rows.fillSpot",
-                                                              "Empty spot: press to take it out",
-                                                          )
-                                                }
-                                                title={
-                                                    filled
-                                                        ? tolgee.t(
-                                                              "shapes.rows.leaveEmpty",
-                                                              "Leave this spot empty",
-                                                          )
-                                                        : tolgee.t(
-                                                              "shapes.rows.fillSpot",
-                                                              "Empty spot: press to take it out",
-                                                          )
-                                                }
-                                                onClick={() =>
-                                                    env &&
-                                                    apply(
-                                                        rows.toggleSpot(
-                                                            target.params,
-                                                            target.spots,
-                                                            row.index,
-                                                            j,
-                                                            env,
-                                                        ),
-                                                    )
-                                                }
-                                                data-testid={`shape-rows-dot-${i}-${j}`}
-                                                className={clsx(
-                                                    "group flex h-24 items-center justify-center px-1",
-                                                    row.side === null
-                                                        ? "text-accent"
-                                                        : "text-text",
-                                                )}
-                                            >
-                                                <span
-                                                    className={clsx(
-                                                        "block rounded-full group-hover:scale-125",
-                                                        filled
-                                                            ? "bg-current"
-                                                            : "border border-current opacity-60",
-                                                    )}
-                                                    style={{
-                                                        width: dot,
-                                                        height: dot,
-                                                    }}
-                                                />
-                                            </button>
-                                        ))}
-                                    </span>
+                                    <RowSpots
+                                        lens={lens}
+                                        at={i}
+                                        spots={row.spots}
+                                        accent={row.side === null}
+                                        label={tolgee.t(
+                                            "shapes.rows.spotsLabel",
+                                            "{name}: its spots. Arrow keys move along them, Space leaves one empty or fills it",
+                                            { name },
+                                        )}
+                                        onPress={(j) =>
+                                            env &&
+                                            apply(
+                                                rows.toggleSpot(
+                                                    target.params,
+                                                    target.spots,
+                                                    row.index,
+                                                    j,
+                                                    env,
+                                                ),
+                                            )
+                                        }
+                                        testId={`shape-rows-spots-${i}`}
+                                    />
                                     <NumberChip
                                         param={param}
                                         display={param.display(
@@ -2070,18 +2062,31 @@ function RowsMenu({ target }: { target: ShapeEditTarget }) {
                             );
                         })}
                     </div>
-                    <span className="text-text/60 px-4">
-                        {tolgee.t(
-                            "shapes.rows.dotHint",
-                            "Press a dot to leave that spot empty",
-                        )}
-                    </span>
+                    <RowSpotsReadout
+                        lens={lens}
+                        names={names}
+                        spots={view.rows.map((r) => r.spots)}
+                        across={across}
+                    />
                     {many && (
                         <>
                             <div className="bg-stroke my-4 h-px" />
                             <span className="text-text/60 px-4">
                                 {tolgee.t("shapes.rows.spacing", "Spacing")}
                             </span>
+                            {/* Which way the rows step from the drawn shape (#1193) */}
+                            <div
+                                className="flex min-h-24 items-center justify-between gap-8 pl-4"
+                                data-testid="shape-rows-go"
+                            >
+                                <span>{rows.go.label}</span>
+                                <ChoiceMenu
+                                    choice={rows.go}
+                                    target={target}
+                                    envFor={envFor}
+                                    nested
+                                />
+                            </div>
                             {[rows.apart, rows.slant].map((param) => (
                                 <div
                                     key={param.key}
@@ -2449,8 +2454,16 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
         latestFollow.current = follow;
     });
     const wasDragging = useRef(fieldDrag);
+    // The shape as the drag found it: a press that changed nothing (a tap on the line, which shows
+    // the scissors there, #1336) is no edit, and leaves the view where it is
+    const atDragStart = useRef<string | null>(null);
     useLayoutEffect(() => {
-        const dragEnded = wasDragging.current && !fieldDrag;
+        if (fieldDrag && !wasDragging.current)
+            atDragStart.current = JSON.stringify(params);
+        const dragEnded =
+            wasDragging.current &&
+            !fieldDrag &&
+            atDragStart.current !== JSON.stringify(params);
         wasDragging.current = fieldDrag;
         if (fieldDrag || room.width === 0) return;
         const edit = performance.now() - edited.current < EDIT_WINDOW_MS;
@@ -2594,10 +2607,17 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
                     e.target instanceof Element
                         ? (e.target.closest("button, input") ?? e.target)
                         : null;
-                pressed.current = control && {
-                    el: control,
-                    left: control.getBoundingClientRect().left,
-                };
+                // Only a control in the editor itself: one in a menu it opened (the Rows menu's
+                // numbers, a portal the press reaches through React) moves with the menu, and
+                // following it would slide the editor, and the menu with it, as a dragged number
+                // changes width (owner)
+                pressed.current =
+                    control && ref.current?.contains(control)
+                        ? {
+                              el: control,
+                              left: control.getBoundingClientRect().left,
+                          }
+                        : null;
                 setPressing(true);
             },
         },

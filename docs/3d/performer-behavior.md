@@ -183,14 +183,14 @@ Each type controls one parameter and is one lane on the timeline (section
 7.3). Cues of different types never touch each other: a Position cue leaves
 Facing alone.
 
-| Group     | Cue type  | Parameter                 | Values                                                                     | Default                | Built                                     |
-| --------- | --------- | ------------------------- | -------------------------------------------------------------------------- | ---------------------- | ----------------------------------------- |
-| Equipment | Equipment | What the performer holds  | A catalog item (guard, brass, woodwinds, drums), their own, nothing        | The section's usual    | End to end (fork #992)                    |
-| Equipment | Position  | How it is held            | Horn up, down, trail; sticks playing, in, down; set, port, present; tosses | Up, playing or set     | Compile; 3D horn holds. No editor         |
-| Equipment | Silk      | A held flag's design      | Plain color; artwork later                                                 | The section's color    | Compile only                              |
-| Looks     | Look      | Which uniform look        | A look from #972                                                           | The band or guard look | Compile only; waits on #972               |
-| Facing    | Facing    | Where the performer faces | Front, back, side 1, side 2, direction of travel, an angle, toward a point | Front                  | Compile; 3D headings. No editor           |
-| Body      | Posture   | The body's posture        | Neutral, kneel; body visuals later                                         | Neutral                | Compile; the 3D feet stand. No kneel pose |
+| Group     | Cue type  | Parameter                 | Values                                                                     | Default                  | Built                                     |
+| --------- | --------- | ------------------------- | -------------------------------------------------------------------------- | ------------------------ | ----------------------------------------- |
+| Equipment | Equipment | What the performer holds  | A catalog item (guard, brass, woodwinds, drums), their own, nothing        | The section's usual      | End to end (fork #992)                    |
+| Equipment | Position  | How it is held            | Horn up, down, trail; sticks playing, in, down; set, port, present; tosses | Up, playing or set       | Compile; 3D horn holds. No editor         |
+| Equipment | Silk      | A held flag's design      | Plain color; artwork later                                                 | The section's color      | Compile only                              |
+| Looks     | Look      | Which uniform look        | A look from #972                                                           | The band or guard look   | Compile only; waits on #972               |
+| Facing    | Facing    | Where the performer faces | Front, back, side 1, side 2, direction of travel, an angle, toward a point | Front; bass drums side 2 | Compile; 3D headings. No editor           |
+| Body      | Posture   | The body's posture        | Neutral, kneel; body visuals later                                         | Neutral                  | Compile; the 3D feet stand. No kneel pose |
 
 - Equipment, Look and Facing are naturally lasting; a toss is momentary only.
   The choice stays open wherever it makes sense.
@@ -373,8 +373,8 @@ only when nothing but those types' cues changed.
 These are commands (`shortcuts/definitions.ts`, `cues/useCueCommands.ts`),
 so the command bar finds them. The field's right-click menu has an
 **Equipment** submenu (their own instrument; the last four items picked; a
-submenu per family; Nothing) and a **Select by equipment** submenu grouped the
-same way. The Equipment lane's cue menu offers the cue edits:
+submenu per family; Nothing), and its **Select** submenu has a **Holding**
+submenu grouped the same way. The Equipment lane's cue menu offers the cue edits:
 
 - **Equipment: <item>**, one per catalog item, **their own instrument** and
   **Nothing:** what the selected performers hold from the paused playhead on,

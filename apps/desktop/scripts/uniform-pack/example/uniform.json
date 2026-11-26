@@ -1,0 +1,53 @@
+{
+    "name": "OpenMarch sample",
+    "style": "classic",
+    "palette": {
+        "primary": "#170d4a",
+        "secondary": "#f2f2ee",
+        "accent": "#d8b04a",
+        "trim": "#d8b04a",
+        "pants": "#170d4a",
+        "shoes": "#0b0b0d",
+        "gloves": "#f2f2ee",
+        "hat": "#170d4a",
+        "plume": "#6442ff",
+        "visor": "#d8b04a"
+    },
+    "options": {
+        "stripe": false,
+        "collar": true,
+        "cuffs": true,
+        "gloves": true,
+        "hat": true
+    },
+    "credits": {
+        "author": "OpenMarch",
+        "source": "apps/desktop/src/view3d/assets/uniform-flats/sample"
+    },
+    "layers": [
+        {
+            "id": "base",
+            "name": "Base",
+            "front": "front.svg",
+            "back": "back.svg"
+        }
+    ],
+    "items": [
+        {
+            "id": "crest",
+            "name": "Chest crest",
+            "file": "crest.svg",
+            "panel": "front",
+            "at": [17, 25.32],
+            "width": 6
+        },
+        {
+            "id": "number",
+            "name": "Back number",
+            "file": "number.svg",
+            "panel": "back",
+            "at": [17, 28.47],
+            "height": 8
+        }
+    ]
+}

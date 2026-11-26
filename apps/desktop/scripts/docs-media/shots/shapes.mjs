@@ -415,6 +415,22 @@ async function centerOf(locator) {
 
 const BOX = [300, 165];
 
+/** `area` kept inside the 1600 × 1000 window. */
+const inWindow = (area) =>
+    inside(area, { x: 0, y: 0, width: 1600, height: 1000 });
+
+/** Opens the open shape's Rows menu and adds one row on `side` ("far" is behind), off camera. */
+async function addRow(page, side = "far") {
+    await clickOn(page, page.getByTestId("shape-rows"));
+    await clickOn(page, page.getByTestId(`shape-rows-add-${side}`));
+}
+
+/** Picks `value` from the Rows menu's Rows go, off camera; the Rows menu stays open. */
+async function pickRowsGo(page, value) {
+    await clickOn(page, page.getByTestId("shape-choice-rowsGo"));
+    await clickOn(page, page.getByTestId(`shape-choice-rowsGo-${value}`));
+}
+
 const shots = [
     {
         id: "shapes-tab",
@@ -899,6 +915,82 @@ const shots = [
         },
     },
     {
+        id: "shapes-split-line",
+        kind: "clip",
+        covers: ["apps/desktop/src/shapes/placed/splitShape.ts"],
+        // A placed straight line, selected: the pointer over a gap between two marchers shows
+        // the scissors, and a click on them splits the line in two, nobody moving; a click on
+        // the first marcher then selects the first piece alone (#1336)
+        async setup({ page }) {
+            const { area } = await startInArea(page, 380, 60);
+            const y = area.y + area.height / 2;
+            const a = { x: area.x, y };
+            const b = { x: area.x + area.width, y };
+            await page.keyboard.press("KeyL");
+            await page.waitForTimeout(300);
+            await quickDrag(page, a, b);
+            await page.waitForTimeout(600);
+            await page.keyboard.press("Enter");
+            await page.waitForTimeout(1500);
+            await page.mouse.move(a.x - 40, a.y - 60);
+            await page.waitForTimeout(600);
+            await tidy(page);
+            const along = (await marchers(page))
+                .filter(
+                    (m) =>
+                        Math.abs(m.y - y) < 10 &&
+                        m.x >= a.x - 10 &&
+                        m.x <= b.x + 10,
+                )
+                .sort((m, n) => m.x - n.x);
+            if (along.length < 4)
+                throw new Error(`the line has ${along.length} marchers`);
+            // Between the second and third along the line
+            this.gap = {
+                x: (along[1].x + along[2].x) / 2,
+                y: (along[1].y + along[2].y) / 2,
+            };
+            this.rest = { x: a.x - 40, y: a.y - 60 };
+            this.first = along[0];
+            return { box: await cropArea(page, area, 40) };
+        },
+        async perform({ page, film, overlay }) {
+            await film.release();
+            await overlay.enable();
+            const { gap, rest } = this;
+            await page.mouse.move(rest.x, rest.y);
+            await film.hold(0.4);
+            await film.moveTo(page, rest, gap, 0.9);
+            await page.waitForTimeout(300);
+            await film.hold(0.6);
+            const scissors = await page
+                .getByTestId("fieldSplitScissors")
+                .boundingBox();
+            if (!scissors) throw new Error("no scissors over the gap");
+            const at = {
+                x: scissors.x + scissors.width / 2,
+                y: scissors.y + scissors.height / 2,
+            };
+            await film.moveTo(page, gap, at, 0.5);
+            await film.hold(0.4);
+            await page.mouse.click(at.x, at.y);
+            await page.waitForTimeout(800);
+            await film.hold(0.6);
+            // Away and back: a click on the first marcher selects the first piece alone
+            await film.moveTo(page, at, rest, 0.5);
+            await page.mouse.click(rest.x, rest.y);
+            await page.waitForTimeout(400);
+            await film.hold(0.4);
+            const first = this.first;
+            await film.moveTo(page, rest, first, 0.6);
+            await page.mouse.click(first.x, first.y);
+            await page.waitForTimeout(600);
+            await film.hold(0.6);
+            await film.moveTo(page, first, rest, 0.4);
+            await film.hold(1.2);
+        },
+    },
+    {
         id: "shapes-take-out",
         kind: "clip",
         // A placed box with one marcher dragged out of it: the box is selected and Close up
@@ -1312,6 +1404,90 @@ const shots = [
                             height: 30,
                         }),
                         30,
+                    ),
+                    field,
+                ),
+            };
+        },
+    },
+    {
+        id: "shapes-rows-menu",
+        kind: "still",
+        // A line across the field split into two rows, one behind the drawn one, its Rows menu open
+        async setup({ page }) {
+            const { area } = await startInArea(page, 360, 90, 120);
+            const a = { x: area.x, y: area.y + area.height };
+            const b = { x: area.x + area.width, y: area.y + area.height };
+            await page.keyboard.press("KeyL");
+            await page.waitForTimeout(300);
+            await quickDrag(page, a, b);
+            await addRow(page, "far");
+            // The pointer off the menu and the shape, so no tooltip shows
+            await page.mouse.move(area.x - 30, area.y - 30);
+            await page.waitForTimeout(700);
+            const menu = await page
+                .getByTestId("shape-rows-content")
+                .boundingBox();
+            const bar = await editorBar(page).boundingBox();
+            return { box: inWindow(grow(unionOf(area, menu, bar), 24)) };
+        },
+    },
+    {
+        id: "shapes-rows-go-arc",
+        kind: "still",
+        // An arc with a row behind it in rings, the Rows menu's Rows go list open beside it
+        async setup({ page }) {
+            const { area } = await startInArea(page, 340, 150, 120);
+            await page.getByTestId("shapes-tab-arc").click();
+            await page.waitForTimeout(300);
+            await quickDrag(
+                page,
+                { x: area.x, y: area.y + area.height },
+                { x: area.x + area.width, y: area.y + area.height },
+            );
+            await addRow(page, "far");
+            await clickOn(page, page.getByTestId("shape-choice-rowsGo"));
+            const go = await page
+                .getByTestId("shape-choice-rowsGo-content")
+                .boundingBox();
+            // The pointer resting on the picked way, as when choosing
+            const rings = await centerOf(
+                page.getByTestId("shape-choice-rowsGo-follow"),
+            );
+            await page.mouse.move(rings.x + 60, rings.y);
+            await page.waitForTimeout(700);
+            const menu = await page
+                .getByTestId("shape-rows-content")
+                .boundingBox();
+            return { box: inWindow(grow(unionOf(area, menu, go), 24)) };
+        },
+    },
+    {
+        id: "shapes-rows-front-to-back",
+        kind: "still",
+        // A diagonal line with two rows behind it going Front to back: each marcher straight
+        // back from the one on the drawn line, every row the same slant as the line
+        async setup({ page }) {
+            const { area } = await startInArea(page, 300, 200, 120);
+            const a = { x: area.x, y: area.y + area.height };
+            const b = { x: area.x + area.width, y: area.y + 70 };
+            await page.keyboard.press("KeyL");
+            await page.waitForTimeout(300);
+            await quickDrag(page, a, b);
+            await addRow(page, "far");
+            await clickOn(page, page.getByTestId("shape-rows-add-far"));
+            await pickRowsGo(page, "back");
+            // Closes the Rows menu so the field shows the rows alone
+            await clickOn(page, page.getByTestId("shape-rows"));
+            await page.mouse.move(b.x + 40, b.y + 90);
+            await page.waitForTimeout(700);
+            // The line and its rows only: the editor bar isn't the point here
+            const field = await fieldBox(page);
+            return {
+                box: inside(
+                    grow(
+                        { ...area, y: area.y - 20, height: area.height + 20 },
+                        40,
                     ),
                     field,
                 ),

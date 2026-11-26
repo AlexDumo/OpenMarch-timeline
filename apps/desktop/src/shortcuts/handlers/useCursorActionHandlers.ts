@@ -6,6 +6,7 @@ import {
 import tolgee from "@/global/singletons/Tolgee";
 import { activeFieldEditor } from "@/field/editor/activeFieldEditor";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
+import { useSelectBy } from "@/selection/useSelectBy";
 import { useActionHandler } from "../useActionHandler";
 import { useEditorReadiness } from "./useEditorReadiness";
 
@@ -35,6 +36,23 @@ export function useCursorActionHandlers() {
             activeFieldEditor()?.selectAll();
         },
         { enabled: ready },
+    );
+
+    // Everyone in the selected performers' sections, through the Select tab's own selecting:
+    // `add` (Shift, or Add on a tablet, in the field menu) adds them to the selection
+    const selectBy = useSelectBy();
+    const anySelected =
+        (selectedMarchersContext?.selectedMarchers.length ?? 0) > 0;
+    useActionHandler(
+        "selectSameSection",
+        (args) =>
+            selectBy.selectIds(selectBy.sameSectionIds(), args?.add === true),
+        {
+            enabled: ready && anySelected,
+            disabledReason: anySelected
+                ? undefined
+                : tolgee.t("actions.select.sameSectionNone"),
+        },
     );
 
     // Box to Lasso, or back, as the field's Select bar does. The palette names the tool it picks.
