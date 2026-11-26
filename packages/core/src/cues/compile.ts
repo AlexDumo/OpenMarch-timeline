@@ -181,8 +181,13 @@ function lastingTimeline(
  * A cue's turn leads into its count (`transitionSegment`) at an even speed, from the angle they
  * held before to where the value takes them from there (`facingTargetDegrees`).
  */
-function withFacingDegrees(segments: readonly CueSegment[]): CueSegment[] {
-    let current = 0;
+function withFacingDegrees(
+    segments: readonly CueSegment[],
+    start: number,
+): CueSegment[] {
+    // `start` is the performer's first default, so a turn that begins at count 0
+    // (no default segment is emitted there) still turns from the section's angle.
+    let current = start;
     return segments.map((seg) => {
         if (seg.kind === "transition") {
             const from = current;
@@ -918,6 +923,11 @@ function resolveType(
                     counts,
                     flags,
                     spans,
+                ),
+                facingTargetDegrees(
+                    spans[0]!.value,
+                    spans[0]!.settings ?? {},
+                    0,
                 ),
             ),
         };

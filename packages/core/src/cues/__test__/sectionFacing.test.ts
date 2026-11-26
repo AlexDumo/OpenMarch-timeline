@@ -95,4 +95,44 @@ describe("section Facing defaults (ADR 0015 D-2)", () => {
         });
         expect(facingAt(compiled, 1, 4)).toBe(180);
     });
+
+    it("turns from the default when a transition starts at count 0", () => {
+        // a 4-count Front landing on count 3 starts on count 0, where no default segment is emitted
+        const compiled = compileCues({
+            beats,
+            marchers: [bass],
+            cues: [{ ...facingCue(1, 3, "front", [1]), transition: 4 }],
+            sections,
+        });
+        expect([0, 1, 2, 3].map((c) => facingAt(compiled, 1, c))).toEqual([
+            90, 60, 30, 0,
+        ]);
+    });
+
+    it("turns from the default for a turn left whose transition starts at count 0", () => {
+        const compiled = compileCues({
+            beats,
+            marchers: [bass],
+            cues: [
+                {
+                    ...facingCue(1, 3, "turnLeft", [1]),
+                    transition: 4,
+                },
+            ],
+            sections,
+        });
+        expect([0, 1, 2, 3].map((c) => facingAt(compiled, 1, c))).toEqual([
+            90, 105, 120, 135,
+        ]);
+    });
+
+    it("turns from the default for a snap on count 0", () => {
+        const compiled = compileCues({
+            beats,
+            marchers: [bass],
+            cues: [facingCue(1, 0, "turnLeft", [1])],
+            sections,
+        });
+        expect(facingAt(compiled, 1, 0)).toBe(135);
+    });
 });
