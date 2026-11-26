@@ -67,8 +67,12 @@ export function travelDirection(
     return { family: "backward", legYaw: phi - Math.sign(phi) * Math.PI, phi };
 }
 
-/** As far as a head turns from the chest to look at the front (radians): a quarter turn. */
-export const EYES_FRONT_REACH = Math.PI / 2;
+/**
+ * As far as a head turns from the chest to look at the front (radians): 70°. A neck turns
+ * about 70–80° at most, and bass drummers on a side, in photos, turn theirs about 60–70° and
+ * look the rest of the way.
+ */
+export const EYES_FRONT_REACH = (70 * Math.PI) / 180;
 
 const EYES_FRONT = new Set(
     Object.values(SECTIONS)
@@ -84,17 +88,18 @@ export function isEyesFrontSection(section: string): boolean {
 /**
  * How far an eyes-front performer facing `heading` turns their head from their chest, radians
  * in the heading's sense (positive to their left), to look at the front. Within
- * {@link EYES_FRONT_REACH} of the front, all the way: side 2 (heading +90°) turns the head 90°
- * to their right. Further round, the head comes back toward the chest as they face the back,
- * straight ahead at the back itself, so a turn through the back never snaps the head across.
+ * {@link EYES_FRONT_REACH} of the front, all the way; out to a side, as far as it reaches:
+ * side 2 (heading +90°) turns the head 70° to their right. Past a side, the head comes back
+ * toward the chest as they face the back, straight ahead at the back itself, so a turn through
+ * the back never snaps the head across.
  */
 export function eyesFrontYaw(heading: number): number {
     const t = Math.atan2(Math.sin(heading), Math.cos(heading));
     const a = Math.abs(t);
-    if (a <= EYES_FRONT_REACH) return -t;
-    return (
-        -Math.sign(t) *
-        EYES_FRONT_REACH *
-        ((Math.PI - a) / (Math.PI - EYES_FRONT_REACH))
-    );
+    const side = Math.PI / 2;
+    const turn =
+        a <= side
+            ? Math.min(a, EYES_FRONT_REACH)
+            : EYES_FRONT_REACH * ((Math.PI - a) / (Math.PI - side));
+    return -Math.sign(t) * turn;
 }
