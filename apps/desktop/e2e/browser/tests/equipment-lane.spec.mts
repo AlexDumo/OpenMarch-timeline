@@ -189,9 +189,16 @@ test("the Lanes button sits in the bottom-left corner, counts hidden lanes, and 
     });
     expect(scroll.end - scroll.start).toBeGreaterThanOrEqual(400);
     await waitForIdle(page);
-    const scrolled = await corner();
-    expect(Math.abs(scrolled.x - before.x)).toBeLessThanOrEqual(1);
-    expect(Math.abs(scrolled.y - before.y)).toBeLessThanOrEqual(1);
+    // Retries until the layout settles, so a frame of motion doesn't fail the check
+    await expect
+        .poll(async () => {
+            const now = await corner();
+            return Math.max(
+                Math.abs(now.x - before.x),
+                Math.abs(now.y - before.y),
+            );
+        })
+        .toBeLessThanOrEqual(1);
     await viewport.evaluate((v) => {
         v.scrollLeft = 0;
     });
