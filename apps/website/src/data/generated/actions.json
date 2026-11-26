@@ -1292,6 +1292,21 @@
         "category": "ui",
         "bindings": []
     },
+    "addFlag": {
+        "label": "Add a flag to the show",
+        "category": "ui",
+        "bindings": []
+    },
+    "equipmentShowFlag": {
+        "label": "Equipment: one of the show's flags",
+        "category": "batchEdit",
+        "bindings": []
+    },
+    "selectHoldingShowFlag": {
+        "label": "Select who holds one of the show's flags",
+        "category": "select",
+        "bindings": []
+    },
     "removeUnusedAssets": {
         "label": "Remove unused assets…",
         "category": "file",

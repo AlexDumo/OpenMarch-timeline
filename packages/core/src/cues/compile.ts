@@ -176,12 +176,17 @@ function lastingTimeline(
 
 /**
  * Adds each performer's angle to their Facing segments (fork #993), which come from the same
- * lasting timeline as every type's (`lastingTimeline`): front, 0°, until their first cue; a cue's
- * turn leads into its count (`transitionSegment`) at an even speed, from the angle they held
- * before to where the value takes them from there (`facingTargetDegrees`).
+ * lasting timeline as every type's (`lastingTimeline`): `start`, their default, until their first
+ * cue (front, 0°, unless the section gives another: bass drums, side 2, 90°); a cue's turn leads
+ * into its count (`transitionSegment`) at an even speed, from the angle they held before to where
+ * the value takes them from there (`facingTargetDegrees`). `start` is passed in rather than read
+ * from the default segment, which isn't there when their first turn starts on count 0.
  */
-function withFacingDegrees(segments: readonly CueSegment[]): CueSegment[] {
-    let current = 0;
+function withFacingDegrees(
+    segments: readonly CueSegment[],
+    start: number,
+): CueSegment[] {
+    let current = start;
     return segments.map((seg) => {
         if (seg.kind === "transition") {
             const from = current;
@@ -373,13 +378,15 @@ interface TypeResult {
 }
 
 /**
- * A performer's Equipment, Silk and Look defaults, and what Equipment gives
+ * A performer's Equipment, Silk, Look and Facing defaults, and what Equipment gives
  * over the show, which sets the Position default and the cues that fit.
  */
 interface PerformerDefaults {
     equipment: CueTraceDefault & { holds: PerformerCarry };
     silk: CueTraceDefault;
     look: CueTraceDefault;
+    /** Where they face before their first Facing cue: the section's, else front. */
+    facing: CueTraceDefault;
     /** What Equipment gives from each count where its value changes, from count 0. */
     holds: readonly { at: number; holds: PerformerCarry }[];
 }
@@ -428,6 +435,8 @@ function defaultTrace(
             return defaults.silk;
         case "look":
             return defaults.look;
+        case "facing":
+            return defaults.facing;
         case "position": {
             const holds = holdsAt(defaults, count);
             return {
@@ -588,7 +597,7 @@ function compileLookup(input: CompileInput): CueValueLookup {
     ]);
 }
 
-/** Each performer's Equipment, Silk and Look defaults. */
+/** Each performer's Equipment, Silk, Look and Facing defaults. */
 function performerDefaultsOf(
     input: CompileInput,
 ): (marcher: CueMarcher) => Omit<PerformerDefaults, "holds"> {
@@ -646,6 +655,16 @@ function performerDefaults(
     const show = input.showDefaults ?? {};
     return {
         equipment,
+        facing: section?.facing
+            ? {
+                  source: "section_facing",
+                  value: section.facing,
+                  section: marcher.section,
+              }
+            : {
+                  source: "library",
+                  value: defaultCueValue("facing", marcher.carries),
+              },
         silk: {
             source: "section_color",
             value: defaultCueValue("silk", marcher.carries),
@@ -702,6 +721,8 @@ function defaultSpans(
             ];
         case "look":
             return [{ at: 0, value: defaults.look.value }];
+        case "facing":
+            return [{ at: 0, value: defaults.facing.value }];
         case "position":
             return defaults.holds.map(({ at, holds }) => ({
                 at,
@@ -899,6 +920,11 @@ function resolveType(
                     counts,
                     flags,
                     spans,
+                ),
+                facingTargetDegrees(
+                    spans[0]!.value,
+                    spans[0]!.settings ?? {},
+                    0,
                 ),
             ),
         };

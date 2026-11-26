@@ -18,6 +18,7 @@ import {
     ArrowsOutLineHorizontalIcon,
     BezierCurveIcon,
     PencilSimpleIcon,
+    PlusIcon,
     TrashIcon,
     type Icon,
 } from "@phosphor-icons/react";
@@ -41,6 +42,9 @@ import {
 } from "@/shortcuts/definitions";
 import { equipmentCatalog } from "@openmarch/core";
 import { itemKeyOf } from "@/cues/equipmentItems";
+import { latestCueCommands } from "@/cues/latestCueCommands";
+import type { ShowFlag } from "@/showAssets/flags";
+import { FlagPicture } from "@/components/assets/FlagPicture";
 import { useSideNamesStore } from "@/cues/turnPopoverStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { getActionLabel } from "@/shortcuts/labels";
@@ -270,6 +274,9 @@ export const FIELD_MENU_ACTIONS: readonly ActionId[] = [
 const SNAPSHOT_ACTIONS: readonly ActionId[] = [
     ...FIELD_MENU_ACTIONS,
     "unlockSelectedItem",
+    // the show's flags' entries (fork #985)
+    "equipmentShowFlag",
+    "selectHoldingShowFlag",
 ];
 
 /** Holds, shown only in timeline mode (unavailable where they can't run) */
@@ -381,6 +388,7 @@ export default function FieldContextMenu({
     const recentEquipment = useUiSettingsStore(
         (s) => s.uiSettings.recentEquipment,
     );
+
     // A finger-only tablet has no keys to press: the caps wait for a hardware keyboard (#880)
     const showHints = useShowShortcutHints();
     const sides = useSideNamesStore();
@@ -575,6 +583,90 @@ export default function FieldContextMenu({
             </DropdownMenu.Item>
         );
     };
+    // The show's own flags (fork #985), listed with the guard's equipment
+    const flags = latestCueCommands()?.show?.flags ?? [];
+    /**
+     * One of the show's flags, as an entry that hands it to the selection (`equipmentShowFlag`)
+     * or selects whoever holds it (`selectHoldingShowFlag`): its picture and name, ticked when
+     * the selection already holds it, greyed out with its reason when it can't run.
+     */
+    const flagEntry = (flag: ShowFlag, select: boolean) => {
+        const id: ActionId = select
+            ? "selectHoldingShowFlag"
+            : "equipmentShowFlag";
+        const testId = `field-menu-${select ? "select-" : ""}flag-${flag.id}`;
+        const words = (
+            <>
+                <FlagPicture hash={flag.thumbnail} className="h-16 w-16" />
+                <span className="truncate">{flag.name}</span>
+            </>
+        );
+        const holds = !select && latestCueCommands()?.holdsAlready(flag.value);
+        if (holds)
+            return (
+                <DropdownMenu.CheckboxItem
+                    key={testId}
+                    data-testid={testId}
+                    checked
+                    disabled
+                    className={MENU_ITEM_CLASS}
+                >
+                    {words}
+                    <span className="ml-auto pl-8">
+                        <DropdownMenu.ItemIndicator className="flex">
+                            <CheckIcon size={14} />
+                        </DropdownMenu.ItemIndicator>
+                    </span>
+                </DropdownMenu.CheckboxItem>
+            );
+        const run = () => runAction(id, { value: flag.value });
+        const reason = enabled(id) ? undefined : actionDisabledReason(id);
+        if (reason)
+            return (
+                <MenuItemWithReason
+                    key={testId}
+                    testId={testId}
+                    reason={reason}
+                    reasonTestId={`${testId}-reason`}
+                    onSelect={run}
+                    className={MENU_ITEM_CLASS}
+                >
+                    {words}
+                </MenuItemWithReason>
+            );
+        return (
+            <DropdownMenu.Item
+                key={testId}
+                data-testid={testId}
+                onSelect={run}
+                className={MENU_ITEM_CLASS}
+            >
+                {words}
+            </DropdownMenu.Item>
+        );
+    };
+    /** The Guard submenu's end: the show's flags, then Add flag… (the Assets panel) */
+    const showFlagEntries = (select: boolean) => (
+        <>
+            {flags.length > 0 && (
+                <DropdownMenu.Separator className={MENU_SEPARATOR_CLASS} />
+            )}
+            {flags.map((flag) => flagEntry(flag, select))}
+            {!select && (
+                <>
+                    <DropdownMenu.Separator className={MENU_SEPARATOR_CLASS} />
+                    <DropdownMenu.Item
+                        data-testid="field-menu-add-flag"
+                        onSelect={() => runAction("addFlag")}
+                        className={MENU_ITEM_CLASS}
+                    >
+                        <PlusIcon size={14} aria-hidden />
+                        {t("assets.flags.menuAdd")}
+                    </DropdownMenu.Item>
+                </>
+            )}
+        </>
+    );
     const separatedGroups = (list: readonly (readonly ActionId[])[]) =>
         list.map((group, i) => (
             <Fragment key={group[0]}>
@@ -663,6 +755,8 @@ export default function FieldContextMenu({
                                                     t(`cues.item.${m.keys[i]}`),
                                                 ),
                                             )}
+                                            {m.family === "guard" &&
+                                                showFlagEntries(false)}
                                         </SubMenu>
                                     ))}
                                     <DropdownMenu.Separator
@@ -687,6 +781,8 @@ export default function FieldContextMenu({
                                             {m.select
                                                 .slice(1)
                                                 .map((id) => entry(id))}
+                                            {m.family === "guard" &&
+                                                showFlagEntries(true)}
                                         </SubMenu>
                                     ))}
                                     <DropdownMenu.Separator

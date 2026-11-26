@@ -415,6 +415,22 @@ async function centerOf(locator) {
 
 const BOX = [300, 165];
 
+/** `area` kept inside the 1600 × 1000 window. */
+const inWindow = (area) =>
+    inside(area, { x: 0, y: 0, width: 1600, height: 1000 });
+
+/** Opens the open shape's Rows menu and adds one row on `side` ("far" is behind), off camera. */
+async function addRow(page, side = "far") {
+    await clickOn(page, page.getByTestId("shape-rows"));
+    await clickOn(page, page.getByTestId(`shape-rows-add-${side}`));
+}
+
+/** Picks `value` from the Rows menu's Rows go, off camera; the Rows menu stays open. */
+async function pickRowsGo(page, value) {
+    await clickOn(page, page.getByTestId("shape-choice-rowsGo"));
+    await clickOn(page, page.getByTestId(`shape-choice-rowsGo-${value}`));
+}
+
 const shots = [
     {
         id: "shapes-tab",
@@ -1312,6 +1328,90 @@ const shots = [
                             height: 30,
                         }),
                         30,
+                    ),
+                    field,
+                ),
+            };
+        },
+    },
+    {
+        id: "shapes-rows-menu",
+        kind: "still",
+        // A line across the field split into two rows, one behind the drawn one, its Rows menu open
+        async setup({ page }) {
+            const { area } = await startInArea(page, 360, 90, 120);
+            const a = { x: area.x, y: area.y + area.height };
+            const b = { x: area.x + area.width, y: area.y + area.height };
+            await page.keyboard.press("KeyL");
+            await page.waitForTimeout(300);
+            await quickDrag(page, a, b);
+            await addRow(page, "far");
+            // The pointer off the menu and the shape, so no tooltip shows
+            await page.mouse.move(area.x - 30, area.y - 30);
+            await page.waitForTimeout(700);
+            const menu = await page
+                .getByTestId("shape-rows-content")
+                .boundingBox();
+            const bar = await editorBar(page).boundingBox();
+            return { box: inWindow(grow(unionOf(area, menu, bar), 24)) };
+        },
+    },
+    {
+        id: "shapes-rows-go-arc",
+        kind: "still",
+        // An arc with a row behind it in rings, the Rows menu's Rows go list open beside it
+        async setup({ page }) {
+            const { area } = await startInArea(page, 340, 150, 120);
+            await page.getByTestId("shapes-tab-arc").click();
+            await page.waitForTimeout(300);
+            await quickDrag(
+                page,
+                { x: area.x, y: area.y + area.height },
+                { x: area.x + area.width, y: area.y + area.height },
+            );
+            await addRow(page, "far");
+            await clickOn(page, page.getByTestId("shape-choice-rowsGo"));
+            const go = await page
+                .getByTestId("shape-choice-rowsGo-content")
+                .boundingBox();
+            // The pointer resting on the picked way, as when choosing
+            const rings = await centerOf(
+                page.getByTestId("shape-choice-rowsGo-follow"),
+            );
+            await page.mouse.move(rings.x + 60, rings.y);
+            await page.waitForTimeout(700);
+            const menu = await page
+                .getByTestId("shape-rows-content")
+                .boundingBox();
+            return { box: inWindow(grow(unionOf(area, menu, go), 24)) };
+        },
+    },
+    {
+        id: "shapes-rows-front-to-back",
+        kind: "still",
+        // A diagonal line with two rows behind it going Front to back: each marcher straight
+        // back from the one on the drawn line, every row the same slant as the line
+        async setup({ page }) {
+            const { area } = await startInArea(page, 300, 200, 120);
+            const a = { x: area.x, y: area.y + area.height };
+            const b = { x: area.x + area.width, y: area.y + 70 };
+            await page.keyboard.press("KeyL");
+            await page.waitForTimeout(300);
+            await quickDrag(page, a, b);
+            await addRow(page, "far");
+            await clickOn(page, page.getByTestId("shape-rows-add-far"));
+            await pickRowsGo(page, "back");
+            // Closes the Rows menu so the field shows the rows alone
+            await clickOn(page, page.getByTestId("shape-rows"));
+            await page.mouse.move(b.x + 40, b.y + 90);
+            await page.waitForTimeout(700);
+            // The line and its rows only: the editor bar isn't the point here
+            const field = await fieldBox(page);
+            return {
+                box: inside(
+                    grow(
+                        { ...area, y: area.y - 20, height: area.height + 20 },
+                        40,
                     ),
                     field,
                 ),

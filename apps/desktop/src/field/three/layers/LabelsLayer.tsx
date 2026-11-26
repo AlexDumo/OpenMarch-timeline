@@ -19,11 +19,17 @@ import type {
     EquipmentIconKey,
     EquipmentIconPlace,
 } from "@/cues/equipmentIcons";
-import { IconBatch, useIconAtlas, type FieldIcon } from "../iconBatch";
+import {
+    IconBatch,
+    useIconAtlas,
+    type FieldIcon,
+    type PictureAtlas,
+} from "../iconBatch";
 import type { FieldFacing } from "@/cues/useFieldFacing";
 import {
     anchorsClearOfCarets,
     caretSizes,
+    ICON_DOT_REACH,
     type CaretSizes,
 } from "../facingCaret";
 
@@ -156,9 +162,11 @@ export default function LabelsLayer({
     style = DEFAULT_STYLE,
     holdAutoSize = false,
     icons = null,
+    pictures = null,
     iconPlace = "beside",
     hovered = null,
     facing = null,
+    placed = null,
 }: {
     marchers: FieldMarchers;
     /** Marchers whose labels are drawn dimmed (#201). */
@@ -179,6 +187,8 @@ export default function LabelsLayer({
      * change.
      */
     icons?: LabelIcons | null;
+    /** The show's flags' pictures, for the icons of performers holding one (`useFlagPictures`) */
+    pictures?: PictureAtlas | null;
     /** Where the icons go: after the drill number, in place of the dot, or of the number */
     iconPlace?: EquipmentIconPlace;
     /**
@@ -194,6 +204,11 @@ export default function LabelsLayer({
      * label moves to the other side of its dot when the caret points through it
      */
     facing?: FieldFacing | null;
+    /**
+     * Where each label is anchored as drawn (x, y per marcher, field units): the marcher's spot,
+     * or moved off its facing caret. Read by the field test API; don't write it.
+     */
+    placed?: { current: Float64Array | null } | null;
 }) {
     const invalidate = useThree((s) => s.invalidate);
     const draw = useFieldDraw();
@@ -217,6 +232,11 @@ export default function LabelsLayer({
         invalidate();
         return () => iconBatch?.dispose();
     }, [iconBatch, invalidate]);
+    // The show's flags' pictures (fork #985): who holds which flag, in its own colors. They go on
+    // the icons with the layout (in the frame), so a layout never reads the last set's places.
+    useEffect(() => {
+        invalidate();
+    }, [pictures, invalidate]);
     const drawn = useRef({
         version: -1,
         idsVersion: -1,
@@ -230,18 +250,22 @@ export default function LabelsLayer({
         shown: new Uint8Array(0) as Uint8Array,
         iconKey: "",
         iconBatch: null as IconBatch | null,
+        pictures: null as PictureAtlas | null,
         iconPlace,
         hoveredId: null as number | null,
         selectionVersion: -1,
         facing: null as FieldFacing | null,
-        /** The carets' size the anchors were moved off (it changes with zoom when zoomed out) */
-        caretDepth: 0,
+        /** Labels were moved off facing carets: Show facing is on and labels or icons show */
+        offCarets: false,
+        /** The zoom and selection they were moved off at (carets change with both) */
+        caretZoom: 0,
+        caretSelection: -1,
     });
-    // The facing directions, the labels' widths and the anchors moved off the carets, reused
-    // frame to frame
+    // The labels' widths, how far each caret starts in dot radii, and the anchors moved off the
+    // carets, reused frame to frame
     const scratch = useRef({
-        directions: new Float32Array(0),
         widths: new Float64Array(0),
+        reach: new Float32Array(0),
         anchors: new Float64Array(0),
     });
 
@@ -306,6 +330,7 @@ export default function LabelsLayer({
         const newLayout =
             iconKey !== last.iconKey ||
             iconBatch !== last.iconBatch ||
+            pictures !== last.pictures ||
             iconPlace !== last.iconPlace ||
             (byNumber &&
                 (hoveredId !== last.hoveredId ||
@@ -339,16 +364,30 @@ export default function LabelsLayer({
                     ? (labels.get(id) ?? "")
                     : "",
             );
-            // How wide each label is, for keeping it off its facing caret (#1316)
+            // How wide each label is, its icon included, for keeping it off its facing caret
+            // (#1316); and how far the caret starts, past an icon in place of the dot
             if (facing) {
-                const iconAfter =
-                    iconPlace === "beside" ? iconsNow?.icons : undefined;
+                const withLabel = onDots ? undefined : iconsNow?.icons;
                 scratch.current.widths = Float64Array.from(
                     marchers.ids,
-                    (id, i) =>
-                        (atlas.measure(texts[i]) +
-                            (iconAfter?.has(id) ? ICON_WIDTH_EM : 0)) *
-                        size,
+                    (id, i) => {
+                        // Labels Off draws no numbers, only icons
+                        const drawnText = style.form === "off" ? "" : texts[i];
+                        // An icon is drawn after the number, or alone where the label would be
+                        const iconWidth =
+                            withLabel?.has(id) &&
+                            shown[i] &&
+                            dimming.labelShown(id)
+                                ? drawnText
+                                    ? ICON_WIDTH_EM
+                                    : ICON_EM
+                                : 0;
+                        return (atlas.measure(drawnText) + iconWidth) * size;
+                    },
+                );
+                const iconDots = onDots ? iconsNow?.icons : undefined;
+                scratch.current.reach = Float32Array.from(marchers.ids, (id) =>
+                    iconDots?.has(id) ? ICON_DOT_REACH : 1,
                 );
             }
             text.setLabels(
@@ -366,24 +405,35 @@ export default function LabelsLayer({
                     weight: weightOf(id),
                 })),
             );
+            iconBatch?.setPictures(pictures);
             iconBatch?.setIcons(
                 iconsOf(iconsNow?.icons, shown, size, color, hoveredId),
             );
         } else if (weightsChanged) {
             text.setWeights((i) => weightOf(marchers.ids[i]!));
         }
-        const caret = facing ? caretSizes(zoom) : null;
-        const caretDepth = caret?.depth ?? 0;
+        // Labels move off facing carets only while something is drawn there: the labels, or icons
+        // with them
+        const offCarets =
+            facing !== null &&
+            opacity > 0 &&
+            (style.form !== "off" || (iconKey !== "" && !onDots));
         if (
             newLayout ||
             marchers.version !== last.version ||
-            facing !== last.facing ||
-            caretDepth !== last.caretDepth
+            offCarets !== last.offCarets ||
+            // The carets' sizes change with zoom, and a selected marcher's starts past its ring
+            (offCarets &&
+                (zoom !== last.caretZoom ||
+                    marchers.selectionVersion !== last.caretSelection))
         ) {
-            const anchors = anchorsOffCarets(caret, size);
+            const anchors = offCarets
+                ? anchorsOffCarets(caretSizes(zoom), size)
+                : marchers.positions;
             text.setAnchors(anchors);
             // In place of a dot an icon stays on the spot
             iconBatch?.setAnchors(onDots ? marchers.positions : anchors);
+            if (placed) placed.current = anchors;
         }
         drawn.current = {
             version: marchers.version,
@@ -398,32 +448,30 @@ export default function LabelsLayer({
             shown,
             iconKey,
             iconBatch,
+            pictures,
             iconPlace,
             hoveredId,
             selectionVersion: marchers.selectionVersion,
             facing,
-            caretDepth,
+            offCarets,
+            caretZoom: zoom,
+            caretSelection: marchers.selectionVersion,
         };
     });
 
     /** Each label's anchor: its marcher's spot, moved off its facing caret (#1316). */
-    function anchorsOffCarets(
-        caret: CaretSizes | null,
-        size: number,
-    ): Float64Array {
+    function anchorsOffCarets(caret: CaretSizes, size: number): Float64Array {
         const beat = marchers.drawnBeat;
-        if (!facing || !caret || beat === null) return marchers.positions;
+        if (!facing || beat === null) return marchers.positions;
         const n = marchers.positions.length;
         const buffers = scratch.current;
-        if (buffers.anchors.length !== n) {
-            buffers.anchors = new Float64Array(n);
-            buffers.directions = new Float32Array(n);
-        }
-        facing.write(marchers.ids, beat, buffers.directions);
+        if (buffers.anchors.length !== n) buffers.anchors = new Float64Array(n);
         return anchorsClearOfCarets({
             positions: marchers.positions,
-            directions: buffers.directions,
+            directions: facing.directions(marchers.ids, beat),
             widths: buffers.widths,
+            reach: buffers.reach,
+            selected: marchers.selected,
             label: {
                 beside: style.beside,
                 offset: style.beside ? LABEL_BESIDE : LABEL_LIFT,

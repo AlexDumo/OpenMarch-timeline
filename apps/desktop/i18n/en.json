@@ -289,7 +289,9 @@
             "toggleShapeOutlines": "Show or hide shape outlines",
             "toggleShapeOutlinesKeywords": "shapes outlines boxes forms placed border always",
             "showShapeOutlines": "Show shape outlines",
-            "hideShapeOutlines": "Hide shape outlines"
+            "hideShapeOutlines": "Hide shape outlines",
+            "addFlag": "Add a flag to the show",
+            "addFlagKeywords": "flag silk guard equipment import artwork asset custom design"
         },
         "items": {
             "edit": "Edit selected prop or equipment",
@@ -352,7 +354,9 @@
             "toggleFacingLane": "Show or hide the Facing lane",
             "toggleEquipmentIcons": "Show or hide equipment icons",
             "showEquipmentIcons": "Show equipment icons",
-            "hideEquipmentIcons": "Hide equipment icons"
+            "hideEquipmentIcons": "Hide equipment icons",
+            "equipmentShowFlag": "Equipment: one of the show's flags",
+            "selectHoldingShowFlag": "Select who holds one of the show's flags"
         },
         "path": {
             "pen": "Path pen",
@@ -1885,7 +1889,14 @@
                 "overTriangleCap": "Still detailed: {triangles} triangles (the aim is {cap})"
             }
         },
-        "modelMissing": "This prop's model isn't in the show any more, so it draws as a block."
+        "modelMissing": "This prop's model isn't in the show any more, so it draws as a block.",
+        "flags": {
+            "title": "Flags",
+            "add": "Add flag…",
+            "give": "Hand {name} to the selected performers",
+            "empty": "Add a flag for each silk design the show uses.",
+            "hint": "Select performers, then pick a flag to hand it to them from the playhead. It's also in the field's right-click menu: Equipment › Guard equipment."
+        }
     },
     "frontEnsemble": {
         "title": "Front ensemble and podiums",
@@ -2798,12 +2809,13 @@
             "countMore": "One more here: from the longest other row",
             "dotHint": "Press a dot to leave that spot empty",
             "drawn": "Drawn",
-            "fillSpot": "Empty spot: press to take it out",
+            "fillSpot": "Empty spot: press to put a marcher back here",
             "frontN": "Front {count}",
             "heading": "{count} marchers in {rows} rows",
             "headingEmpty": "{count} marchers in {rows} rows · {empty, plural, one {# empty spot} other {# empty spots}}",
             "label": "Rows",
             "leaveEmpty": "Leave this spot empty",
+            "lensHint": "Point along a row to see its spots up close. Press a dot to leave that spot empty",
             "leftN": "Left {count}",
             "pickTip": "{perRow} in a row, {rows} rows",
             "pickTipLast": "{perRow} in a row, {rows} rows, the last row {last}",
@@ -2826,8 +2838,32 @@
             "slantMark": "Slant {steps}",
             "spacing": "Spacing",
             "splits": "Splits your {count} marchers. Adds none.",
+            "spotAcross": "{name}, spot {spot} of {count}: {left} to the left, {right} to the right",
+            "spotCount": "{left} left · {right} right",
+            "spotCountUpDown": "{left} front · {right} back",
+            "spotUpDown": "{name}, spot {spot} of {count}: {left} toward the front, {right} toward the back",
+            "spotsLabel": "{name}: its spots. Arrow keys move along them, Space leaves one empty or fills it",
             "summary": "Rows · {count}",
-            "tip": "Split these marchers into rows alongside the line"
+            "tip": "Split these marchers into rows alongside the line",
+            "go": "Rows go",
+            "goBack": "Front to back",
+            "goBackDetail": "Straight back on the grid",
+            "goFollow": "Follow the bends",
+            "goFollowCurveDetail": "Each row square to the curve",
+            "goFollowLineDetail": "Each row square to the line",
+            "goOut": "Out from the line",
+            "goOutDetail": "Each row square to the line",
+            "goRings": "Rings",
+            "goRingsDetail": "Round the arc's center",
+            "goSide": "Side to side",
+            "goSideDetail": "Straight across on the grid",
+            "goSlideArc": "Slide the whole arc",
+            "goSlideArcDetail": "The same arc, moved",
+            "goSlideCurve": "Slide the whole curve",
+            "goSlideCurveDetail": "The same curve, moved",
+            "goSlideLine": "Slide the whole line",
+            "goSlideLineDetail": "The same line, moved",
+            "goTip": "Which way each row steps from the line you drew"
         }
     },
     "tags": {
@@ -3753,8 +3789,6 @@
             "guardUniforms": "Guard uniform",
             "brassFinish": "Brass finish",
             "tuba": "Tubas",
-            "silkShape": "Flag silk shape",
-            "silkArtwork": "Flag silk artwork",
             "tabs": {
                 "venue": "Venue",
                 "performers": "Performers",
@@ -3764,7 +3798,9 @@
             "computerNote": "Saved on this computer only. Not part of the show.",
             "shortcuts": "Keyboard shortcuts",
             "followTurns": "Following: turn with the performer",
-            "povShowsBody": "Point of view: show their arms and instrument"
+            "povShowsBody": "Point of view: show their arms and instrument",
+            "customUniforms": "Custom uniforms (preview)",
+            "customUniformsDescription": "Make your own band uniforms: the uniform template, importing and saving uniform files, logos and numbers, and modes. This is a preview, so uniform files may change in a later version of OpenMarch."
         },
         "keys": {
             "playPause": "Play or pause",
@@ -3797,6 +3833,7 @@
         },
         "uniformPreset": {
             "fade": "Ultraviolet Fade",
+            "flatsSample": "Sample flats (preview)",
             "military": "Night Watch",
             "plastron": "Lilac Plastron",
             "prism": "Prism Split",
@@ -3877,16 +3914,6 @@
             "swing": "Swing"
         },
         "silkArtwork": {
-            "none": "No artwork: the silks show the guard uniform's pattern or the section's color.",
-            "import": "Import PNG…",
-            "replace": "Replace…",
-            "remove": "Remove",
-            "template": "Template for {shape}:",
-            "preparing": "Preparing…",
-            "notPng": "That file isn't a PNG. Export your artwork as PNG and import it again.",
-            "tooLarge": "That PNG is too large. Export it at a lower resolution and import it again.",
-            "unreadable": "That PNG couldn't be read.",
-            "templateFailed": "The template couldn't be made.",
             "saveFailed": "Couldn't save the flag silk artwork"
         },
         "cameraSettings": {
@@ -3951,6 +3978,183 @@
         "venueFit": {
             "fallback": "This show's field is bigger than the {width} × {depth} ft floor at {venue}, so the 3D View shows the {fallback} instead.",
             "tooBig": "{venue} has a fixed {width} × {depth} ft floor, and this show's field is {fieldWidth} × {fieldDepth} ft."
+        },
+        "uniformTemplate": {
+            "label": "Uniform template:",
+            "preparing": "Preparing…",
+            "jsonInfo": "JSON holds the template's shapes and seams as numbers, for scripts and AI agents.",
+            "jsonInfoLabel": "About the JSON file",
+            "failed": "The uniform template couldn't be made."
+        },
+        "uniformImport": {
+            "import": "Import uniform…",
+            "importing": "Importing…",
+            "save": "Save uniform file",
+            "saveNeedsImported": "Pick an imported uniform above to save it as a file.",
+            "saveNeedsImport": "Import a uniform first.",
+            "missing": "The band's uniform isn't in this show anymore, so the band wears its preset. Import it again to bring it back.",
+            "unreadable": "The band's uniform is in this show, but its file can't be read (it may be damaged), so the band wears its preset. Pick another uniform, or import one.",
+            "hint": "Paint on the template, hide the template layer, then import a transparent PNG or an SVG. A saved uniform file imports too.",
+            "imported": "The band now wears “{name}”.",
+            "saveFailed": "Couldn't save the imported uniform",
+            "storeFailed": "The uniform couldn't be stored in the show. The editor window says why.",
+            "importNeedsSettings": "The show's 3D View settings are still loading.",
+            "note": {
+                "scaled": "The image is {width} × {height} px, not the template's {templateWidth} × {templateHeight} px, so it was scaled to fit.",
+                "svgViewBox": "The SVG's viewBox isn't the template page (0 0 105 88), so it was fitted to the page.",
+                "template": "The template looks like it's still showing. Hide the template layer before you export.",
+                "empty": "Nothing is painted on the uniform's front or back.",
+                "opaque": "The page has no transparent areas. Only the uniform's front and back are used.",
+                "palette": "Parts you didn't paint use {preset}'s colors.",
+                "paintedLogo": "Something on the uniform looks like a logo or number painted on. Painted art widens on fuller builds, so a round crest turns oval. Add it under Logos and numbers instead."
+            },
+            "refused": {
+                "unsupported": "Import a PNG, an SVG or a uniform file.",
+                "pdf": "PDFs can't be imported yet. Export your design as PNG or SVG and import that.",
+                "notPng": "That file isn't a PNG. Export your design as PNG and import it again.",
+                "notSvg": "That file isn't an SVG.",
+                "tooLarge": "That file is too large. Export it at the template's size and import it again.",
+                "unreadable": "That file couldn't be read.",
+                "notPack": "That file isn't an OpenMarch uniform file.",
+                "newer": "That uniform file is from a newer version of OpenMarch. Update OpenMarch to import it.",
+                "damaged": "That uniform file is damaged.",
+                "timedOut": "Importing took too long. Try a smaller file."
+            },
+            "newer": "The band's uniform was made with a newer version of OpenMarch, so the band wears its preset. Update OpenMarch to see it.",
+            "loadFailed": "The band's uniform couldn't be loaded just now, so the band wears its preset for now. Its file may be fine. Try again to load it.",
+            "listFailed": "The list of the show's custom uniforms couldn't be loaded just now, so some may be missing from it.",
+            "tryAgain": "Try again",
+            "loading": "Loading…"
+        },
+        "uniformItems": {
+            "title": "Logos and numbers",
+            "add": "Add logo or number…",
+            "adding": "Adding…",
+            "saving": "Saving…",
+            "saveFailed": "The logos and numbers couldn't be saved in the show. The 3D View shows the uniform as it was saved.",
+            "hint": "Place logos, numbers and crests here instead of painting them on the uniform, so they keep their shape on every body type.",
+            "full": "A uniform holds up to {count} logos and numbers.",
+            "unnamed": "Image",
+            "remove": "Remove",
+            "place": "Place",
+            "preset": {
+                "chest": "Chest center",
+                "backNumber": "Back number",
+                "sleeveLeft": "Left sleeve",
+                "sleeveRight": "Right sleeve",
+                "custom": "Custom"
+            },
+            "panelLabel": "Side",
+            "panel": {
+                "front": "Front",
+                "back": "Back",
+                "cape": "Cape"
+            },
+            "x": "Across",
+            "y": "Down",
+            "sizeBy": "Size by",
+            "width": "Width",
+            "height": "Height",
+            "size": "Size",
+            "rotate": "Rotation",
+            "grade": "On other builds",
+            "grades": {
+                "proportional": "Scales with build",
+                "fixed": "Real size",
+                "stretch": "Stretches like fabric",
+                "tile": "Repeating print",
+                "line": "Line, keeps its width"
+            },
+            "repeatOver": "Repeat over",
+            "region": {
+                "torso": "Jacket",
+                "sleeve-L": "Left sleeve",
+                "sleeve-R": "Right sleeve",
+                "hips": "Pants top",
+                "leg-L": "Left leg",
+                "leg-R": "Right leg",
+                "cape": "Cape"
+            },
+            "needsRegion": "A repeating print needs at least one part.",
+            "notDrawn": "At this size one side would be over 120 in, so it isn't drawn.",
+            "notDrawnTile": "At this size each copy would be under 1 in or over 120 in on one side, so the print isn't drawn.",
+            "tooThin": "At this size it's {thickness} in thick, too thin to see.",
+            "fixRange": "Set Size between {lo} and {hi} in.",
+            "fixByWidth": "Set Size by to Width, then Size between {lo} and {hi} in.",
+            "fixByHeight": "Set Size by to Height, then Size between {lo} and {hi} in.",
+            "noSize": "No size works: the image is {ratio} times longer than it is wide. Use a less thin image.",
+            "noSizeTile": "No size works for a repeating print: the image is {ratio} times longer than it is wide, so a copy 1 in on its short side would be over 120 in on its long side. Use a less thin image, or choose another option under On other builds.",
+            "sizeByRefused": "Sized that way, this item would be {value} in, outside the {min}–{max} in Size takes.",
+            "loading": "Loading…"
+        },
+        "uniformModes": {
+            "title": "Modes",
+            "wears": "Band wears",
+            "cueLater": "One mode for the whole show for now. Switching modes during the show comes with Uniform cues.",
+            "hint": "Add a mode to wear this uniform another way, such as with a sash or unzipped. A mode can add an overlay image or just change colors.",
+            "waitForSave": "Wait until the uniform's changes are saved.",
+            "full": "A uniform holds up to {count} modes.",
+            "add": "Add mode…",
+            "defaultName": "Default",
+            "newName": "Mode {number}",
+            "needsName": "Give the mode a name.",
+            "name": "Name",
+            "overlay": "Overlay image",
+            "overlayPick": "Pick image…",
+            "overlayChange": "Pick another…",
+            "overlayClear": "No overlay",
+            "reading": "Reading…",
+            "overlayHint": "Drawn over the uniform's art in this mode only.",
+            "overlayScaled": "The image wasn't the template's size, so it was scaled to fit the page.",
+            "noOverlayHint": "Optional. Without one, the mode starts as a copy of the first mode, so you can change its colors or parts.",
+            "layersFull": "A uniform holds up to {count} images.",
+            "create": "Add mode",
+            "cancel": "Cancel",
+            "expand": "Show this mode's details",
+            "collapse": "Hide this mode's details",
+            "default": "Default",
+            "defaultTip": "The first mode is the default. Move another mode up to make it the default.",
+            "moveUp": "Move up",
+            "moveDown": "Move down",
+            "alreadyFirst": "Already first",
+            "alreadyLast": "Already last",
+            "remove": "Remove mode",
+            "layers": "Images",
+            "needsLayer": "A mode shows at least one image.",
+            "items": "Logos and numbers",
+            "colors": "Colors",
+            "colorsReset": "Use the uniform's colors",
+            "parts": "Parts",
+            "role": {
+                "primary": "Main",
+                "secondary": "Second",
+                "accent": "Accent",
+                "trim": "Trim",
+                "pants": "Pants"
+            },
+            "part": {
+                "stripe": "Stripe",
+                "collar": "Collar",
+                "cuffs": "Cuffs",
+                "gloves": "Gloves",
+                "hat": "Hat"
+            },
+            "unusedImages": "{count, plural, =1 {One image isn't shown in any mode.} other {# images aren't shown in any mode.}}",
+            "removeUnused": "Remove unused images",
+            "loading": "Wait until the uniform has loaded.",
+            "lastRemoved": "Removing the last mode also removed what it didn't show: {images, plural, =0 {no images} =1 {one image} other {# images}} and {items, plural, =0 {no logos or numbers} =1 {one logo or number} other {# logos or numbers}}."
+        },
+        "uniformPreview": {
+            "badge": "Preview",
+            "warning": "Preview: uniform files may change in a later version of OpenMarch, and uniforms you make now may need to be imported again. Keep your original artwork.",
+            "dismiss": "Got it",
+            "showUses": "This show's band wears a custom uniform, a preview feature.",
+            "turnOn": "Turn on custom uniforms",
+            "missingOff": "The band's custom uniform isn't in this show anymore, so the band wears its preset. To bring it back, turn on custom uniforms and import it again.",
+            "unreadableOff": "The band's custom uniform is in this show, but its file can't be read, so the band wears its preset. Pick another uniform, or turn on custom uniforms to import one.",
+            "showUsesUnavailable": "This show's band wears a custom uniform. Making custom uniforms isn't in this version of OpenMarch yet.",
+            "missingUnavailable": "The band's custom uniform isn't in this show anymore, so the band wears its preset.",
+            "unreadableUnavailable": "The band's custom uniform is in this show, but its file can't be read, so the band wears its preset. Pick another uniform."
         }
     },
     "web": {
@@ -5531,21 +5735,40 @@
         "notes": {
             "unused": "{count, plural, one {# asset isn't used} other {# assets aren't used}} anywhere in the show · {size}",
             "missing": "{count, plural, one {# prop names a model this show doesn't have, so it draws as a block.} other {# props name models this show doesn't have, so they draw as blocks.}}",
-            "large": "Assets make this show large: {size}. Large shows are slower to open, save and share."
+            "large": "Assets make this show large: {size}. Large shows are slower to open, save and share.",
+            "missingUniform": "The band's custom uniform isn't in this show anymore, so the band wears its preset. Import it again in the 3D View settings to bring it back.",
+            "unreadableUniform": "The band's custom uniform is in this show, but its file can't be read (it may be damaged), so the band wears its preset. Pick another uniform in the 3D View settings, or import one.",
+            "historyFailed": "Couldn't check which uniforms Undo can bring back, so imported uniforms aren't offered for removal.",
+            "unusedVersions": "{count, plural, one {# asset version isn't used} other {# asset versions aren't used}} anywhere in the show · {size}",
+            "missingUniformPreviewOff": "The band's custom uniform isn't in this show anymore, so the band wears its preset. To bring it back, turn on Custom uniforms (preview) in the 3D View settings' Preferences, then import it again.",
+            "missingUniformUnavailable": "The band's custom uniform isn't in this show anymore, so the band wears its preset.",
+            "unreadableUniformPreviewOff": "The band's custom uniform is in this show, but its file can't be read (it may be damaged), so the band wears its preset. Pick another uniform in the 3D View settings.",
+            "newerUniform": "The band's custom uniform was made with a newer version of OpenMarch, so the band wears its preset. Update OpenMarch to see it.",
+            "loadFailedUniform": "The band's custom uniform couldn't be loaded just now. Its file may be fine. Until it loads, the band wears its preset.",
+            "loadFailed": "The show's assets couldn't be loaded just now."
         },
         "removeUnused": {
             "button": "Remove unused…",
             "title": "{count, plural, one {Remove # unused asset?} other {Remove # unused assets?}}",
             "description": "Nothing in the show uses these. Removing them makes the show {size} smaller. Undo doesn't bring them back.",
             "none": "Every asset is in use, so there's nothing to remove.",
+            "checking": "Checking what nothing uses…",
             "cancel": "Cancel",
-            "confirm": "{count, plural, one {Remove # asset} other {Remove # assets}}"
+            "confirm": "{count, plural, one {Remove # asset} other {Remove # assets}}",
+            "olderVersions": "{count, plural, one {An older version of {name}} other {# older versions of {name}}}",
+            "versions": "{count, plural, one {{name} (# version)} other {{name} (# versions)}}",
+            "otherVersions": "{count, plural, one {Another version of {name}} other {# other versions of {name}}}",
+            "titleVersions": "{count, plural, one {Remove # unused version?} other {Remove # unused versions?}}",
+            "confirmVersions": "{count, plural, one {Remove # version} other {Remove # versions}}"
         },
         "kind": {
-            "model": "3D model"
+            "model": "3D model",
+            "uniform": "Uniform",
+            "flag": "Flag"
         },
         "uses": "{count, plural, one {Used once} other {Used # times}}",
         "unused": "Not used",
+        "uniformCreditsFixed": "An imported uniform's credits come from its file. Change them in the file and import it again.",
         "shareNote": "Unknown license: you may not have the right to share it",
         "size": {
             "bytes": "{value} bytes",
@@ -5556,6 +5779,32 @@
         "errors": {
             "remove": "Couldn't remove the unused assets",
             "credits": "Couldn't save the credits"
+        },
+        "olderVersions": "{count, plural, one {# older version} other {# older versions}}, {size}",
+        "otherVersions": "{count, plural, one {# other version} other {# other versions}}, {size}",
+        "tryAgain": "Try again",
+        "loading": "Loading…",
+        "flags": {
+            "addTitle": "Add a flag",
+            "shape": "Silk shape",
+            "template": "Template to paint:",
+            "preparing": "Preparing…",
+            "choose": "Choose painted PNG…",
+            "chooseAnother": "Choose another PNG…",
+            "name": "Name",
+            "namePlaceholder": "Opener silk",
+            "cancel": "Cancel",
+            "add": "Add flag",
+            "needPicture": "Choose the painted PNG first",
+            "needName": "Give the flag a name",
+            "notPng": "That file isn't a PNG. Save the painted template as a PNG, then choose it.",
+            "tooLarge": "That PNG is too large. Export it at a lower resolution and import it again.",
+            "unreadable": "Couldn't read that PNG.",
+            "templateFailed": "Couldn't make the template.",
+            "menuAdd": "Add flag…",
+            "errors": {
+                "add": "Couldn't add the flag"
+            }
         }
     }
 }

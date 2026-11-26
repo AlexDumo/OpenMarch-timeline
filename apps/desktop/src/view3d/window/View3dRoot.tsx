@@ -24,6 +24,7 @@ import View3dOverlay from "./overlay/View3dOverlay";
 import { startPrefsSync, useView3dSceneStore } from "./sceneStore";
 import Scene from "./Scene";
 import { useKitShowCredits } from "./useKitShowCredits";
+import { composeChecksUniformPacks } from "@/hooks/queries/useUniformPack";
 
 /**
  * What the viewport shows instead of the scene, as a translation key, or null
@@ -53,6 +54,9 @@ export function readView3dWindowParams(search: string): View3dWindowParams {
 }
 
 const params = readView3dWindowParams(window.location.search);
+
+// this window composes the uniform it reads, which decodes its art: its reads needn't
+composeChecksUniformPacks();
 
 // Same defaults as the editor's client in App.tsx.
 const queryClient = new QueryClient({

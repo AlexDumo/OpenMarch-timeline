@@ -26,13 +26,16 @@ import { caretSizes, ICON_DOT_REACH } from "../facingCaret";
  * edged with a halo of the field's background so it reads over yard lines and paths.
  *
  * Drawn under the dots (a neighbor's dot covers a caret that reaches it) and over the labels,
- * which move off it.
+ * which move off it. A selected performer's caret starts past their selection ring, which the dots
+ * draw opaque: drawn over the dots instead, the caret's halo would cut the ring and the caret
+ * would cover close neighbors' dots.
  */
 const VERTEX = /* glsl */ `
 attribute vec2 aPos;
 attribute vec2 aDir;
-attribute vec2 aStyle;
+attribute vec3 aStyle;
 uniform float uStart;
+uniform float uSelectedStart;
 uniform float uTip;
 uniform float uHalf;
 varying vec2 vLocal;
@@ -40,7 +43,9 @@ varying float vOpacity;
 varying float vStart;
 void main() {
     vOpacity = aStyle.x;
-    vStart = uStart * aStyle.y;
+    // Past the dot (or an icon in its place, aStyle.y dot radii), and a selection ring (aStyle.z):
+    // facingCaret.ts's caretStart
+    vStart = max(uStart * aStyle.y, aStyle.z * uSelectedStart);
     if (dot(aDir, aDir) == 0.0 || aStyle.x <= 0.0) {
         // No caret: off screen
         gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
@@ -92,6 +97,7 @@ type Drawn = {
     idsVersion: number;
     appearanceVersion: number;
     dimVersion: number;
+    selectionVersion: number;
     facing: FieldFacing | null;
     iconDotsKey: string;
 };
@@ -125,6 +131,7 @@ export default function FacingCaretsLayer({
         idsVersion: -1,
         appearanceVersion: -1,
         dimVersion: -1,
+        selectionVersion: -1,
         facing: null,
         iconDotsKey: "",
     });
@@ -147,6 +154,7 @@ export default function FacingCaretsLayer({
                 fragmentShader: FRAGMENT,
                 uniforms: {
                     uStart: { value: 0 },
+                    uSelectedStart: { value: 0 },
                     uTip: { value: 0 },
                     uHalf: { value: 0 },
                     uHalfWidth: { value: 0 },
@@ -187,6 +195,7 @@ export default function FacingCaretsLayer({
         const sizes = caretSizes(zoom);
         const { uniforms } = mesh.material;
         uniforms.uStart.value = sizes.start;
+        uniforms.uSelectedStart.value = sizes.selectedStart;
         uniforms.uTip.value = sizes.depth;
         uniforms.uHalf.value =
             sizes.halfWidth + sizes.strokeHalfWidth + sizes.halo + 1 / zoom;
@@ -208,7 +217,8 @@ export default function FacingCaretsLayer({
             facing !== last.facing ||
             iconDotsKey !== last.iconDotsKey ||
             marchers.appearanceVersion !== last.appearanceVersion ||
-            dimming.version !== last.dimVersion;
+            dimming.version !== last.dimVersion ||
+            marchers.selectionVersion !== last.selectionVersion;
         if (!restyled && marchers.version === last.version) return;
         const geometry = mesh.geometry;
         if (resized || !geometry.getAttribute("aPos")) {
@@ -223,22 +233,24 @@ export default function FacingCaretsLayer({
             geometry.setAttribute("aDir", dynamic(new Float32Array(n * 2), 2));
             geometry.setAttribute(
                 "aStyle",
-                dynamic(new Float32Array(n * 2), 2),
+                dynamic(new Float32Array(n * 3), 3),
             );
             geometry.instanceCount = n;
         }
         const instanced = (name: string) =>
             geometry.getAttribute(name) as InstancedBufferAttribute;
         if (restyled) {
-            // Opacity (hidden marchers and items have none), and where the arms start
+            // Opacity (hidden marchers and items have none), and where the arms start: past an
+            // icon in place of the dot, and past the selection ring
             const style = instanced("aStyle");
             const styles = style.array as Float32Array;
             marchers.ids.forEach((id, i) => {
                 const shown = !marchers.hidden[i] && !marchers.isItem[i];
-                styles[i * 2] = shown ? dimming.opacityOf(id) : 0;
-                styles[i * 2 + 1] = iconDots?.icons.has(id)
+                styles[i * 3] = shown ? dimming.opacityOf(id) : 0;
+                styles[i * 3 + 1] = iconDots?.icons.has(id)
                     ? ICON_DOT_REACH
                     : 1;
+                styles[i * 3 + 2] = marchers.selected[i] ?? 0;
             });
             style.needsUpdate = true;
         }
@@ -250,10 +262,8 @@ export default function FacingCaretsLayer({
         if (marchers.drawnBeat === null)
             (directions.array as Float32Array).fill(0);
         else
-            facing.write(
-                marchers.ids,
-                marchers.drawnBeat,
-                directions.array as Float32Array,
+            (directions.array as Float32Array).set(
+                facing.directions(marchers.ids, marchers.drawnBeat),
             );
         directions.needsUpdate = true;
         drawn.current = {
@@ -261,6 +271,7 @@ export default function FacingCaretsLayer({
             idsVersion: marchers.idsVersion,
             appearanceVersion: marchers.appearanceVersion,
             dimVersion: dimming.version,
+            selectionVersion: marchers.selectionVersion,
             facing,
             iconDotsKey,
         };

@@ -146,6 +146,28 @@ describe("setting a facing (#993)", () => {
         expect(at({ kind: "angle", degrees: 0 }, [1])).toBe(false);
         expect(at({ kind: "front" }, [])).toBe(false);
     });
+
+    it("starts bass drums on side 2 in the editor's compile, so the menu checks Side 2", () => {
+        const show = compileShowCues(
+            [
+                { id: 1, section: "Bass Drum" },
+                { id: 2, section: "Trumpet" },
+            ],
+            BEATS,
+            [],
+        );
+        expect(facingAt(show.compiled, 1, 0)).toBe(90);
+        expect(facingAt(show.compiled, 2, 0)).toBe(0);
+        const checked = (kind: "front" | "side2") =>
+            facingAlready({
+                compiled: show.compiled,
+                choice: { kind },
+                marcherIds: [1],
+                count: 8,
+            });
+        expect(checked("side2")).toBe(true);
+        expect(checked("front")).toBe(false);
+    });
 });
 
 describe("stretching a turn (#993)", () => {

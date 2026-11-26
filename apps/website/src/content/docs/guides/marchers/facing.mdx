@@ -38,7 +38,7 @@ import { Steps } from "@astrojs/starlight/components";
 
 <InShort>Select the marchers, right-click one and choose <Ui k="field.menu.facing" /> › a direction, or press <Kbd action="facingSide2" /> for side 2. To turn over the counts before, pull the tab on the left of its diamond in the Facing lane to the left.</InShort>
 
-Every marcher faces the front until you turn them. A facing change says where the selected marchers face by a count: they face that way on it, and until their next facing change. They can turn into it instantly or over the counts before it. The field can draw a small caret in front of each marcher's dot, its point aimed the way they face ([See facing on the field](#see-facing-on-the-field)), and the 3D View turns them.
+Every marcher faces the front until you turn them, except bass drums and flub drums, which start on side 2 with their right side toward the front. A facing change says where the selected marchers face by a count: they face that way on it, and until their next facing change. They can turn into it instantly or over the counts before it. The field can draw a small caret in front of each marcher's dot, its point aimed the way they face ([See facing on the field](#see-facing-on-the-field)), and the 3D View turns them.
 
 ## Turn marchers
 
@@ -140,7 +140,7 @@ To see which way everyone faces, select <Ui k="fieldDisplay.overlays" /> (the ey
   maxWidth={480}
 />
 
-While it's on, every marcher has a small caret (^) in front of their dot, its point aimed the way they face: down the field toward the audience for the front, up for the back, and toward side 1 or side 2 for the sides. Marchers without a facing change face the front, so their carets point down.
+While it's on, every marcher has a small caret (^) in front of their dot, its point aimed the way they face: down the field toward the audience for the front, up for the back, and toward side 1 or side 2 for the sides. Marchers without a facing change face the front, so their carets point down; bass drums and flub drums start on side 2, so theirs point toward side 2.
 
 <Media
   id="marchers-facing-field"

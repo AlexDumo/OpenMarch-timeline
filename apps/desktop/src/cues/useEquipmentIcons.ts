@@ -7,7 +7,7 @@ import {
     iconsKey,
     type EquipmentIconKey,
 } from "./equipmentIcons";
-import { useShowCues } from "./useShowCues";
+import type { EditorCues } from "./useShowCues";
 
 /** The icons the 2D field draws after drill numbers at a beat, and a key that changes with them. */
 export interface LabelIcons {
@@ -25,10 +25,10 @@ const NONE = { key: "", icons: new Map<number, EquipmentIconKey>() } as const;
  * other than their own instrument (the default), everyone, everyone in some sections, or nobody
  * (null).
  * `at` takes a spec beat (fractional while playing) and is cheap to call every frame: it works the
- * icons out again only when the count changes.
+ * icons out again only when the count changes. `show` is the field's one compile (`useShowCues`),
+ * which the facing carets read too.
  */
-export function useEquipmentIcons(): LabelIcons | null {
-    const show = useShowCues();
+export function useEquipmentIcons(show: EditorCues | null): LabelIcons | null {
     const beats = useTimingObjects()?.beats;
     const shown = useUiSettingsStore(
         (s) => s.uiSettings.equipmentIcons ?? "changed",

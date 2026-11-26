@@ -1,4 +1,4 @@
-import type { FieldTheme } from "@openmarch/core";
+import type { FieldProperties, FieldTheme } from "@openmarch/core";
 import type {
     FieldPlan,
     FieldRole,
@@ -6,6 +6,12 @@ import type {
     PlanItem,
 } from "@/view3d/core/field";
 import { TURF } from "@/view3d/core/field/turfPlan";
+import {
+    NOTHING_PAINTED,
+    type PaintedMarking,
+    type PaintedMarkings,
+} from "@/field/fieldPlan";
+import { turfHashRows } from "@/view3d/core/field/turfPlan";
 import {
     useUiSettingsStore,
     type FieldVenueAround,
@@ -28,7 +34,10 @@ export interface VenueLook {
     detail: number;
     /** Markings only: the logo and end zones as faint grey ink, no turf. */
     ink: boolean;
-    /** Keeps the turf's own yard lines, hashes and numbers (and draws the grid in light ink). */
+    /**
+     * Paints the venue's own markings: its yard lines, hashes, numbers and arrows. The 2D grid
+     * leaves out what the venue paints (`venuePaintedMarkings`) and draws the rest in light ink.
+     */
     keepMarkings: boolean;
     /** Share of color for the stands around the field. */
     aroundAmount: number;
@@ -130,8 +139,8 @@ const INK_MARKS: ReadonlySet<FieldRole> = new Set<FieldRole>([
 /**
  * The plan's items a look paints, in passes: each pass is painted at its
  * alpha, in order. Markings only paints end zones lightly, then the logo and
- * lettering; the other looks paint everything but what the 2D grid draws
- * (Full color keeps it all).
+ * lettering; Faint and Soft paint everything but what the 2D grid draws, and
+ * Full color paints it all (the grid then leaves out what it paints).
  */
 export function venuePasses(
     plan: FieldPlan,
@@ -156,6 +165,39 @@ export function venuePasses(
             alpha: 1,
         },
     ];
+}
+
+const VENUE_MARKINGS: readonly PaintedMarking[] = [
+    "yardLine",
+    "yLine",
+    "yardNumber",
+    "border",
+];
+
+/**
+ * The markings the look paints from the venue, which the 2D grid then leaves out
+ * (`planField2d`'s `painted`): in Full color, each one the venue's surface has. Stadium turf
+ * paints its yard lines, hashes, numbers and border, so the grid keeps only its step grid, labels
+ * and any reference hash the turf skips; a tarp paints only its edge, marks and dots, so the grid
+ * keeps its lines and numbers.
+ */
+export function venuePaintedMarkings(
+    plan: FieldPlan,
+    look: VenueLook,
+    fieldProperties: FieldProperties,
+): PaintedMarkings {
+    if (!look.keepMarkings || look.ink) return NOTHING_PAINTED;
+    const roles = new Set<FieldRole>(plan.items.map((i) => i.role));
+    return {
+        kinds: new Set(VENUE_MARKINGS.filter((m) => roles.has(m))),
+        hashRows: new Set(
+            roles.has("hash")
+                ? turfHashRows(fieldProperties.yCheckpoints).map(
+                      (c) => c.stepsFromCenterFront,
+                  )
+                : [],
+        ),
+    };
 }
 
 /** The color most of the surface is (its background rect), as 0..1 RGB. */

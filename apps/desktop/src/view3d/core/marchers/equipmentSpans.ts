@@ -17,6 +17,7 @@ import type { CueSegment, PerformerCarry } from "@openmarch/core";
 import { carryForModel, type Carry } from "../instruments/catalog";
 import { modelOfValue } from "@/cues/equipmentItems";
 import type { HoldFamily, HoldState } from "../instruments/holds";
+import { DEFAULT_SILK_SHAPE, type SilkShapeId } from "../sizes/silkShapes";
 import { performerCarryOf, type HornEvent } from "./hornChannel";
 
 /**
@@ -30,8 +31,23 @@ export function carryForValue(
     value: string | null,
     holds: PerformerCarry,
     base: Carry | null,
+    flagOf?: FlagOf,
 ): Carry | null {
     if (holds === "none") return null;
+    // One of the show's flags (fork #985): the 6 ft flag in its own silk shape, painted with its
+    // own design
+    const showFlag = value !== null ? flagOf?.(value) : undefined;
+    if (showFlag !== undefined) {
+        const flag = carryForModel("flag6");
+        const shaped =
+            showFlag.shape === DEFAULT_SILK_SHAPE
+                ? flag
+                : {
+                      ...flag,
+                      options: { ...flag.options, silkShape: showFlag.shape },
+                  };
+        return { ...shaped, artwork: showFlag.artwork };
+    }
     const model = modelOfValue(value);
     if (model) {
         if (base && base.model === model) return base;
@@ -42,6 +58,16 @@ export function carryForValue(
     if (base && performerCarryOf(base.family) === holds) return base;
     return null;
 }
+
+/** One of the show's flags as the 3D View draws it: its silk shape and its design's tile */
+export interface ShowFlagCarry {
+    readonly shape: SilkShapeId;
+    /** Its design's tile in the flags' texture (`flagArtworkAtlas.ts`) */
+    readonly artwork: number;
+}
+
+/** The show's flag an Equipment value names, or undefined for another value */
+export type FlagOf = (value: string) => ShowFlagCarry | undefined;
 
 /** The 6 ft flag and the tuba are the section default, which a show setting may swap. */
 const sameKind = (a: string, b: string) =>
@@ -71,13 +97,14 @@ export function slotEquipment(
     segments: readonly CueSegment[],
     holdsAt: (count: number) => PerformerCarry,
     base: Carry | null,
+    flagOf?: FlagOf,
 ): SlotEquipment | null {
     const carries: (Carry | null)[] = [base];
     const keys = [JSON.stringify(base)];
     const spans: HeldSpan[] = [];
     for (const seg of segments) {
         if (!(seg.to > seg.from)) continue;
-        const carry = carryForValue(seg.value, holdsAt(seg.from), base);
+        const carry = carryForValue(seg.value, holdsAt(seg.from), base, flagOf);
         const key = JSON.stringify(carry);
         let held = keys.indexOf(key);
         if (held < 0) {

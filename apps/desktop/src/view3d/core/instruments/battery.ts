@@ -665,7 +665,7 @@ const PLATE_MOUNT: Vec3 = [0.06, 1.07, 0.19];
  * sit at 1.46 on every body) and down the back, padded where they sit, a
  * plate down the sternum onto a belly plate, a bar across the upper back,
  * and J-bars from the belly plate to `drumMounts` (instrument frame, the
- * first on the performer's right). Clearances come from the seven body
+ * first on the performer's right). Clearances come from the body
  * meshes: chests reach z 0.17, upper backs z −0.19.
  */
 function vestCarrier(

@@ -23,7 +23,9 @@ import {
     notifyActionHandlersChanged,
     registerActionHandler,
 } from "@/shortcuts/registry";
+import { flagCueValues, type ShowFlag } from "@/showAssets/flags";
 import { EquipmentLaneView } from "../EquipmentLane";
+import { ROW_NAME_GAP } from "../cueLaneParts";
 import { useTimelinePointer } from "../../TimelinePrimitives";
 import type { TimelineBeatRange } from "../../TimelineViewModel";
 
@@ -114,10 +116,13 @@ function renderLane(
     timeline: {
         onSeek?: (beat: number) => void;
         onSelectRange?: (range: TimelineBeatRange) => void;
+        flags?: ShowFlag[];
     } = {},
 ) {
-    const compiled = compileShowCues(marchers, beats, cues);
-    const show = { ...compiled, cues, marchers };
+    const flags = timeline.flags ?? [];
+    const values = flagCueValues(flags);
+    const compiled = compileShowCues(marchers, beats, cues, values);
+    const show = { ...compiled, cues, marchers, flags, values };
     const lane = equipmentLane({
         compiled: compiled.compiled,
         cues,
@@ -372,5 +377,49 @@ describe("clicking in the Equipment lane (#1288 follow-up)", () => {
         });
         expect(onSeek).not.toHaveBeenCalled();
         expect(written).toEqual([]);
+    });
+});
+
+describe("a cue bar's name beside its row's name (fork #985)", () => {
+    const OPENER: ShowFlag = {
+        value: `library:opener@${"a".repeat(64)}`,
+        id: "opener",
+        name: "Opener red",
+        shape: "swing",
+        artwork: "c".repeat(64),
+        width: 600,
+        height: 400,
+        thumbnail: undefined,
+    };
+    const flagCue = (id: number, count: number): DatabaseCue => ({
+        ...cue(id, count, "flag"),
+        value: OPENER.value,
+    });
+
+    it("pins the name past the row's name, so a cue at the show's start shows all of it", () => {
+        const { container } = renderLane([flagCue(1, 0)], { flags: [OPENER] });
+        const name = container.querySelector<HTMLElement>(
+            '[data-testid="equipment-lane-cue"][data-cue-id="1"] [data-testid="equipment-lane-cue-name"]',
+        )!;
+        expect(name.textContent).toBe("Opener red");
+        expect(name.classList.contains("sticky")).toBe(true);
+        // jsdom measures the row's name as 0 px wide
+        expect(name.style.left).toBe(`${ROW_NAME_GAP}px`);
+        // the bar starts at the row's start, under the row's name: no further push at 0 px
+        expect(name.style.marginLeft).toBe("0px");
+    });
+
+    it("shows a show flag's picture before its name, and none for a catalog item", () => {
+        const { container } = renderLane([flagCue(1, 0), cue(2, 12, "rifle")], {
+            flags: [OPENER],
+        });
+        const nameOf = (id: number) =>
+            container.querySelector(
+                `[data-testid="equipment-lane-cue"][data-cue-id="${id}"] [data-testid="equipment-lane-cue-name"]`,
+            )!;
+        // a flag stored without a picture shows the Flag icon in its place
+        expect(nameOf(1).querySelector("svg, img")).not.toBeNull();
+        expect(nameOf(2).querySelector("svg, img")).toBeNull();
+        expect(nameOf(2).textContent).toBe("Rifle");
     });
 });

@@ -20,6 +20,7 @@ import { showAssetsQueryOptions } from "@/hooks/queries/useShowAssets";
 import { PropListContents } from "@/components/items/PropsModal";
 import { importModel } from "@/components/items/modelImport/openModelImport";
 import { showAssetsView } from "@/components/assets/openAssets";
+import { showPropsPanel } from "@/components/items/openProps";
 import { importedModels } from "@/components/items/modelImport/ImportedModels";
 import { showAssetRefValue } from "@/showAssets/ref";
 
@@ -95,6 +96,7 @@ export function useItemActionHandlers() {
     }, [only, item?.locked]);
     useActionHandler("importModel", () => void importModel());
     useActionHandler("openAssets", () => showAssetsView());
+    useActionHandler("addFlag", () => showPropsPanel({ addFlag: true }));
     useActionHandler("removeUnusedAssets", () =>
         showAssetsView({ openRemove: true }),
     );
