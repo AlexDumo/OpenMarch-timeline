@@ -379,3 +379,37 @@ Facing row.
 - A transition's length as people see it (the counts before the cue) is one
   less than the stored `transition`, which counts the cue's own count too.
 - Equipment stays an instant swap on its count.
+
+## Amendment 2026-11-25: the show's flags are Equipment
+
+Owner, 2026-11-25: designers import as many flags as the show uses and hand
+them out as equipment ("select those flags as equipment"), with the 2D field
+showing who holds which.
+
+- **A show's flag is an Equipment value.** Each flag is a show asset of kind
+  `flag` (fork #985: a name, a built-in silk shape, its painted Artwork and a
+  small picture). An Equipment cue hands it out by its asset reference,
+  `library:<id>@<version hash>` (ADR 0004), and compile knows it as a value
+  the show adds (`CompileInput.values`): Guard family, holding it counts as
+  holding a flag. Changing silks is therefore an equipment change, as it is
+  on the floor, where a performer picks up another pole.
+- **The Silk type stays for colors.** D-3's Silk row (a plain silk in the
+  section's color) is unchanged; a show's flag carries its own design, so it
+  needs no Silk cue.
+- **Where it shows.** The field menu's Equipment › Guard equipment lists the
+  show's flags after the catalog's, with their pictures; the 2D field's
+  equipment icon for a show's flag is its picture in its own colors; the
+  Equipment lane names it by its name; the 3D View hands its holders the
+  6 ft flag in the flag's shape.
+
+### Consequences
+
+- An Equipment value may now be a show asset reference, so its name comes
+  from the show's assets, not the translations. A build that doesn't know
+  the asset (or a show missing it) treats the cue as an unknown value and
+  ignores it (D-9).
+- A flag nothing hands out is unused and may be removed (Remove unused…),
+  unless an undo or redo step names it.
+- Still to come: each flag's own Artwork on its silks in the 3D View (today
+  they show the guard's one Artwork, or a plain silk), and editing a flag
+  after it's added.

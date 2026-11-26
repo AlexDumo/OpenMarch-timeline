@@ -18,6 +18,11 @@ export interface Carry {
     family: HoldFamily;
     /** Per-marcher options, such as a bass drum's size. */
     options?: ModelOptions;
+    /**
+     * One of the show's flags (fork #985): its design's tile in the flags' texture
+     * (`flagArtworkAtlas.ts`), which paints the silk.
+     */
+    artwork?: number;
 }
 
 const SECTIONS: Record<string, Carry> = {

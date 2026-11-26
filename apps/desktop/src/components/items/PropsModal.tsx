@@ -19,6 +19,7 @@ import ItemPanelHeader from "./ItemPanelHeader";
 import { ItemEditor, PropColorControl } from "./ItemEditor";
 import { ItemRow, ShowNamesSwitch, type ItemWithMarcher } from "./ItemRows";
 import ImportedModels from "./modelImport/ImportedModels";
+import ShowFlags from "./ShowFlags";
 
 const OUTLINE_TOOLS: { id: OutlineType; icon: React.ReactNode }[] = [
     { id: "rectangle", icon: <SquareIcon size={24} /> },
@@ -47,15 +48,19 @@ export default function PropsModal() {
             contents={<PropListContents />}
             newContentId="props"
             buttonLabel={<CubeIcon size={24} />}
+            testId="sidebar-props"
         />
     );
 }
 
 export function PropListContents({
     justImported,
+    addingFlag = false,
 }: {
     /** A model just imported (`items.model` value), marked in the Imported group */
     justImported?: string | null;
+    /** Opens the Flags group's Add flag at once (the `addFlag` action) */
+    addingFlag?: boolean;
 } = {}) {
     const { setContent } = useSidebarModalStore();
     return (
@@ -63,6 +68,9 @@ export function PropListContents({
             <ItemPanelHeader title={<T keyName="props.title" />} />
             <div className="flex w-[28rem] grow flex-col gap-16 overflow-y-auto">
                 <PropToolSelector />
+                <div className="border-stroke border-t pt-12">
+                    <ShowFlags adding={addingFlag} />
+                </div>
                 <div className="border-stroke border-t pt-12">
                     <ImportedModels justImported={justImported} />
                 </div>

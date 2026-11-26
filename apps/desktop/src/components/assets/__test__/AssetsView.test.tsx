@@ -304,9 +304,9 @@ describeDbTests("Assets view", (it) => {
             addShowAssetInTransaction({
                 tx,
                 asset: {
-                    kind: "flag",
-                    name: "Flag",
-                    parts: { silk: new Uint8Array([1, 2]) },
+                    kind: "drumWrap",
+                    name: "Wrap",
+                    parts: { wrap: new Uint8Array([1, 2]) },
                 },
             }),
         );
@@ -323,7 +323,7 @@ describeDbTests("Assets view", (it) => {
         const list = await screen.findByTestId("assets-remove-list");
         expect(list).toHaveTextContent("Test pattern");
         expect(list).not.toHaveTextContent("Chair");
-        expect(list).not.toHaveTextContent("Flag");
+        expect(list).not.toHaveTextContent("Wrap");
         // A prop starts using the pattern while the list is up: it's kept
         const beats = await db
             .select({ id: schema.beats.id })
@@ -347,7 +347,7 @@ describeDbTests("Assets view", (it) => {
             expect(screen.queryByTestId("assets-remove-dialog")).toBeNull(),
         );
         expect((await getShowAssets({ db })).map((a) => a.name).sort()).toEqual(
-            ["Chair", "Flag", "Test pattern"],
+            ["Chair", "Test pattern", "Wrap"],
         );
         await act(async () =>
             useItemDrawingStore.getState().resetDrawingState(),

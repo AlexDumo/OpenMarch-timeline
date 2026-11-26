@@ -8,35 +8,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-/** The demo silk Artwork, painted on the Standard silk's template (fork #973). */
-const SILK_ARTWORK = path.join(
-    path.dirname(fileURLToPath(import.meta.url)),
-    "..",
-    "assets",
-    "silk-artwork.png",
-);
-
-/**
- * Opens 3D View settings › Performers, picks the Standard silk and imports
- * the demo Artwork; leaves the panel open and returns it.
- */
-async function paintSilks(view) {
-    await view.getByTestId("view3d-settings-button").click();
-    const panel = view.getByTestId("view3d-settings");
-    await panel.waitFor();
-    await view.getByTestId("view3d-settings-tab-performers").click();
-    await view
-        .getByTestId("view3d-silk-shape-picker")
-        .locator('[data-value="standard"]')
-        .click();
-    await view
-        .getByTestId("view3d-silk-artwork-file")
-        .setInputFiles(SILK_ARTWORK);
-    await view
-        .getByTestId("view3d-silk-artwork-name")
-        .waitFor({ timeout: 20000 });
-    return panel;
-}
+import { addDemoFlags, giveFlag } from "../flags.mjs";
 
 /** The nth page box on the timeline ruler, in order. */
 const pageBox = (page, n) => page.locator("[data-timeline-range-page]").nth(n);
@@ -184,6 +156,18 @@ async function propsPanel(page) {
         await page.locator("#sidebar-launcher-props").click();
         await page.waitForTimeout(500);
     }
+}
+
+/** The guard's drill numbers (G…) on screen, left to right. */
+async function guardByX(page) {
+    const guard = await page.evaluate(() =>
+        window.fieldTest
+            .marchers()
+            .filter((m) => m.onScreen && /^G\d+$/.test(m.label))
+            .map((m) => ({ label: m.label, x: m.screen.x })),
+    );
+    if (guard.length < 4) throw new Error("the guard isn't on the field");
+    return guard.sort((a, b) => a.x - b.x).map((m) => m.label);
 }
 
 const items = (page) => page.evaluate(() => window.fieldTest.items?.() ?? []);
@@ -794,64 +778,31 @@ const shots = [
         },
     },
     {
-        id: "3d-silk-settings",
+        id: "3d-flag-silks",
         kind: "still",
-        // The flag silk rows of 3D View settings › Performers: the shapes, and imported Artwork
+        // The guard carrying the show's two flags from Props › Flags, from the front row: the
+        // left of the guard the Opener silk, the right the Closer silk, each with its own design
         async setup(ctx) {
-            await seekInPage(ctx.page, 3, 0.5);
+            const { page } = ctx;
+            await seekInPage(page, 3, 0.5);
+            await addDemoFlags(page);
+            const guard = await guardByX(page);
+            const half = Math.ceil(guard.length / 2);
+            await giveFlag(page, guard.slice(0, half), "Opener silk");
+            await giveFlag(page, guard.slice(half), "Closer silk");
+            // The panel closed and nobody selected, so the 3D View shows no selection
+            if (await page.getByTestId("show-flags").isVisible())
+                await page.locator("#sidebar-launcher-props").click();
+            await page.keyboard.press("Escape");
+            await ctx.wait(400);
             const { view } = await open3d(ctx);
-            await paintSilks(view);
-            // the rows, labels and all: the shapes, and the Artwork under them
-            const shapeRow = view
-                .getByTestId("view3d-silk-shape-picker")
-                .locator("xpath=..");
-            const artworkRow = view
-                .getByTestId("view3d-silk-artwork")
-                .locator("xpath=..");
-            // the shapes' row near the top of the panel, clear of its edge
-            await shapeRow.evaluate((el) => {
-                el.scrollIntoView({ block: "start" });
-                let scroller = el.parentElement;
-                while (
-                    scroller &&
-                    !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)
-                )
-                    scroller = scroller.parentElement;
-                if (scroller) scroller.scrollTop -= 24;
-            });
-            await view.mouse.move(4, ctx.window.height / 2);
-            await ctx.wait(1500);
-            return {
-                // tight below the Artwork, so the next row's control stays out
-                box: ctx.union(
-                    await ctx.around(shapeRow, 10),
-                    await ctx.around(artworkRow, 4),
-                ),
-                target: view,
-            };
-        },
-    },
-    {
-        id: "3d-silk-artwork",
-        kind: "still",
-        // The guard's flags in the Standard shape, painted with imported Artwork
-        async setup(ctx) {
-            await seekInPage(ctx.page, 3, 0.5);
-            const { view } = await open3d(ctx);
-            await paintSilks(view);
-            await view.getByTestId("view3d-settings-button").click();
-            await ctx.wait(1500);
             // The Front row camera: close to the sideline, at the band's height
             await view.keyboard.press("Digit2");
             await view.mouse.move(ctx.window.width - 4, ctx.window.height / 2);
             await ctx.wait(3000);
             return {
-                box: {
-                    x: 200,
-                    y: 330,
-                    width: ctx.window.width - 400,
-                    height: 440,
-                },
+                // The band from the stands' edge down to the front sideline
+                box: { x: 0, y: 300, width: ctx.window.width, height: 270 },
                 target: view,
             };
         },
@@ -929,6 +880,24 @@ const shots = [
             );
             return {
                 box: { ...panel, height: row.y + row.height - panel.y },
+            };
+        },
+    },
+    {
+        id: "3d-props-flags",
+        kind: "still",
+        // Props › Flags with two flags added, "Opener silk" and "Closer silk", and a few of the
+        // guard selected, so the tiles can be selected to hand a flag out
+        async setup(ctx) {
+            const { page } = ctx;
+            await seekInPage(page, 3, 0.5);
+            await addDemoFlags(page);
+            const guard = await guardByX(page);
+            await giveFlag(page, guard.slice(0, 4), "Opener silk");
+            await page.mouse.move(1596, 996);
+            await ctx.wait(800);
+            return {
+                box: await ctx.around(page.getByTestId("show-flags"), 12),
             };
         },
     },

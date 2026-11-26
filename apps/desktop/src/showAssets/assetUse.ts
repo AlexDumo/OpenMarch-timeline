@@ -10,6 +10,7 @@ import type { ShowAsset } from "@/db-functions/showAssets";
 import { MODEL_ASSET_KIND } from "./modelImport/rules";
 import { UNIFORM_ASSET_KIND } from "@/view3d/core/uniformPack/format";
 import { showAssetRefValue } from "./ref";
+import { FLAG_ASSET_KIND } from "./flags";
 
 /**
  * The kinds whose every use this build can find (props' models, cue values, the venue's uniform). Another kind, such
@@ -19,6 +20,17 @@ export const REMOVABLE_ASSET_KINDS: ReadonlySet<string> = new Set([
     MODEL_ASSET_KIND,
     // imported uniforms (fork #1257): the venue's `uniformArtwork` is their use
     UNIFORM_ASSET_KIND,
+    // the show's flags (fork #985): Equipment cues are their use
+    FLAG_ASSET_KIND,
+]);
+
+/**
+ * The kinds whose uses an undo or redo can bring back (the venue's uniform, an Equipment cue's
+ * flag): Remove unused… keeps one any undo or redo step names.
+ */
+export const HISTORY_CHECKED_ASSET_KINDS: ReadonlySet<string> = new Set([
+    UNIFORM_ASSET_KIND,
+    FLAG_ASSET_KIND,
 ]);
 
 /** Past this many bytes of assets, the show says it's large (ADR 0010 D-19) */
