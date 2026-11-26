@@ -23,6 +23,12 @@
         "width": 900,
         "height": 132
     },
+    "3d-flag-silks": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 1600,
+        "height": 270
+    },
     "3d-front-ensemble-3d": {
         "chapter": "3d-view",
         "kind": "still",
@@ -105,6 +111,12 @@
         "width": 996,
         "height": 1260
     },
+    "3d-props-flags": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 936,
+        "height": 404
+    },
     "3d-props-handles": {
         "chapter": "3d-view",
         "kind": "clip",
@@ -148,18 +160,6 @@
         "kind": "still",
         "width": 752,
         "height": 928
-    },
-    "3d-silk-artwork": {
-        "chapter": "3d-view",
-        "kind": "still",
-        "width": 1600,
-        "height": 586
-    },
-    "3d-silk-settings": {
-        "chapter": "3d-view",
-        "kind": "still",
-        "width": 684,
-        "height": 1048
     },
     "3d-uniforms": {
         "chapter": "3d-view",
@@ -376,6 +376,12 @@
         "kind": "still",
         "width": 1468,
         "height": 1404
+    },
+    "marchers-equipment-show-flags": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 1472,
+        "height": 592
     },
     "marchers-facing-field": {
         "chapter": "marchers",

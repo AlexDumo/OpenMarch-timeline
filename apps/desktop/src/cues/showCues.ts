@@ -12,6 +12,7 @@ import {
     defaultCueValue,
     type CompiledCues,
     type CueInput,
+    type CueValue,
     type PerformerCarry,
 } from "@openmarch/core";
 import { sectionCueCarry } from "@/view3d/core/marchers/hornChannel";
@@ -47,11 +48,15 @@ export interface ShowCues {
 export const usualCarryOf = (section: string): PerformerCarry =>
     sectionCueCarry(section);
 
-/** Compiles the stored cues over the performers and timed beats. */
+/**
+ * Compiles the stored cues over the performers and timed beats. `values` are the ones the show
+ * adds to the built-in library: its flags (`flagCueValues`, fork #985).
+ */
 export function compileShowCues(
     marchers: readonly ShowCueMarcher[],
     beats: readonly ShowCueBeat[],
     cues: readonly CueInput[],
+    values: readonly CueValue[] = [],
 ): ShowCues {
     const timed = beats
         .filter((b) => b.duration > 0)
@@ -82,6 +87,7 @@ export function compileShowCues(
         })),
         cues,
         sections,
+        values,
     });
     return {
         compiled,

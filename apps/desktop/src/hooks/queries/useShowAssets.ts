@@ -13,12 +13,14 @@ import {
     setShowAssetCreditsInTransaction,
     valuesNamedInHistory,
 } from "@/db-functions/showAssets";
-import { UNIFORM_ASSET_KIND } from "@/view3d/core/uniformPack/format";
 import type { JsonObject } from "@/showAssets/hash";
 import type { ShowAssetRef } from "@/showAssets/ref";
 import { showAssetRefValue } from "@/showAssets/ref";
 import { conToastError } from "@/utilities/utils";
-import { REMOVABLE_ASSET_KINDS } from "@/showAssets/assetUse";
+import {
+    HISTORY_CHECKED_ASSET_KINDS,
+    REMOVABLE_ASSET_KINDS,
+} from "@/showAssets/assetUse";
 import { useItemDrawingStore } from "@/stores/ItemDrawingStore";
 
 import tolgee from "@/global/singletons/Tolgee";
@@ -110,11 +112,14 @@ export const removeUnusedShowAssetsMutationOptions = (qc: QueryClient) =>
                         )
                         .map(showAssetRefValue),
                 );
-                // an imported uniform an undo or redo would dress the band in again stays
+                // an imported uniform an undo or redo would dress the band in again stays, as
+                // does a flag an undone or redone Equipment cue hands out
                 const kept = await valuesNamedInHistory({
                     db: tx,
                     values: assets
-                        .filter((asset) => asset.kind === UNIFORM_ASSET_KIND)
+                        .filter((asset) =>
+                            HISTORY_CHECKED_ASSET_KINDS.has(asset.kind),
+                        )
                         .map(showAssetRefValue),
                 });
                 return await removeShowAssetsInTransaction({

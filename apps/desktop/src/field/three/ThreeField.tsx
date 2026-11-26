@@ -162,6 +162,7 @@ import FacingCaretsLayer from "./layers/FacingCaretsLayer";
 import { useEquipmentIcons } from "@/cues/useEquipmentIcons";
 import { useFieldFacing } from "@/cues/useFieldFacing";
 import { useShowCues } from "@/cues/useShowCues";
+import { useFlagPictures } from "./useFlagPictures";
 import OverlayLayer from "./layers/OverlayLayer";
 import StartFlagLayers from "./StartFlagLayers";
 import { ModeMarchers } from "./ModeMarchers";
@@ -368,6 +369,7 @@ function ThreeFieldView() {
     const showCues = useShowCues();
     // What a performer holds, by their drill number, when it isn't their section's usual (#992)
     const equipmentIcons = useEquipmentIcons(showCues);
+    const flagPictures = useFlagPictures(equipmentIcons !== null);
     // Which way each performer faces at the playhead, as a caret in front of their dot (#1316)
     const facing = useFieldFacing(showCues);
     // Where the labels layer anchors each label as drawn, for the field test API
@@ -953,6 +955,7 @@ function ThreeFieldView() {
                             style={labelStyle}
                             holdAutoSize={isPlaying}
                             icons={equipmentIcons}
+                            pictures={flagPictures}
                             iconPlace={equipmentIconPlace}
                             hovered={hoveredMarcher}
                             facing={facing}

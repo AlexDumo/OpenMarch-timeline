@@ -19,7 +19,12 @@ import type {
     EquipmentIconKey,
     EquipmentIconPlace,
 } from "@/cues/equipmentIcons";
-import { IconBatch, useIconAtlas, type FieldIcon } from "../iconBatch";
+import {
+    IconBatch,
+    useIconAtlas,
+    type FieldIcon,
+    type PictureAtlas,
+} from "../iconBatch";
 import type { FieldFacing } from "@/cues/useFieldFacing";
 import {
     anchorsClearOfCarets,
@@ -157,6 +162,7 @@ export default function LabelsLayer({
     style = DEFAULT_STYLE,
     holdAutoSize = false,
     icons = null,
+    pictures = null,
     iconPlace = "beside",
     hovered = null,
     facing = null,
@@ -181,6 +187,8 @@ export default function LabelsLayer({
      * change.
      */
     icons?: LabelIcons | null;
+    /** The show's flags' pictures, for the icons of performers holding one (`useFlagPictures`) */
+    pictures?: PictureAtlas | null;
     /** Where the icons go: after the drill number, in place of the dot, or of the number */
     iconPlace?: EquipmentIconPlace;
     /**
@@ -224,6 +232,11 @@ export default function LabelsLayer({
         invalidate();
         return () => iconBatch?.dispose();
     }, [iconBatch, invalidate]);
+    // The show's flags' pictures (fork #985): who holds which flag, in its own colors. They go on
+    // the icons with the layout (in the frame), so a layout never reads the last set's places.
+    useEffect(() => {
+        invalidate();
+    }, [pictures, invalidate]);
     const drawn = useRef({
         version: -1,
         idsVersion: -1,
@@ -237,6 +250,7 @@ export default function LabelsLayer({
         shown: new Uint8Array(0) as Uint8Array,
         iconKey: "",
         iconBatch: null as IconBatch | null,
+        pictures: null as PictureAtlas | null,
         iconPlace,
         hoveredId: null as number | null,
         selectionVersion: -1,
@@ -316,6 +330,7 @@ export default function LabelsLayer({
         const newLayout =
             iconKey !== last.iconKey ||
             iconBatch !== last.iconBatch ||
+            pictures !== last.pictures ||
             iconPlace !== last.iconPlace ||
             (byNumber &&
                 (hoveredId !== last.hoveredId ||
@@ -390,6 +405,7 @@ export default function LabelsLayer({
                     weight: weightOf(id),
                 })),
             );
+            iconBatch?.setPictures(pictures);
             iconBatch?.setIcons(
                 iconsOf(iconsNow?.icons, shown, size, color, hoveredId),
             );
@@ -432,6 +448,7 @@ export default function LabelsLayer({
             shown,
             iconKey,
             iconBatch,
+            pictures,
             iconPlace,
             hoveredId,
             selectionVersion: marchers.selectionVersion,

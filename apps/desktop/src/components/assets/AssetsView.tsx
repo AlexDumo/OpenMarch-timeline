@@ -1,10 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-    CaretRightIcon,
-    PackageIcon,
-    WarningIcon,
-} from "@phosphor-icons/react";
+import { CaretRightIcon, WarningIcon } from "@phosphor-icons/react";
 import { T, useTranslate } from "@tolgee/react";
 import clsx from "clsx";
 import {
@@ -40,6 +36,7 @@ import {
     groupAssetVersions,
     type AssetGroup,
     LARGE_SHOW_ASSET_BYTES,
+    HISTORY_CHECKED_ASSET_KINDS,
     keptForHistory,
     showAssetUse,
     sizeParts,
@@ -104,7 +101,7 @@ function useAssetUse() {
     const uniforms = useMemo(
         () =>
             (assets ?? [])
-                .filter((asset) => asset.kind === UNIFORM_ASSET_KIND)
+                .filter((asset) => HISTORY_CHECKED_ASSET_KINDS.has(asset.kind))
                 .map(showAssetRefValue),
         [assets],
     );

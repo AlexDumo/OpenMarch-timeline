@@ -66,9 +66,18 @@ describe("showAssetUse", () => {
     });
 
     it("never calls an asset of another kind unused: this build can't see its uses", () => {
-        const flag = { ...asset("04", { silk: "c" }), kind: "flag" };
-        const use = showAssetUse([chair, flag], sizes, []);
+        const wrap = { ...asset("04", { wrap: "c" }), kind: "drumWrap" };
+        const use = showAssetUse([chair, wrap], sizes, []);
         expect(use.unused.map((row) => row.asset.kind)).toEqual(["model"]);
+    });
+
+    it("calls a flag nothing hands out unused: Equipment cues are its uses (fork #985)", () => {
+        const flag = { ...asset("05", { artwork: "c" }), kind: "flag" };
+        const value = `library:${flag.id}@${flag.versionHash}`;
+        expect(
+            showAssetUse([flag], sizes, []).unused.map((r) => r.asset.kind),
+        ).toEqual(["flag"]);
+        expect(showAssetUse([flag], sizes, [value]).unused).toEqual([]);
     });
 
     it("says a show is large past 500 MB", () => {

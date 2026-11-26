@@ -37,7 +37,6 @@ import { type ControlScheme } from "../camera/controlScheme";
 import ControlSchemePicker from "../camera/ControlSchemePicker";
 import { ColorField, Segmented } from "./Panel";
 import { KITS_WITH_OWN_FIELD } from "@/view3d/core/venueSettings";
-import { SilkArtworkControls } from "./SilkArtworkControls";
 import { UniformTemplateControls } from "./UniformTemplateControls";
 import { UniformImportControls } from "./UniformImportControls";
 import { UniformItemsControls } from "./UniformItemsControls";
@@ -48,7 +47,6 @@ import {
     BrassFinishPicker,
     LightingControl,
     GuardUniformPicker,
-    SilkShapePicker,
     TubaPicker,
     UniformPicker,
     VenuePicker,
@@ -213,12 +211,6 @@ export function SettingsPanel({
                     </Row>
                     <Row label={t("view3d.settings.guardUniforms")} stacked>
                         <GuardUniformPicker />
-                    </Row>
-                    <Row label={t("view3d.settings.silkShape")} stacked>
-                        <SilkShapePicker />
-                    </Row>
-                    <Row label={t("view3d.settings.silkArtwork")} stacked>
-                        <SilkArtworkControls />
                     </Row>
                 </TabContent>
                 <TabContent

@@ -104,6 +104,8 @@ export interface WindowCueInputs {
      * Marchers carry nothing when it is left out.
      */
     carries?: (marcherId: number) => PerformerCarry;
+    /** Values the show adds to the cue library: its flags (fork #985) */
+    values?: CompileInput["values"];
 }
 
 /** The window's compiled cues, with the show setting the planner reads beside them. */
@@ -138,6 +140,7 @@ export function compileWindowCues(
         })),
         cues: inputs.cues ?? [],
         sections: inputs.sections,
+        values: inputs.values,
         bandTravels: bandMoving ? (c) => bandMoving[c] === 1 : undefined,
         holdStyles: inputs.holdStyles,
         showDefaults: {
