@@ -390,6 +390,8 @@ export interface ToolChoiceOption {
     readonly disabled?: string;
     /** What it does, sketched; the menu shows the name alone when absent */
     readonly picture?: ToolChoicePicture;
+    /** What it does, in a few words under its name; none when the name says it */
+    readonly detail?: string;
 }
 
 /**
@@ -402,6 +404,8 @@ export interface ToolChoice<P> {
     readonly key: string;
     /** What it is, for its tooltip and screen readers: "Spacing" */
     readonly label: string;
+    /** Its tooltip when its name is shown beside it and would only repeat it */
+    readonly tip?: string;
     /** The answers, in the order the menu lists them */
     options(params: P, n: number): readonly ToolChoiceOption[];
     /** The answer the shape has now: one of {@link options}' values */
@@ -568,6 +572,8 @@ export interface ToolRows<P> {
     readonly apart: ToolParam<P>;
     /** How much further along each row starts than the one in front */
     readonly slant: ToolParam<P>;
+    /** Which way the rows step from the drawn shape (#1193) */
+    readonly go: ToolChoice<P>;
     /**
      * The gap its Rows apart and Slant numbers set, as the field draws it while they're engaged:
      * from an end spot of the drawn row straight across to the next row (`corner`), then along it
