@@ -250,6 +250,27 @@ test.describe("with a finger", () => {
         expect(await recipes(show)).toHaveLength(1);
     });
 
+    test("change: a tap on the selected line that changes nothing leaves the view where it is, though the line runs off the field", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await placeLine(show);
+        // An iPad held upright: the line runs past the field's edge
+        await page.setViewportSize({ width: 820, height: 1180 });
+        const view = () => page.evaluate(() => window.fieldTest!.viewport());
+        await expect.poll(async () => (await view()).zoom).toBeGreaterThan(0);
+        await waitForIdle(page);
+        const before = await view();
+        const along = (await drawnMarchers(page)).sort(
+            (a, b) => a.screen.x - b.screen.x,
+        );
+        const [m4, m5] = [along[3]!.screen, along[4]!.screen];
+        await tap(page, { x: (m4.x + m5.x) / 2, y: (m4.y + m5.y) / 2 });
+        await expect(page.getByTestId("fieldSplitScissors")).toBeVisible();
+        await waitForIdle(page);
+        expect(await view()).toEqual(before);
+    });
+
     test("change: a long press on a gap of the selected line offers Shape: Split here in the field menu", async ({
         show,
     }) => {
