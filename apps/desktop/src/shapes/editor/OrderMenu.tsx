@@ -3,7 +3,7 @@ import { useId, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { TooltipClassName } from "@openmarch/ui";
-import { CaretDownIcon, QuestionIcon } from "@phosphor-icons/react";
+import { CaretDownIcon, InfoIcon, QuestionIcon } from "@phosphor-icons/react";
 import tolgee from "@/global/singletons/Tolgee";
 import { ORDER_CHOICES, type OrderChoice } from "../assign";
 import type { OrderWhy, ShapeEditTarget } from "./editTargets";
@@ -30,12 +30,24 @@ export function orderLabel(choice: OrderChoice): string {
     }
 }
 
-/**
- * What a choice without a picture does, in words (09-who-goes-where.md): four numbers can't show
- * these apart
- */
-function orderDescription(choice: OrderChoice): string | null {
+/** What a choice does, in words, for the tip beside it (09-who-goes-where.md) */
+function orderDescription(choice: OrderChoice): string {
     switch (choice) {
+        case "nearest":
+            return tolgee.t(
+                "shapes.edit.order.nearestHint",
+                "Each marcher takes a spot that keeps everyone's walk short",
+            );
+        case "keep":
+            return tolgee.t(
+                "shapes.edit.order.keepHint",
+                "The marchers' order runs along the shape, the first marcher on the first spot",
+            );
+        case "reverse":
+            return tolgee.t(
+                "shapes.edit.order.reverseHint",
+                "The marchers' order runs back along the shape, the last marcher on the first spot",
+            );
         case "inside":
             return tolgee.t(
                 "shapes.edit.order.insideHint",
@@ -51,8 +63,6 @@ function orderDescription(choice: OrderChoice): string | null {
                 "shapes.edit.order.sectionsHint",
                 "Each section stays together, least travel inside it",
             );
-        default:
-            return null;
     }
 }
 
@@ -91,7 +101,7 @@ export function orderWhyText(why: OrderWhy): string {
 export function orderOptions(why: (choice: OrderChoice) => OrderWhy | null): {
     value: OrderChoice;
     label: string;
-    hint: string | null;
+    hint: string;
     refusal: string | null;
 }[] {
     return ORDER_CHOICES.map((value) => {
@@ -124,11 +134,21 @@ function ChoicePicture({
     );
 }
 
+/** Whether `el` has the focus from the keys, not from a click or the menu opening */
+function keyFocus(el: HTMLElement): boolean {
+    try {
+        return el.matches(":focus-visible");
+    } catch {
+        return true;
+    }
+}
+
 /**
- * One answer in the menu. One that doesn't fit these marchers dims and does nothing; a **?** at
- * its end shows why beside it while the row is under the pointer, has the keys or is pressed (as
- * the timeline menus' unavailable entries do). Screen readers hear the reason as its description.
- * Escape closes the tip and the menu together.
+ * One answer in the menu. What it does waits in a tip beside it, shown while the row is under the
+ * pointer, has the keys or is pressed, the way the timeline menus show an unavailable entry's
+ * reason; an (i) at the row's end says it's there. One that doesn't fit these marchers dims, does
+ * nothing and has a **?** instead, and its tip also says why. Screen readers hear the tip as the
+ * row's description. Escape closes the tip and the menu together.
  */
 function OrderRow({
     option,
@@ -142,10 +162,11 @@ function OrderRow({
     /** Closes the menu: an open tip is the top layer and gets Escape first */
     onClose: () => void;
 }) {
-    const reasonId = useId();
+    const tipId = useId();
     const [open, setOpen] = useState(false);
     const refused = option.refusal !== null;
     const testId = `shape-order-${option.value}`;
+    const Icon = refused ? QuestionIcon : InfoIcon;
     return (
         <>
             <button
@@ -153,13 +174,14 @@ function OrderRow({
                 role="menuitemradio"
                 aria-checked={current}
                 aria-disabled={refused ? true : undefined}
-                aria-describedby={refused ? reasonId : undefined}
-                // A finger's long press shows the reason too (LongPressGuard, #928)
-                {...(refused ? { [TIP_DATA.label]: option.refusal } : {})}
+                aria-describedby={tipId}
+                // A finger's long press shows the tip too (LongPressGuard, #928)
+                {...{ [TIP_DATA.label]: option.refusal ?? option.hint }}
                 onClick={() => (refused ? setOpen(true) : onPick())}
                 onPointerEnter={() => setOpen(true)}
                 onPointerLeave={() => setOpen(false)}
-                onFocus={() => setOpen(true)}
+                // Focus from the keys only: opening the menu focuses the current answer
+                onFocus={(e) => setOpen(keyFocus(e.currentTarget))}
                 onBlur={() => setOpen(false)}
                 data-testid={testId}
                 className={clsx(
@@ -181,52 +203,46 @@ function OrderRow({
                         choice={option.value}
                         testId={`${testId}-picture`}
                     />
-                    <span className="flex max-w-[16rem] flex-col">
-                        <span data-label>{option.label}</span>
-                        {option.hint && (
+                    <span data-label>{option.label}</span>
+                </span>
+                <Tooltip.Provider delayDuration={0} disableHoverableContent>
+                    {/* Only the row opens and closes it, so it doesn't close as the pointer
+                        crosses the icon */}
+                    <Tooltip.Root open={open} onOpenChange={() => {}}>
+                        <Tooltip.Trigger asChild>
                             <span
-                                className="text-text/60"
-                                data-testid={`${testId}-note`}
+                                aria-hidden="true"
+                                data-testid={`${testId}-tip-icon`}
+                                data-refused={refused || undefined}
+                                className="text-text/60 ml-auto pl-16"
                             >
-                                {option.hint}
+                                <Icon size={14} />
                             </span>
-                        )}
-                    </span>
-                </span>
-                {refused && (
-                    <Tooltip.Provider delayDuration={0} disableHoverableContent>
-                        {/* Only the row opens and closes it, so it doesn't close as the pointer
-                            crosses the ? */}
-                        <Tooltip.Root open={open} onOpenChange={() => {}}>
-                            <Tooltip.Trigger asChild>
-                                <span
-                                    aria-hidden="true"
-                                    data-testid={`${testId}-why-icon`}
-                                    className="text-text/60 ml-auto pl-16"
-                                >
-                                    <QuestionIcon size={14} />
-                                </span>
-                            </Tooltip.Trigger>
-                            <Tooltip.Portal>
-                                <Tooltip.Content
-                                    side="right"
-                                    sideOffset={8}
-                                    onEscapeKeyDown={onClose}
-                                    data-testid={`${testId}-why-tip`}
-                                    className={`${TooltipClassName} text-body max-w-[240px]`}
-                                >
-                                    {option.refusal}
-                                </Tooltip.Content>
-                            </Tooltip.Portal>
-                        </Tooltip.Root>
-                    </Tooltip.Provider>
-                )}
+                        </Tooltip.Trigger>
+                        <Tooltip.Portal>
+                            <Tooltip.Content
+                                side="right"
+                                sideOffset={8}
+                                onEscapeKeyDown={onClose}
+                                data-testid={`${testId}-tip`}
+                                className={`${TooltipClassName} text-body flex max-w-[240px] flex-col gap-4`}
+                            >
+                                <span>{option.hint}</span>
+                                {option.refusal && (
+                                    <span className="italic">
+                                        {option.refusal}
+                                    </span>
+                                )}
+                            </Tooltip.Content>
+                        </Tooltip.Portal>
+                    </Tooltip.Root>
+                </Tooltip.Provider>
             </button>
-            {refused && (
-                <span id={reasonId} data-testid={`${testId}-why`} hidden>
-                    {option.refusal}
-                </span>
-            )}
+            <span id={tipId} data-testid={`${testId}-tip-text`} hidden>
+                {option.refusal
+                    ? `${option.hint}. ${option.refusal}`
+                    : option.hint}
+            </span>
         </>
     );
 }
@@ -234,9 +250,10 @@ function OrderRow({
 /**
  * Who goes where on a kind with an order along it (a Line, #528; 09-who-goes-where.md): Least
  * travel, Keep order, Reverse order, Inside out, Zipper or Within sections. A choice that doesn't
- * fit these marchers is greyed out and says why. Like the kind's own menus, its button names the
+ * fit these marchers is greyed out and says why in its tip. Like the kind's own menus, its button names the
  * answer the shape has, and picking another lays the marchers out again as one change. The first
- * three answers' pictures read the new line as numbers (#559); the others say what they do. On an
+ * three answers' pictures read the new line as numbers (#559); every answer says what it does in its
+ * tip. On an
  * open shape a line under the answers says what the current one gives: its biggest step and how
  * many walks cross. None for a kind without an order.
  */

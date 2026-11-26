@@ -32,13 +32,13 @@ These weren't spelled out in the prototype. Each is easy to change.
 
 - **Keys.** W for Pick by hand ("who"), Shift+W for Swap two, Tab to switch between marchers and spots while picking. H was taken (Hide marchers). All three are in the command palette and Settings › Shortcuts (Tab hidden from the palette).
 - **Two placed Lines** open on Least travel, as before. Keep order and Inside out are greyed there with "These marchers come from two lines. Use Zipper, or set one order on them first."
-- **The new options have no picture** in the menu: four marchers can't show them apart (Inside out of 1 2 3 4 reads 2 1 4 3, the same as the sample's Least travel). They have a one-line description instead.
+- **The new options have no picture** in the menu: four marchers can't show them apart (Inside out of 1 2 3 4 reads 2 1 4 3, the same as the sample's Least travel).
 - **The picking bar is its own row** under the floating editor, so its status isn't cut off.
 - **While picking, the shape's handles are hidden**: presses pick instead of editing the shape. The rest of the floating editor still works.
 - **Hand picks are dropped by a fresh draw or another kind**, and kept through another option, Recalculate and spacing changes.
 - **Each pair is one undo step.** Undo while picking takes back a waiting pick first, then the last pair.
 - **The readout** shows only on an open shape, not a placed one.
-- **Reasons behind a ?** (owner review, 2026-11-26): the first build printed each reason under its option; now it's a tip, the same way the timeline menus show an unavailable entry's reason.
+- **Descriptions and reasons in a tip** (owner review, 2026-11-26): the first build printed a description under Inside out, Zipper and Within sections, and each reason under its option. Now every option, including Least travel, Keep order and Reverse order (new descriptions), says what it does in a tip beside its row, with an (i) at the row's end; one that doesn't fit has a ? instead, and its tip adds why. The same way the timeline menus show an unavailable entry's reason. The tip opens on hover, a press, or the arrow keys, not when the menu opens.
 
 ### Checked
 
@@ -48,6 +48,7 @@ These weren't spelled out in the prototype. Each is easy to change.
 
 ## Not in this change
 
+- Animated pictures of each option in its tip (owner idea, 2026-11-26): a separate change.
 - Different count structures per marcher (staggered starts, holds inside the move).
 - Picking by hand and Swap on a placed shape. They work while a shape is open in the shape tool.
   A placed shape keeps everyone's spot when it is reshaped; picking Least travel, Keep order or

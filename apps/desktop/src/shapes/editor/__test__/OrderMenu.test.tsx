@@ -70,16 +70,28 @@ describe("who goes where's menu", () => {
         expect(screen.queryByRole("button", { pressed: true })).toBeNull();
     });
 
-    it("says in words what the answers without a picture do", () => {
+    it("says what every answer does in a tip, not under its name", () => {
         renderMenu("keep");
         openMenu();
-        expect(screen.getByTestId("shape-order-inside-note")).toHaveTextContent(
+        expect(screen.queryByTestId("shape-order-inside-note")).toBeNull();
+        expect(
+            screen.getByTestId("shape-order-inside"),
+        ).toHaveAccessibleDescription(
             "The middle of the line goes to the ends of the shape",
         );
-        expect(screen.getByTestId("shape-order-zipper-note")).toHaveTextContent(
-            "Two lines merge into one, taking turns",
+        expect(
+            screen.getByTestId("shape-order-nearest"),
+        ).toHaveAccessibleDescription(
+            "Each marcher takes a spot that keeps everyone's walk short",
         );
-        expect(screen.queryByTestId("shape-order-keep-note")).toBeNull();
+        expect(screen.queryByTestId("shape-order-zipper-tip")).toBeNull();
+        fireEvent.pointerEnter(screen.getByTestId("shape-order-zipper"));
+        expect(
+            screen.getAllByTestId("shape-order-zipper-tip")[0],
+        ).toHaveTextContent("Two lines merge into one, taking turns");
+        expect(
+            screen.getByTestId("shape-order-zipper-tip-icon"),
+        ).not.toHaveAttribute("data-refused");
     });
 
     it("greys out an answer that doesn't fit, says why, and won't pick it", () => {
@@ -89,19 +101,22 @@ describe("who goes where's menu", () => {
         expect(keep).toHaveAttribute("aria-disabled", "true");
         // The reason waits behind a ? instead of showing under the name
         expect(screen.queryByTestId("shape-order-keep-note")).toBeNull();
-        expect(
-            screen.getByTestId("shape-order-keep-why-icon"),
-        ).toBeInTheDocument();
+        expect(screen.getByTestId("shape-order-keep-tip-icon")).toHaveAttribute(
+            "data-refused",
+            "true",
+        );
         expect(keep).toHaveAccessibleDescription(
             /These marchers have no order yet/,
         );
-        expect(screen.queryByTestId("shape-order-keep-why-tip")).toBeNull();
+        expect(screen.queryByTestId("shape-order-keep-tip")).toBeNull();
         fireEvent.click(keep);
         expect(pick).not.toHaveBeenCalled();
-        // A press shows it beside the row
+        // A press shows what it does and why it doesn't fit, beside the row
         expect(
-            screen.getAllByTestId("shape-order-keep-why-tip")[0],
-        ).toHaveTextContent("These marchers have no order yet");
+            screen.getAllByTestId("shape-order-keep-tip")[0],
+        ).toHaveTextContent(
+            /The marchers' order runs along the shape.*These marchers have no order yet/,
+        );
         // Reverse order fits any line, as before
         expect(screen.getByTestId("shape-order-reverse")).not.toHaveAttribute(
             "aria-disabled",
