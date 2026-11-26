@@ -100,6 +100,36 @@ export function equipmentWho(s: UiSettings): EquipmentWho {
 }
 
 /**
+ * Who the who button names in this show: picked sections the show has no one in are left out
+ * (the pick is remembered across shows by section name). When none of them are in the show, it
+ * still names them all rather than saying nothing, and the menu marks them as not in this show.
+ */
+export function equipmentWhoInShow(
+    who: EquipmentWho,
+    showSections: readonly string[],
+): EquipmentWho {
+    if (who.kind !== "sections") return who;
+    const here = who.sections.filter((name) => showSections.includes(name));
+    return here.length > 0 ? { kind: "sections", sections: here } : who;
+}
+
+/**
+ * The section ticks in the who menu: the show's sections, then any picked ones the show has no
+ * one in, so a pick from another show can still be cleared
+ */
+export function equipmentSectionChoices(
+    showSections: readonly string[],
+    picked: readonly string[],
+): { section: string; inShow: boolean }[] {
+    return [
+        ...showSections.map((section) => ({ section, inShow: true })),
+        ...picked
+            .filter((name) => !showSections.includes(name))
+            .map((section) => ({ section, inShow: false })),
+    ];
+}
+
+/**
  * Sets who shows an equipment icon from the palette's choices or the panel's menu: Off, Not their
  * own or Everyone. Any sections picked are dropped: Everyone means everyone.
  */

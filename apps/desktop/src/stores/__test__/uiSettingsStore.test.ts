@@ -324,9 +324,22 @@ describe("Show on field's drill numbers (fork #1332)", () => {
     });
 
     it("carry Auto over as full drill numbers with the Auto size", () => {
+        expect(from({ marcherLabels: "auto" })).toMatchObject({
+            marcherLabels: "names",
+            marcherLabelSize: "auto",
+        });
+        expect(
+            from({ marcherLabels: "auto", marcherLabelSize: "normal" }),
+        ).toMatchObject({ marcherLabels: "names", marcherLabelSize: "auto" });
+    });
+
+    it("keep a Small or Large size picked with Auto, not shrinking the labels", () => {
         expect(
             from({ marcherLabels: "auto", marcherLabelSize: "large" }),
-        ).toMatchObject({ marcherLabels: "names", marcherLabelSize: "auto" });
+        ).toMatchObject({ marcherLabels: "names", marcherLabelSize: "large" });
+        expect(
+            from({ marcherLabels: "auto", marcherLabelSize: "small" }),
+        ).toMatchObject({ marcherLabels: "names", marcherLabelSize: "small" });
     });
 
     it("keep a form picked by hand at the size it had, normal when none was set", () => {

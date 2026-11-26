@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { defaultSettings, useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
     changedFieldShow,
+    equipmentSectionChoices,
     equipmentWho,
+    equipmentWhoInShow,
     resetFieldShow,
     setEquipmentIcons,
     setFieldChoice,
@@ -56,6 +58,36 @@ describe("Show on field", () => {
         setEquipmentIcons("everyone");
         expect(equipmentWho(settings())).toEqual({ kind: "everyone" });
         expect(settings().equipmentIconSections).toEqual([]);
+    });
+
+    it("Equipment icons: a section picked in another show can still be cleared, and the button names only this show's", () => {
+        toggleEquipmentSection("Color Guard");
+        toggleEquipmentSection("Battery");
+        const who = equipmentWho(settings());
+        const show = ["Trumpet", "Battery"];
+        // The button names the picked sections this show has
+        expect(equipmentWhoInShow(who, show)).toEqual({
+            kind: "sections",
+            sections: ["Battery"],
+        });
+        // With none of them in the show, it still names the pick rather than nothing
+        expect(equipmentWhoInShow(who, ["Trumpet"])).toEqual(who);
+        expect(equipmentWhoInShow({ kind: "everyone" }, show)).toEqual({
+            kind: "everyone",
+        });
+        // The menu lists the show's sections, then the picked one the show doesn't have
+        const picked = who.kind === "sections" ? who.sections : [];
+        expect(equipmentSectionChoices(show, picked)).toEqual([
+            { section: "Trumpet", inShow: true },
+            { section: "Battery", inShow: true },
+            { section: "Color Guard", inShow: false },
+        ]);
+        // Clearing its tick there takes it out
+        toggleEquipmentSection("Color Guard");
+        expect(equipmentWho(settings())).toEqual({
+            kind: "sections",
+            sections: ["Battery"],
+        });
     });
 
     it("counts a mode's row only in its mode, and resets every row", () => {

@@ -828,6 +828,7 @@
         "equipmentOnly": "Only these sections",
         "equipmentSectionsJoin": ", ",
         "equipmentSectionsCount": "{count} sections",
+        "equipmentSectionNotInShow": "Not in this show",
         "equipmentOffReason": "Equipment icons are off. Turn them on in Show on field.",
         "selected": "Selected",
         "all": "All",

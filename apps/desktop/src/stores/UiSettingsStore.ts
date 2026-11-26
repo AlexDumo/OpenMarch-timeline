@@ -329,8 +329,14 @@ export const parseSettings = (raw: string): UiSettings => {
         timelineFoldedCueLanes: stringList(parsed.timelineFoldedCueLanes),
         recentEquipment: stringList(parsed.recentEquipment).slice(0, 4),
         marcherLabels: labels.form,
+        // Auto labels drew at the chosen size before Auto was a size: a Small or Large pick
+        // keeps that size, a normal one becomes the Auto size
         marcherLabelSize: labels.autoSize
-            ? "auto"
+            ? oneOf<MarcherLabelSize>(
+                  ["small", "large", "auto"],
+                  parsed.marcherLabelSize,
+                  "auto",
+              )
             : oneOf(
                   LABEL_SIZES,
                   parsed.marcherLabelSize,
