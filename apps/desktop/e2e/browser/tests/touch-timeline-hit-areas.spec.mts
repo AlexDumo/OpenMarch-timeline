@@ -502,6 +502,53 @@ test.describe("touch layout", () => {
         await expect.poll(() => playheadAt(page)).not.toBe(moved);
     });
 
+    test("right after selecting a clip, a finger on its start resizes it, though the start flag is parked there (#593)", async ({
+        show,
+    }) => {
+        const { page } = show;
+        const clip = await splitMoveIntoClip(show, PAGE_START);
+        await ready(page);
+        await clip.scrollIntoViewIfNeeded();
+        await tap(page, await centerOf(clip));
+        await expect(clip).toHaveAttribute("data-selected", "true");
+        const box = (await clip.boundingBox())!;
+        const y = box.y + box.height / 2;
+        // Selecting it parked the start flag on its start
+        const flag = await startFlagX(page);
+        expect(Math.abs(flag - box.x)).toBeLessThan(4);
+        const playhead = await playheadAt(page);
+        // Right on the line, just before the start, on the clip's row: the start takes it
+        const f = await finger(page);
+        await f.down({ x: flag - 1, y });
+        await f.move(40);
+        await expect(
+            page.getByTestId("timeline-clip-resize-tag"),
+        ).toBeVisible();
+        expect(await startFlagX(page), "the start flag stayed").toBeCloseTo(
+            flag,
+            0,
+        );
+        expect(await playheadAt(page), "the playhead stayed").toBe(playhead);
+        await f.up();
+        await expect(page.getByTestId("timeline-clip-resize-tag")).toBeHidden();
+        await expect
+            .poll(async () => (await clip.boundingBox())!.x)
+            .toBeGreaterThan(box.x + 20);
+        // The start flag followed the start; off the clip's row its line still drags it
+        await expect
+            .poll(async () =>
+                Math.abs(
+                    (await startFlagX(page)) - (await clip.boundingBox())!.x,
+                ),
+            )
+            .toBeLessThan(4);
+        const moved = await startFlagX(page);
+        await drag(page, { x: moved, y: await bareY(page) }, -60);
+        await expect
+            .poll(async () => Math.abs((await startFlagX(page)) - moved))
+            .toBeGreaterThan(30);
+    });
+
     test("a finger's tap 15 px off a keyframe seeks to it, as a tap on it does", async ({
         show,
     }) => {

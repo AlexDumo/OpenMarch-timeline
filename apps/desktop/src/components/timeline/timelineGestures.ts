@@ -829,21 +829,22 @@ export function findTouchHit(
 }
 
 /**
- * The selected clip's end handle a mouse's press on a line belongs to (#593), or null to leave it
+ * The selected clip's edge handle a mouse's press on a line belongs to (#593), or null to leave it
  * on the line. `target` is where the press landed and `stack` what's under it, topmost first
- * (`elementsFromPoint`). Selecting a move parks the playhead on its end, and the start flag and the
- * playhead are painted over the clip rows (UI-21), so the press lands on the line: when the handle
- * (`data-selected-clip-end`) is the first control under the lines, it takes the press. Any other
- * control there (an unselected clip's end, a page flag's grip) leaves it to the line.
+ * (`elementsFromPoint`). Selecting a move parks the start flag on its start and the playhead on its
+ * end, and both lines are painted over the clip rows (UI-21), so the press lands on a line: when a
+ * handle of the selected clip (`data-selected-clip-edge`) is the first control under the lines, it
+ * takes the press. Any other control there (an unselected clip's edge, a page flag's grip) leaves
+ * it to the line.
  */
-export function selectedClipEndUnderLine(
+export function selectedClipEdgeUnderLine(
     target: Element,
     stack: readonly Element[],
 ): HTMLElement | null {
     if (!target.closest(TIMELINE_LINE_SELECTOR)) return null;
     for (const element of stack) {
         if (element.closest(TIMELINE_LINE_SELECTOR)) continue;
-        const handle = element.closest(SELECTED_CLIP_END_SELECTOR);
+        const handle = element.closest(SELECTED_CLIP_EDGE_SELECTOR);
         if (handle instanceof HTMLElement) return handle;
         if (element.closest(TIMELINE_CONTROL_SELECTOR)) return null;
     }
@@ -851,15 +852,15 @@ export function selectedClipEndUnderLine(
 }
 
 const TIMELINE_LINE_SELECTOR = "[data-timeline-line]";
-const SELECTED_CLIP_END_SELECTOR = "[data-selected-clip-end]";
+const SELECTED_CLIP_EDGE_SELECTOR = "[data-selected-clip-edge]";
 
 /**
  * Sends a mouse's or pen's press on the start flag's or the playhead's line to the selected clip's
- * end handle under it (`selectedClipEndUnderLine`, #593), before the timeline's own handlers see
- * it (capture phase); the line never hears it. A finger's press is the gesture adapter's, whose
- * hit areas rank the same way (`pickTouchTarget`). Returns the detach.
+ * start or end handle under it (`selectedClipEdgeUnderLine`, #593), before the timeline's own
+ * handlers see it (capture phase); the line never hears it. A finger's press is the gesture
+ * adapter's, whose hit areas rank the same way (`pickTouchTarget`). Returns the detach.
  */
-export function attachSelectedClipEndPress(viewport: HTMLElement): () => void {
+export function attachSelectedClipEdgePress(viewport: HTMLElement): () => void {
     const sent = new WeakSet<Event>();
     /** A press sent on: its mouse down mustn't focus the line */
     let pressed: Element | null = null;
@@ -876,7 +877,7 @@ export function attachSelectedClipEndPress(viewport: HTMLElement): () => void {
             !event.target.closest(TIMELINE_LINE_SELECTOR)
         )
             return;
-        const handle = selectedClipEndUnderLine(
+        const handle = selectedClipEdgeUnderLine(
             event.target,
             viewport.ownerDocument.elementsFromPoint?.(
                 event.clientX,

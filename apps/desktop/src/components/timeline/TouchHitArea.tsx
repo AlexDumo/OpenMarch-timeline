@@ -22,7 +22,7 @@ export function TouchHitArea({
     group?: string;
     /** The start flag's or the playhead's line */
     line?: boolean;
-    /** The selected clip's end: where a line sits on it, it wins the press (#593) */
+    /** The selected clip's start or end: where a line sits on it, it wins the press (#593) */
     overLines?: boolean;
     /** Replaces the centered 44px area, for a target that reaches one way (a clip edge) */
     className?: string;

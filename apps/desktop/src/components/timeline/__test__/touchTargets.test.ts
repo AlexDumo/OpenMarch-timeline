@@ -128,6 +128,32 @@ describe("pickTouchTarget", () => {
         expect(pickTouchTarget(116, 50, [end, away])).toBe("playhead");
     });
 
+    it("gives a press on the selected clip's start to it where the start flag sits there, and its end to it under the playhead (#593)", () => {
+        const edge = (key: string, x: number): TouchHitCandidate<string> => ({
+            ...target(key, x, { selected: true, group: "clip:1" }),
+            overLines: true,
+        });
+        // Selecting the clip parks the start flag on its start and the playhead on its end
+        const start = edge("selected start", 100);
+        const end = edge("selected end", 160);
+        const startFlag = { ...target("start flag", 100), line: true };
+        const playhead = { ...target("playhead", 160), line: true };
+        const targets = [start, end, startFlag, playhead];
+        expect(pickTouchTarget(100, 50, targets)).toBe("selected start");
+        expect(pickTouchTarget(92, 50, targets)).toBe("selected start");
+        expect(pickTouchTarget(103, 50, targets, "clip:1")).toBe(
+            "selected start",
+        );
+        expect(pickTouchTarget(160, 50, targets)).toBe("selected end");
+        // Off the start's hit area (above the clip row), the start flag takes it
+        expect(
+            pickTouchTarget(100, 50, [
+                { ...start, hit: { ...start.hit, top: 60, bottom: 72 } },
+                startFlag,
+            ]),
+        ).toBe("start flag");
+    });
+
     it("still gives a press on an unselected clip's end to a line on it (UI-21)", () => {
         const end = target("unselected end", 100, { group: "clip:2" });
         const playhead = { ...target("playhead", 100), line: true };

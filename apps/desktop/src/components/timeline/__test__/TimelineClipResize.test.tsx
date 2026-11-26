@@ -520,6 +520,26 @@ describe("resizing a clip by its edges", () => {
         expect(onSelection).toHaveBeenCalledTimes(1);
     });
 
+    it("a selected clip's two edges take a press from a line on them; an unselected clip's don't (#593)", () => {
+        setup();
+        const edges = () =>
+            (["start", "end"] as const).map((edge) =>
+                screen.getByTestId(`timeline-clip-resize-${edge}`),
+            );
+        for (const edge of edges()) {
+            expect(edge.hasAttribute("data-selected-clip-edge")).toBe(false);
+            expect(edge.querySelector("[data-touch-over-lines]")).toBeNull();
+        }
+        fireEvent.click(screen.getByTestId("timeline-clip"));
+        // Selecting it parks the start flag on its start and the playhead on its end
+        for (const edge of edges()) {
+            expect(edge.hasAttribute("data-selected-clip-edge")).toBe(true);
+            expect(
+                edge.querySelector("[data-touch-over-lines]"),
+            ).not.toBeNull();
+        }
+    });
+
     it("the body still moves the whole clip, and Esc cancels that too", () => {
         setup();
         const clip = screen.getByLabelText(/^A timeline/);

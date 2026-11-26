@@ -45,8 +45,8 @@ export interface TouchHitCandidate<K> {
     /** The start flag's or the playhead's line (`data-touch-line`) */
     readonly line?: boolean;
     /**
-     * The selected clip's end (`data-touch-over-lines`): where a line sits on it, it takes the
-     * press from the line (#593)
+     * The selected clip's start or end (`data-touch-over-lines`): where a line sits on it, it takes
+     * the press from the line (#593)
      */
     readonly overLines?: boolean;
 }
@@ -54,7 +54,7 @@ export interface TouchHitCandidate<K> {
 const contains = (rect: TouchRect, x: number, y: number) =>
     x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
 
-/** Whether two rectangles share an x (a line drawn on a clip's end) */
+/** Whether two rectangles share an x (a line drawn on a clip's edge) */
 const overlapsX = (a: TouchRect, b: TouchRect) =>
     a.left <= b.right && b.left <= a.right;
 
@@ -69,9 +69,10 @@ export const distanceToRect = (rect: TouchRect, x: number, y: number) =>
  * Which target a finger's press at (`x`, `y`) belongs to, where hit areas overlap (tablet plan
  * 3.3). Of the targets whose hit area holds the press:
  *
- * 0. Where the start flag's line or the playhead sits on the selected clip's end (`overLines`), and
- *    the press is in that end's hit area, the end takes it from the line (#593): selecting a move
- *    parks the playhead on its end. A line on any other target still wins it (UI-21).
+ * 0. Where the start flag's line or the playhead sits on the selected clip's start or end
+ *    (`overLines`), and the press is in that edge's hit area, the edge takes it from the line
+ *    (#593): selecting a move parks the start flag on its start and the playhead on its end. A line
+ *    on any other target still wins it (UI-21).
  * 1. A target the press is right on (`on`) wins, as it would for a mouse: of those, the nearest
  *    mark, then the one on top.
  * 2. A press on an object that keeps its presses (`keep`: a clip's body or another control under

@@ -507,9 +507,10 @@ export function useClipEdgeResize({
     const handleProps = (edge: Edge) => ({
         "data-testid": `timeline-clip-resize-${edge}`,
         "aria-hidden": true,
-        // The selected move's end, where selecting it parks the playhead: a press on the line
-        // there is this handle's (#593, `attachSelectedClipEndPress`, `pickTouchTarget`)
-        "data-selected-clip-end": selected && edge === "end" ? "" : undefined,
+        // The selected move's edges, where selecting it parks the start flag and the playhead: a
+        // press on the line there is this handle's (#593, `attachSelectedClipEdgePress`,
+        // `pickTouchTarget`)
+        "data-selected-clip-edge": selected ? "" : undefined,
         onPointerDown: (event: ReactPointerEvent<HTMLSpanElement>) => {
             swallowRef.current = false;
             // Ctrl/Cmd draws a range from here, and other buttons open menus: the clip's
@@ -665,8 +666,8 @@ export function useClipEdgeResize({
         },
         // The click ending a press on a handle still reaches the clip, which selects on it. Under
         // the start flag (z-40) and the playhead (z-50), which run down over the clip rows: where
-        // they cross a move's end, the line wins (UI-21, project owner 2026-10-14), except on the
-        // selected move's end, which takes the press (#593)
+        // they cross a move's edge, the line wins (UI-21, project owner 2026-10-14), except on the
+        // selected move's edges, which take the press (#593)
         className:
             "group/resize absolute top-0 z-[1] cursor-ew-resize touch-none",
         style: {
@@ -683,7 +684,7 @@ export function useClipEdgeResize({
         selected ? (
             <TouchHitArea
                 selected
-                overLines={edge === "end"}
+                overLines
                 group={touchGroup}
                 className="touch:block pointer-events-auto absolute top-1/2 hidden h-full min-h-44 -translate-y-1/2"
                 style={{
