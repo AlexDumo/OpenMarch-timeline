@@ -277,7 +277,7 @@ jobs:
       # Every scenario but the three path tool ones, which check what the pen saved before
       # exact paths and lanes (#1164) and fail against the app on main (#316). render-compare.spec only runs
       # with RENDER_COMPARE set; the render project (e2e/browser/render) writes images for a
-      # person to compare and doesn't run here.
+      # person to compare, so only its pixel checks run here (below).
       - name: Run browser scenarios
         working-directory: apps/desktop
         run: |
@@ -289,6 +289,15 @@ jobs:
           elapsed=$(( $(date +%s) - start ))
           echo "Browser scenarios (shard ${{ matrix.shard }}/2) took $(( elapsed / 60 ))m $(( elapsed % 60 ))s"
           exit $status
+
+      # The render project's one pass/fail check (#316): the Not defined look's pixels, counted on
+      # the field (not-defined-look.spec's three "measured" tests, about 20 seconds). On the
+      # second shard, which has no uniform pack smoke tests; its own output folder, so the
+      # scenarios' failures stay in the report
+      - name: Run Not defined look pixel checks
+        if: ${{ !cancelled() && matrix.shard == 2 }}
+        working-directory: apps/desktop
+        run: pnpm exec playwright test --project=render not-defined-look --grep "measured" --output=playwright-report/render
 
       - uses: actions/upload-artifact@v4
         if: ${{ failure() }}
