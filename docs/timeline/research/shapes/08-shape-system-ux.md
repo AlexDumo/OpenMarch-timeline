@@ -280,7 +280,8 @@ row: **Grid** (rows and files), **Outline** (round the edge, the middle empty) a
 - **Outline across and deep (#458/#459):** _placeholder: filled in by the #459 session._
 - **Spread fills the frame you drew (#439, #440).** The frame (center, size, turn) is what the
   designer set. Reshuffle and a typed seed change only which even layout is used, never the frame.
-  A handle moves its own side to the pointer and holds the opposite side. The spacing is whatever
+  A handle moves its own side to the pointer (a pen or finger keeps its offset from the press,
+  #873) and holds the opposite side. The spacing is whatever
   fits the marchers in the frame, never under half a step: a handle stops there, and a switch into
   Spread whose frame is too small for the count grows the frame from its center just enough (the
   one time the frame grows). Typing a spacing scales the frame about the pivot. Spreads placed
