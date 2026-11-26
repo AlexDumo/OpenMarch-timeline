@@ -11,9 +11,9 @@ import { pageAtPlayhead, pageFlags } from "./timelinePlayhead";
  * that still read `useSelectedPage` (the inspector, paths, page notes) follow the playhead.
  *
  * It also runs the other way: when something else selects a page (undo's page jump, a page
- * selection, a test's `setSelectedPage`), the playhead moves to that page's flag. The selection
- * (home or a range) is never changed here; selecting a page doesn't select its timeline. Neither
- * direction runs while playing.
+ * selection, a test's `setSelectedPage`), the window goes to that page, as page navigation does:
+ * its box from its start to its flag, or home for the first page. Neither direction runs while
+ * playing.
  *
  * While a gesture scrubs the playhead (`scrubbing`), the playhead-to-page direction waits and
  * runs once when it ends, so dragging across page flags doesn't select (and load) every page it
@@ -87,7 +87,15 @@ export function useTimelinePageBridge(enabled: boolean): void {
         const store = useTimelineSelectionStore.getState();
         if (pageAtPlayhead(pages, store.playheadBeat)?.id === id) return;
         const flag = pageFlags(pages).find((f) => f.page.id === id);
-        if (flag) store.seek(flag.flag);
+        if (!flag) return;
+        // Isolated, the playhead goes as far toward the page as the isolated move allows
+        if (store.isolation) store.seek(flag.flag);
+        // Otherwise the page is selected, as going to it with page navigation does. A seek to its
+        // flag isn't that in Expert, where the start flag stays: the flag of the page just before
+        // the start flag's is the start flag's own beat, which makes a one-count window there
+        else if (flag.range)
+            store.selectRange(flag.range.start, flag.range.end);
+        else store.selectHome();
         // Only a change of the selected page drives this direction
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [enabled, selectedPage?.id]);
