@@ -176,17 +176,16 @@ function lastingTimeline(
 
 /**
  * Adds each performer's angle to their Facing segments (fork #993), which come from the same
- * lasting timeline as every type's (`lastingTimeline`). The default segment sets the angle until
- * their first cue: front, 0°, unless the section gives another default (bass drums, side 2, 90°).
- * A cue's turn leads into its count (`transitionSegment`) at an even speed, from the angle they
- * held before to where the value takes them from there (`facingTargetDegrees`).
+ * lasting timeline as every type's (`lastingTimeline`): `start`, their default, until their first
+ * cue (front, 0°, unless the section gives another: bass drums, side 2, 90°); a cue's turn leads
+ * into its count (`transitionSegment`) at an even speed, from the angle they held before to where
+ * the value takes them from there (`facingTargetDegrees`). `start` is passed in rather than read
+ * from the default segment, which isn't there when their first turn starts on count 0.
  */
 function withFacingDegrees(
     segments: readonly CueSegment[],
     start: number,
 ): CueSegment[] {
-    // `start` is the performer's first default, so a turn that begins at count 0
-    // (no default segment is emitted there) still turns from the section's angle.
     let current = start;
     return segments.map((seg) => {
         if (seg.kind === "transition") {
@@ -194,8 +193,6 @@ function withFacingDegrees(
             current = facingTargetDegrees(seg.value, seg.settings, from);
             return { ...seg, fromDegrees: from, degrees: current };
         }
-        if (seg.kind === "default")
-            current = facingTargetDegrees(seg.value, seg.settings, current);
         return { ...seg, fromDegrees: current, degrees: current };
     });
 }
@@ -381,7 +378,7 @@ interface TypeResult {
 }
 
 /**
- * A performer's Equipment, Silk and Look defaults, and what Equipment gives
+ * A performer's Equipment, Silk, Look and Facing defaults, and what Equipment gives
  * over the show, which sets the Position default and the cues that fit.
  */
 interface PerformerDefaults {
@@ -600,7 +597,7 @@ function compileLookup(input: CompileInput): CueValueLookup {
     ]);
 }
 
-/** Each performer's Equipment, Silk and Look defaults. */
+/** Each performer's Equipment, Silk, Look and Facing defaults. */
 function performerDefaultsOf(
     input: CompileInput,
 ): (marcher: CueMarcher) => Omit<PerformerDefaults, "holds"> {

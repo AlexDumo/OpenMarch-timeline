@@ -11,8 +11,9 @@ class Section {
     /** The translation key for the section name */
     readonly tName: string;
     /**
-     * Where the section faces before its first Facing cue, as a Facing value (e.g.
-     * `builtin:facing.side2`). Omitted, front.
+     * Where the section faces before its first Facing cue: one of the four directions
+     * (`builtin:facing.front`, `.back`, `.side1` or `.side2`). A turn or an angle can't be a
+     * default: there is nothing to turn from, and a default has no settings. Omitted, front.
      */
     readonly defaultFacing?: string;
 
