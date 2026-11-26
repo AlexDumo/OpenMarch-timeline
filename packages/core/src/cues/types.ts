@@ -114,7 +114,7 @@ export interface CueEquipment {
     holds: PerformerCarry;
 }
 
-/** What compile needs of a section for the Equipment and Silk defaults. */
+/** What compile needs of a section for the Equipment, Silk and Facing defaults. */
 export interface CueSection {
     /** The section's name, matched to `CueMarcher.section` ignoring case and outer spaces. */
     name: string;
@@ -125,6 +125,11 @@ export interface CueSection {
     equipment?: CueEquipment | null;
     /** The section's 2D color, which the default plain silk shows. */
     color?: string | null;
+    /**
+     * Where the section faces before its first Facing cue, as a Facing value
+     * (`builtin:facing.side2`). Omitted, they face front.
+     */
+    facing?: string | null;
 }
 
 /** What a performer's feet do on a hold (a count where their dot doesn't travel). */
@@ -306,6 +311,8 @@ export type CueTraceDefaultSource =
     | "equipment_fallback"
     /** Equipment: what the marcher usually carries, with nothing else given. */
     | "marcher_carries"
+    /** Facing: the section's default facing, before a performer's first Facing cue. */
+    | "section_facing"
     /** Silk: a plain silk in the section's 2D color. */
     | "section_color"
     /** Look: the band default. */

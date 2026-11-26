@@ -1,0 +1,107 @@
+---
+title: Split a line into rows
+description: Stand the marchers of a line, curve or arc in several rows alongside it (ranks, lanes or rings), and choose which way the rows step back.
+type: how-to
+covers:
+  - apps/desktop/src/shapes/line/lineRows.ts
+  - apps/desktop/src/shapes/line/rowsParams.ts
+  - apps/desktop/src/shapes/editor/RowSpots.tsx
+  - apps/desktop/src/shapes/field/rowsGapDrawing.ts
+  - i18n:shapes.rows
+sidebar:
+  order: 5
+---
+
+import Media from "@/components/docs/Media.astro";
+import Ui from "@/components/docs/Ui.astro";
+import InShort from "@/components/docs/InShort.astro";
+import { Steps } from "@astrojs/starlight/components";
+
+<InShort>While a line, curve or arc is open, select <Ui k="shapes.rows.label" /> on the editor's second row, then select <Ui k="shapes.rows.addBehind" /> or <Ui k="shapes.rows.addFront" />, or one of the <Ui k="shapes.rows.picks" />.</InShort>
+
+Rows split the marchers on a line into several rows that run alongside it, like ranks behind a front line, lanes along a curve, or rings round an arc. The line you drew is one of the rows. Rows never add marchers: the ones you selected are shared out among the rows.
+
+**Before you start:** draw an open [line or curve](/guides/shapes/draw-a-line/) or an [arc](/guides/shapes/draw-an-arc/), or open a placed one to change it. A closed line or arc has no rows.
+
+## Add rows
+
+<Steps>
+
+1. Select <Ui k="shapes.rows.label" /> on the editor's second row. The menu lists the line you drew as the one row, <Ui k="shapes.rows.drawn" plain />, and says that rows split your marchers and add none.
+
+2. Select <Ui k="shapes.rows.addBehind" /> or <Ui k="shapes.rows.addFront" /> to add a row on that side. Each time, the marchers are shared out evenly again. The rows start 2 steps apart.
+
+3. Select <Ui k="shapes.edit.place" /> when the rows look right.
+
+</Steps>
+
+To split the marchers in one go, select one of the <Ui k="shapes.rows.picks" /> at the top of the menu instead: each is so many marchers in a row by so many rows, such as 8 × 3. When the marchers don't divide evenly, the back row has the rest; point at a quick pick to see how many that is.
+
+<Media
+  id="shapes-rows-menu"
+  alt="A line across the field split into two rows, the drawn row in front and a row behind it. The Rows menu beside it lists the marchers in 2 rows, quick picks, the buttons to add a row behind or in front, each row with its dots, its number of marchers and its offset, and the Spacing section with Rows go, Rows apart and Slant."
+/>
+
+Rows are named for where they stand on the field: <Ui k="shapes.rows.drawn" plain />, then Behind 1, Behind 2 and Front 1, Front 2 counting out from it. On a line that runs more up and down the field than across it, they're Left and Right instead, and so are the buttons that add them.
+
+## Change one row
+
+Each row in the menu has its own controls:
+
+- The dots are the row's spots. Press a dot to leave that spot empty, and press it again to put a marcher back. With the keyboard, the arrow keys move along the dots and Space empties or fills one. When the rows are long, point along a row to see its spots up close.
+- <Ui k="shapes.rows.colMarchers" plain /> is how many marchers stand in the row. Change it by one and the marcher comes from the longest other row, or goes to the shortest. You can also type a number.
+- <Ui k="shapes.rows.colOffset" plain /> moves the row along the line by half a spot at a time, so a shorter row can sit centered, or rows can stagger.
+- The cross removes the row, and its marchers go to the shortest rows.
+
+<Ui k="shapes.rows.clear" /> at the bottom of the menu takes every row away, back to the one line you drew.
+
+## Space the rows
+
+The menu's <Ui k="shapes.rows.spacing" plain /> section shows once there are two rows or more.
+
+- <Ui k="shapes.rows.rowApart" plain /> is how far each row is from the next, in steps.
+- <Ui k="shapes.rows.rowSlant" plain /> is how much further along each row starts than the one in front, in steps, for a staggered block. 0 lines the rows up.
+
+While you point at either number or drag it, the field marks the gap from the line you drew to the next row, with its size.
+
+## Choose which way the rows go
+
+<Ui k="shapes.rows.go" plain /> in the <Ui k="shapes.rows.spacing" plain /> section sets the way each row steps from the line you drew. Each choice in its menu has a small picture of your shape laid out that way. The choices depend on the shape:
+
+| Shape | Choices |
+| --- | --- |
+| A straight line | <Ui k="shapes.rows.goOut" plain /> (to start with), <Ui k="shapes.rows.goBack" plain />, <Ui k="shapes.rows.goSide" plain /> |
+| An arc | <Ui k="shapes.rows.goRings" plain /> (to start with), <Ui k="shapes.rows.goSlideArc" plain />, <Ui k="shapes.rows.goBack" plain />, <Ui k="shapes.rows.goSide" plain /> |
+| A curve | <Ui k="shapes.rows.goFollow" plain /> (to start with), <Ui k="shapes.rows.goSlideCurve" plain />, <Ui k="shapes.rows.goBack" plain />, <Ui k="shapes.rows.goSide" plain /> |
+| A line with corners | <Ui k="shapes.rows.goFollow" plain />, <Ui k="shapes.rows.goSlideLine" plain /> (to start with), <Ui k="shapes.rows.goBack" plain />, <Ui k="shapes.rows.goSide" plain /> |
+
+<Media
+  id="shapes-rows-go-arc"
+  alt="An arc with a second row behind it, both on circles round the same center. The Rows menu is open, and beside it the Rows go list: Rings is picked, then Slide the whole arc, Front to back and Side to side, each with a small picture of the arc's rows laid out that way."
+/>
+
+- <Ui k="shapes.rows.goOut" plain />: each row is the line moved square to it, the usual block on a diagonal.
+- <Ui k="shapes.rows.goRings" plain />: the rows are arcs round the same center, each further out or further in, and each marcher stands straight out from the center behind the one on the arc you drew.
+- <Ui k="shapes.rows.goFollow" plain />: each row keeps the same distance from the curve, or the line with corners, all along it, so the rows are lanes that bend with it.
+- <Ui k="shapes.rows.goSlideArc" plain />, <Ui k="shapes.rows.goSlideCurve" plain />, <Ui k="shapes.rows.goSlideLine" plain />: each row is the same shape as the one you drew, slid square to the line between its ends. On a tilted arc this gives rows set off at a slant.
+- <Ui k="shapes.rows.goBack" plain />: each marcher stands straight back (or forward) on the field from the one on the line you drew, whatever the line's slant. On a diagonal, the files run straight up the field.
+- <Ui k="shapes.rows.goSide" plain />: each marcher stands straight across the field from the one on the line, to the left or right. Use it on a line that runs up and down the field.
+
+<Media
+  id="shapes-rows-front-to-back"
+  alt="A diagonal line rising to the right with two rows behind it. Each marcher in the back rows stands straight back on the field from a marcher on the drawn line, so the rows have the same slant as the line and the files run straight up the field."
+/>
+
+With <Ui k="shapes.rows.goBack" plain />, the rows are always named Behind and Front, and with <Ui k="shapes.rows.goSide" plain />, Left and Right, however the line slants.
+
+<Ui k="shapes.rows.goBack" plain /> suits a line that runs more across the field than up and down it. On a line close to straight up and down, its rows land almost on top of the line, and turning the line past straight up and down sends them to the line's other end. Use <Ui k="shapes.rows.goSide" plain /> on such a line. In the same way, <Ui k="shapes.rows.goSide" plain /> suits a line that runs up and down the field more than across it.
+
+## When you change the line
+
+The rows go with the line you drew. Dragging its ends or points, changing its interval or turning it carries the rows along, each keeping its marchers and empty spots. Flipping the shape across keeps its rows behind it on the field.
+
+## Related
+
+- [Draw a line or curve](/guides/shapes/draw-a-line/): the line that the rows follow.
+- [Draw an arc](/guides/shapes/draw-an-arc/): an arc's rows can be rings round its center.
+- [Change a placed shape](/guides/shapes/place-marchers/): open a placed line again to change its rows.

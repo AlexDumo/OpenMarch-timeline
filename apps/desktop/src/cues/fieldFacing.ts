@@ -2,7 +2,8 @@
  * Facing on the 2D field (fork #1316): which way each performer faces at the playhead, as the
  * caret the facing carets layer draws in front of their dot. The angle is core's `facingAt`, the compile
  * the Facing lane, the field menu and the 3D View read, so the field turns exactly when they do:
- * linearly through a turn, landing on the cue's count. A performer with no Facing cue faces front.
+ * linearly through a turn, landing on the cue's count. Before their first Facing cue a performer
+ * faces their section's default (the front; side 2 for bass drums).
  *
  * The field display bar's Show facing toggle turns the carets on for everyone (off by default).
  *

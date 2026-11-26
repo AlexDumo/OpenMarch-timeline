@@ -23,7 +23,8 @@ export interface FieldFacing {
 
 /**
  * The facing the 2D field draws carets for while the field display bar's Show facing is on, or
- * null while it's off. Every performer gets one: a performer with no Facing cue faces front.
+ * null while it's off. Every performer gets one: before their first Facing cue a performer
+ * faces their section's default (the front; side 2 for bass drums).
  * Props and equipment don't face. `show` is the field's one compile (`useShowCues`), which the
  * equipment icons read too.
  */
