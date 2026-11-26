@@ -255,6 +255,11 @@ export class Composer {
         this.touch();
     }
 
+    /** Whether heads can turn from the chest (`writeHeadYaw`): the bake has a neck and head. */
+    get turnsHeads(): boolean {
+        return Boolean(this.setup.headTurn);
+    }
+
     /** Turns slot `slot`'s head from its chest by `yaw` radians (eyes front); 0 for none. */
     writeHeadYaw(slot: number, yaw: number): void {
         if (slot >= this.n || !this.setup.headTurn) return;

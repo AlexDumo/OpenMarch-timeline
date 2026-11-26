@@ -1009,6 +1009,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                     lift,
                     headings,
                 );
+                // bass drums look to the front from where they finally face
+                motion?.writeHeads(headings, players);
                 const silks = silkMotion?.update(c, closed) ?? null;
                 withoutHidden(() =>
                     marcherBodies.writeFrame(

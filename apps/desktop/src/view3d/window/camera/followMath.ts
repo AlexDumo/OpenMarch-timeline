@@ -222,9 +222,12 @@ export const POV_DEFAULT_PITCH = (-8 * Math.PI) / 180;
  */
 export const LOOK_DISTANCE = 0.2;
 
-/** The point-of-view look direction's offset from the performer's heading. */
+/**
+ * The point-of-view look direction's offset from where the performer's head
+ * faces (`lookHeading`).
+ */
 export interface PovLook {
-    /** Radians, added to the heading (positive turns toward +X from +Z). */
+    /** Radians, added to `lookHeading` (positive turns toward +X from +Z). */
     yaw: number;
     /** Radians, up positive. */
     pitch: number;

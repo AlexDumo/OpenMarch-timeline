@@ -647,6 +647,8 @@ export class MarcherBodies {
 
     /** Turns slot `slot`'s head from its chest by `yaw` radians (`eyesFrontYaw`); 0 for none. */
     setHeadYaw(slot: number, yaw: number): void {
+        // a body whose head can't turn looks where its chest does, camera too
+        if (!this.composer.turnsHeads) return;
         this.headYawOf[slot] = yaw;
         this.composer.writeHeadYaw(slot, yaw);
     }

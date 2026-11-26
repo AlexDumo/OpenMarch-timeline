@@ -9,8 +9,9 @@
  *   them. With `turnWithPerformer`, the orbit also swings round as they turn
  *   (eased), keeping the angle the viewer orbited to, like a game's camera.
  * - Point of view: the camera flies into their eyes, then looks where their
- *   head faces (a bass drum's head turned to the front, too), turning with them, offset by where the viewer has looked (drag) and
- *   zoomed (field of view). With `showOwnBody` the eye sits inside their head
+ *   head faces (a bass drum's head turned to the front, too), turning with
+ *   them, offset by where the viewer has looked (drag) and zoomed (field of
+ *   view). With `showOwnBody` the eye sits inside their head
  *   and their arms and instrument show in front, their head, hat and plume
  *   left out while the camera is near their eyes; without, their whole body
  *   is left out of the picture.

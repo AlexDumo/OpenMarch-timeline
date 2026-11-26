@@ -262,6 +262,32 @@ describe("composing a performer's bones (CPU reference)", () => {
         close(bone(4), I);
     });
 
+    it("turns the head about the neck, then carries it with the leg turn", () => {
+        // the leg turn's data as above: column at (1, 0, 0), hip yaw 0, turned 90 degrees;
+        // bones 3 and 4 are the neck and head, carried (class 0)
+        const root = [...I];
+        root[3] = 1;
+        root[7] = 0;
+        root[11] = 0;
+        const row = [root, I, I, T(1, 0, 0), T(1, 2, 0)];
+        const a = anim([row, row]);
+        const st = emptyState(1);
+        writeFeetState(st, 0, {
+            row: { row: 0, frames: 1, counts: 1 },
+            legYaw: Math.PI / 2,
+        });
+        writeHeadYaw(st, 0, -Math.PI / 3);
+        const s = setup({ root: 0, waist: 1 });
+        s.turnClass = [0, 1, 2, 0, 0];
+        s.headTurn = { neck: 3, head: 4, at: [0.1, 0, 0.2] };
+        const bone = compose(a, st, 0, s);
+        const about = (t: number, m: M) =>
+            mul(T(1.1, 0, 0.2), mul(ry(t), mul(T(-1.1, 0, -0.2), m)));
+        // turned about the neck's base, then moved as carried bones are: (-1, 0, -1)
+        close(bone(3), mul(T(-1, 0, -1), about(-Math.PI / 6, T(1, 0, 0))));
+        close(bone(4), mul(T(-1, 0, -1), about(-Math.PI / 3, T(1, 2, 0))));
+    });
+
     it("leaves the head on the chest with no head turn set up, or none written", () => {
         const row = [I, I, T(1, 0, 0), T(1, 2, 0), I];
         const a = anim([row, row]);

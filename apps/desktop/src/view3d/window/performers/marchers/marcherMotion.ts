@@ -367,7 +367,8 @@ export class MarcherMotion {
         private readonly podium: readonly string[] = [],
         /**
          * Per slot: looks at the front whichever way it faces (`isEyesFrontSection`), its
-         * head turned from its chest by `eyesFrontYaw` of its heading. None given, none do.
+         * head turned from its chest by `eyesFrontYaw` of its heading (`writeHeads`). None
+         * given, none do.
          */
         private readonly eyesFront: readonly boolean[] = [],
     ) {
@@ -457,7 +458,7 @@ export class MarcherMotion {
                 this.apply(i, plan, index, planCount);
                 this.cursor[i] = index;
             }
-            this.turnTo(i, headingAt(plan, planCount), headings);
+            if (headings) headings[i] = headingAt(plan, planCount);
             if (!placed[i]) continue;
             bodyAt(
                 this.manifest,
@@ -497,7 +498,7 @@ export class MarcherMotion {
             const plan = this.plans[i];
             if (!plan || plan.events.length === 0) continue;
             // the dot's own count: the plan clock runs a count ahead
-            this.turnTo(i, headingAt(plan, count), headings);
+            if (headings) headings[i] = headingAt(plan, count);
             if (players && players[i] >= 0 && this.holdPlaying(i)) continue;
             if (onPodium && onPodium[i] && this.holdPodium(i)) continue;
             const row = rows[this.attention[i]];
@@ -516,10 +517,18 @@ export class MarcherMotion {
         }
     }
 
-    /** Slot `i` faces `heading`: into `headings`, and its head to the front when it looks there. */
-    private turnTo(i: number, heading: number, headings?: Float32Array) {
-        if (headings) headings[i] = heading;
-        if (this.eyesFront[i]) this.bodies.setHeadYaw(i, eyesFrontYaw(heading));
+    /**
+     * Turns each eyes-front slot's head from its chest toward the front (`eyesFrontYaw`) for
+     * where it finally faces, `headings`: call it after everything that writes them (`update`
+     * or `updateClosed`, pit players and podium stands). A slot playing a pit instrument
+     * (`players`) looks at the instrument it faces, its head on its chest.
+     */
+    writeHeads(headings: Float32Array, players?: Int32Array): void {
+        for (let i = 0; i < this.plans.length; i++) {
+            if (!this.eyesFront[i]) continue;
+            const playing = players !== undefined && players[i] >= 0;
+            this.bodies.setHeadYaw(i, playing ? 0 : eyesFrontYaw(headings[i]));
+        }
     }
 
     /**
