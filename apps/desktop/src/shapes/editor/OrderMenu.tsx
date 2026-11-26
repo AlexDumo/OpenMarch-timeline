@@ -8,6 +8,7 @@ import tolgee from "@/global/singletons/Tolgee";
 import { ORDER_CHOICES, type OrderChoice } from "../assign";
 import type { OrderWhy, ShapeEditTarget } from "./editTargets";
 import { arrowFocus, useEditorMenu, useMenuFocus } from "./menuFocus";
+import { OrderAnimation } from "./OrderAnimation";
 import { OrderPicture } from "./OrderPicture";
 import { isPictured, ORDER_PICTURE_SIZE } from "./orderPictures";
 import { Tip, TIP_DATA } from "@/components/ui/Tip";
@@ -145,8 +146,8 @@ function keyFocus(el: HTMLElement): boolean {
 }
 
 /**
- * One answer in the menu. What it does waits in a tip beside it, shown while the row is under the
- * pointer, has the keys or is pressed, the way the timeline menus show an unavailable entry's
+ * One answer in the menu. What it does waits in a tip beside it, a walking picture over the words,
+ * shown while the row is under the pointer, has the keys or is pressed, the way the timeline menus show an unavailable entry's
  * reason; an (i) at the row's end says it's there. One that doesn't fit these marchers dims, does
  * nothing and has a **?** instead, and its tip also says why. Screen readers hear the tip as the
  * row's description. Escape closes the tip and the menu together.
@@ -228,6 +229,10 @@ function OrderRow({
                                 data-testid={`${testId}-tip`}
                                 className={`${TooltipClassName} text-body flex max-w-[240px] flex-col gap-4`}
                             >
+                                <OrderAnimation
+                                    choice={option.value}
+                                    testId={`${testId}-animation`}
+                                />
                                 <span>{option.hint}</span>
                                 {option.refusal && (
                                     <span className="italic">
