@@ -185,6 +185,7 @@ import { makeFloorSampler } from "@/pathways/floorSampler";
 import { useTheme } from "@/context/ThemeContext";
 import FiguresLayer from "./layers/FiguresLayer";
 import { figureKeyOf, useFigureAtlas } from "./figures/figureAtlas";
+import { useShowFigures } from "./figures/showFigures";
 import {
     CHECKPOINT_FONT,
     COLLISION_FONT,
@@ -374,14 +375,18 @@ function ThreeFieldView() {
     const performerFigures = useUiSettingsStore(
         (s) => s.uiSettings.performerFigures ?? "off",
     );
-    const figureAtlas = useFigureAtlas(performerFigures !== "off");
-    const figureKeys = useMemo(
+    // the show's own figures (ADR 0019) once baked; the shipped ones by what each carries until then
+    const shippedFigures = useFigureAtlas(performerFigures !== "off");
+    const showFigures = useShowFigures(marcherRows, performerFigures !== "off");
+    const shippedKeys = useMemo(
         () =>
             new Map(
                 (marcherRows ?? []).map((m) => [m.id, figureKeyOf(m.section)]),
             ),
         [marcherRows],
     );
+    const figureAtlas = showFigures?.atlas ?? shippedFigures;
+    const figureKeys = showFigures?.keys ?? shippedKeys;
     const items = useMemo(() => new FieldItems(marchers), [marchers]);
     const itemLabels = useFieldItems(items, beats);
     const { strips, loaded: itemsLoaded } = useFieldStrips(fieldProperties);

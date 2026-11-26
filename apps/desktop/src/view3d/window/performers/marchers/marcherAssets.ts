@@ -103,9 +103,24 @@ async function loadBody(type: BodyType): Promise<LoadedBody> {
     return { scene: gltf.scene, mesh };
 }
 
+const bodyPromises = new Map<BodyType, Promise<LoadedBody>>();
+
+/** One body (about 250 KB), loaded once; a failed load lets the next ask try again. */
+export function loadOneBody(type: BodyType): Promise<LoadedBody> {
+    let p = bodyPromises.get(type);
+    if (!p) {
+        p = loadBody(type).catch((error: unknown) => {
+            bodyPromises.delete(type);
+            throw error;
+        });
+        bodyPromises.set(type, p);
+    }
+    return p;
+}
+
 /** All seven bodies (about 1.7 MB). */
 export function loadBodies(): Promise<Map<BodyType, LoadedBody>> {
-    bodiesPromise ??= Promise.all(BODY_TYPES.map(loadBody)).then(
+    bodiesPromise ??= Promise.all(BODY_TYPES.map(loadOneBody)).then(
         (bodies) => new Map(BODY_TYPES.map((t, i) => [t, bodies[i]])),
     );
     return bodiesPromise;

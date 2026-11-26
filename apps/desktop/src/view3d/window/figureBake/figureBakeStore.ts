@@ -5,14 +5,13 @@
  * the show's own looks alone; outside a bake both are null.
  */
 import { create } from "zustand";
-import type { PerformerBody, UniformLook } from "@/view3d/core/marchers/looks";
+import type { PerformerBody } from "@/view3d/core/marchers/looks";
+import type { FigureBakeLook } from "@/view3d/core/marchers/figureDress";
 
-export interface FigureBakeLook {
-    style: UniformLook["style"];
-    colors: UniformLook["colors"];
-    /** sRGB: drum shells and plain flag silks. */
-    carryColor: number;
-}
+export {
+    bakeDressed,
+    type FigureBakeLook,
+} from "@/view3d/core/marchers/figureDress";
 
 interface FigureBakeState {
     body: PerformerBody | null;
@@ -25,21 +24,3 @@ export const useFigureBakeStore = create<FigureBakeState>((set) => ({
     look: null,
     set: (body, look) => set({ body, look }),
 }));
-
-/** `look` dressed as the bake says, or `look` itself outside a bake. */
-export function bakeDressed(
-    look: UniformLook,
-    bake: FigureBakeLook | null,
-): UniformLook {
-    if (!bake) return look;
-    return {
-        style: bake.style,
-        colors: { ...bake.colors },
-        options: {
-            ...look.options,
-            carryColor: look.options.carry ? bake.carryColor : null,
-            silk: null,
-            silkArtwork: false,
-        },
-    };
-}
