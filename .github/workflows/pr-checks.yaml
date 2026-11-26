@@ -253,6 +253,15 @@ jobs:
       - name: Build workspace packages
         run: pnpm turbo run build --filter=@openmarch/desktop^...
 
+      # The uniform pack builder against the app's own import, in Chromium (#1260). The
+      # desktop-test shards have no browser, so these run here; REQUIRED makes a missing
+      # Chromium fail instead of skip
+      - name: Uniform pack builder smoke tests
+        working-directory: apps/desktop
+        env:
+          UNIFORM_SMOKE_REQUIRED: "1"
+        run: pnpm exec vitest run scripts/uniform-pack/lib/__test__/browserSmoke.test.ts
+
       - name: Build browser harness
         working-directory: apps/desktop
         run: pnpm run build:browser

@@ -859,6 +859,94 @@ export async function getLatestUndoEntryToken(
     return entry === null ? null : `${historyEpoch}\n${entry}`;
 }
 
+/**
+ * Runs `func` in a transaction that joins the latest undo entry instead of making a new one,
+ * while that entry is still the one `token` names (getLatestUndoEntryToken). Returns
+ * `{ amended: false }`, having run nothing, when it isn't.
+ *
+ * It runs under the same lock as transactionWithHistory and undo/redo, so no wrapped edit, undo
+ * or redo can start or land inside it: every history row added after it starts is `func`'s. Those
+ * rows, which must all write the tables named in `tables`, are deleted in the same transaction:
+ * the latest entry's own statements already put those rows back to how they were before it, so
+ * Undo still returns to there. If `func` wrote any other table with history, it throws and the
+ * whole transaction rolls back, since that write would have no undo. Keep `func` short (no hashing
+ * or building large values in it): it holds the lock.
+ *
+ * Not for the timeline tables: their writes go through transactionWithHistory's change log and
+ * upkeep (timelineChanges, timelineHeldUpkeep), which an amend skips.
+ */
+export async function amendLatestUndoEntry<T>(
+    db: DbConnection,
+    token: string,
+    tables: readonly string[],
+    func: (tx: DbTransaction) => Promise<T>,
+    /** Runs in the same transaction once those rows are gone, for clean-up that reads history */
+    after?: (tx: DbTransaction, result: T) => Promise<void>,
+): Promise<{ amended: true; result: T } | { amended: false }> {
+    return await withTransactionWithHistoryLock(async () => {
+        const outcome = await db.transaction(async (tx) => {
+            if ((await getLatestUndoEntryTokenInTransaction(tx)) !== token)
+                return null;
+            const { history_undo } = schema;
+            const before =
+                (
+                    await tx
+                        .select({ last: max(history_undo.sequence) })
+                        .from(history_undo)
+                        .get()
+                )?.last ?? 0;
+            const result = await func(tx);
+            const added = await tx
+                .select({
+                    sequence: history_undo.sequence,
+                    sql: history_undo.sql,
+                })
+                .from(history_undo)
+                .where(gt(history_undo.sequence, before))
+                .all();
+            const amended = new Set(tables);
+            const ours = added.filter((row) =>
+                amended.has(historyStatementTable(row.sql) ?? ""),
+            );
+            if (ours.length > 0)
+                await tx
+                    .delete(history_undo)
+                    .where(
+                        inArray(
+                            history_undo.sequence,
+                            ours.map((row) => row.sequence),
+                        ),
+                    )
+                    .run();
+            const left = await tx
+                .select({ n: count() })
+                .from(history_undo)
+                .where(gt(history_undo.sequence, before))
+                .get();
+            if ((left?.n ?? 0) > 0)
+                throw new Error(
+                    `amendLatestUndoEntry: the amend wrote ${left!.n} history row(s) outside ${[...tables].join(", ")}`,
+                );
+            await after?.(tx, result);
+            return { result };
+        });
+        if (outcome === null) return { amended: false as const };
+        notifyHistoryChange();
+        return { amended: true as const, result: outcome.result };
+    });
+}
+
+/**
+ * getLatestUndoEntryToken read inside `tx`, so a write can check that the entry it means to
+ * extend is still the latest in the same transaction that extends it.
+ */
+export async function getLatestUndoEntryTokenInTransaction(
+    tx: DbTransaction,
+): Promise<string | null> {
+    const entry = await latestUndoEntry(tx);
+    return entry === null ? null : `${historyEpoch}\n${entry}`;
+}
+
 /** The newest undo entry's group and statements, or null if there is none. */
 async function latestUndoEntry(
     db: DbConnection | DbTransaction,

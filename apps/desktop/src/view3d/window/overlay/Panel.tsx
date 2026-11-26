@@ -1,7 +1,7 @@
 /**
  * Building blocks shared by the overlay's floating panels (ui.md UI-2).
  */
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Button, ToggleGroup, ToggleGroupItem } from "@openmarch/ui";
 import clsx from "clsx";
 import { Tip } from "@/components/ui/Tip";
@@ -164,11 +164,120 @@ export function Segmented<T extends string>({
                     data-value={option.value}
                     data-unavailable={option.unavailable ? "" : undefined}
                     aria-disabled={option.unavailable ? true : undefined}
-                    className="data-[unavailable]:text-text/40 text-body rounded-4! hover:bg-text/10! data-[state=on]:bg-accent! data-[state=on]:hover:bg-accent! data-[state=on]:text-text-invert! h-28 border-0! px-10! whitespace-nowrap"
+                    className={SEGMENT_CLASS}
                 >
                     {option.label}
                 </ToggleGroupItem>
             ))}
         </ToggleGroup>
+    );
+}
+
+/** The look of a segment, shared by {@link Segmented} and {@link SegmentedMany} */
+const SEGMENT_CLASS =
+    "data-[unavailable]:text-text/40 text-body rounded-4! hover:bg-text/10! data-[state=on]:bg-accent! data-[state=on]:hover:bg-accent! data-[state=on]:text-text-invert! h-28 border-0! px-10! whitespace-nowrap aria-disabled:cursor-not-allowed";
+
+/**
+ * Like {@link Segmented}, but any number of options can be on. With `atLeastOne`, the last one
+ * on can't be turned off: it says why in its tooltip (`lastReason`), and clicking it calls
+ * `onRefused` so the panel can say it too.
+ */
+export function SegmentedMany<T extends string>({
+    value,
+    options,
+    onChange,
+    label,
+    testId,
+    lastReason,
+    onRefused,
+    className,
+}: {
+    value: readonly T[];
+    options: readonly SegmentOption<T>[];
+    onChange: (value: T[]) => void;
+    label: string;
+    testId?: string;
+    /** Why the last option on can't be turned off; set to keep at least one on */
+    lastReason?: string;
+    onRefused?: () => void;
+    className?: string;
+}) {
+    const only = lastReason && value.length === 1 ? value[0] : null;
+    return (
+        <ToggleGroup
+            type="multiple"
+            value={[...value]}
+            onValueChange={(next: string[]) => {
+                if (lastReason && next.length === 0) onRefused?.();
+                else onChange(next as T[]);
+            }}
+            aria-label={label}
+            data-testid={testId}
+            className={clsx(
+                "h-auto! shrink-0 flex-wrap gap-2 border-0! bg-transparent! bg-none!",
+                className,
+            )}
+        >
+            {options.map((option) => (
+                <ToggleGroupItem
+                    key={option.value}
+                    value={option.value}
+                    title={option.value === only ? lastReason : option.title}
+                    aria-disabled={option.value === only || undefined}
+                    data-value={option.value}
+                    className={SEGMENT_CLASS}
+                >
+                    {option.label}
+                </ToggleGroupItem>
+            ))}
+        </ToggleGroup>
+    );
+}
+
+/**
+ * A color swatch. The native picker updates the swatch while it is open and
+ * saves once when it closes, so one pick is one undo step.
+ */
+export function ColorField({
+    label,
+    value,
+    onCommit,
+    testId,
+}: {
+    label: string;
+    value: string;
+    onCommit: (color: string) => void;
+    testId?: string;
+}) {
+    const ref = useRef<HTMLInputElement>(null);
+    const commitRef = useRef(onCommit);
+    commitRef.current = onCommit;
+
+    // React's onChange fires on every `input`; saving waits for `change`.
+    useEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+        const onChange = () => commitRef.current(el.value.toLowerCase());
+        el.addEventListener("change", onChange);
+        return () => el.removeEventListener("change", onChange);
+    }, []);
+    useEffect(() => {
+        if (ref.current && ref.current.value !== value) {
+            ref.current.value = value;
+        }
+    }, [value]);
+
+    return (
+        <label className="flex items-center gap-6" title={label}>
+            <span className="text-sub text-text/60">{label}</span>
+            <input
+                ref={ref}
+                type="color"
+                defaultValue={value}
+                aria-label={label}
+                data-testid={testId}
+                className="border-stroke rounded-4 size-28 shrink-0 cursor-pointer border bg-transparent p-2"
+            />
+        </label>
     );
 }

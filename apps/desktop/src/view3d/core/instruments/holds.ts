@@ -489,11 +489,15 @@ const TROMBONE: Record<HoldState, Hold> = {
  * left temple rather than through the head. Marching players roll it far
  * less than concert players (drum corps photos, 2026-11-10).
  */
-const TROMBONE_ROLL_DEG = 18;
-/** And turned 8 degrees, the bell a little right, so the tuning slide swings back past the left ear. */
-const TROMBONE_YAW_DEG = -8;
+const TROMBONE_ROLL_DEG = 22;
+/**
+ * Not turned: the slide points straight ahead, square to the shoulders and
+ * the sideline (owner, 2026-11-25). It used to turn 8 degrees right to clear
+ * the head; the roll and the mouthpiece's offset now do that instead.
+ */
+const TROMBONE_YAW_DEG = 0;
 /** And the mouthpiece a little left of the lips' center, as many players set it. */
-const TROMBONE_OFF_CENTER = 0.012;
+const TROMBONE_OFF_CENTER = 0.022;
 /**
  * The left arm makes the marching triangle (owner, 2026-11-10; Blue Devils
  * 2016 photos): the elbow level with the shoulder, out to the side and a

@@ -8,14 +8,14 @@
  *   change goes to the editor, which saves it with undo.
  * - Preferences, saved on this computer only (ADR 0010 D-5): opening the 3D
  *   View with a show (also in Settings › General), quality, resolution, the
- *   control scheme, following a performer, and the keys, so they can be
- *   found.
+ *   control scheme, following a performer, Custom uniforms (preview), and the
+ *   keys, so they can be found.
  *
  * Each tab says where its choices are saved in its first line. The panel
  * floats at the right and doesn't block the scene, so the viewer can orbit
  * while trying a look. The last tab used is remembered on this computer.
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { T, useTranslate } from "@tolgee/react";
 import { FileIcon, MonitorIcon, XIcon, type Icon } from "@phosphor-icons/react";
 import {
@@ -35,9 +35,15 @@ import { QUALITY_MODES } from "../qualityPreference";
 import { RESOLUTIONS } from "../renderPrefs";
 import { type ControlScheme } from "../camera/controlScheme";
 import ControlSchemePicker from "../camera/ControlSchemePicker";
-import { Segmented } from "./Panel";
+import { ColorField, Segmented } from "./Panel";
 import { KITS_WITH_OWN_FIELD } from "@/view3d/core/venueSettings";
 import { SilkArtworkControls } from "./SilkArtworkControls";
+import { UniformTemplateControls } from "./UniformTemplateControls";
+import { UniformImportControls } from "./UniformImportControls";
+import { UniformItemsControls } from "./UniformItemsControls";
+import { UniformModesControls } from "./UniformModesControls";
+import { CustomUniformsRow, PreviewTitle } from "./UniformPreview";
+import { useCustomUniforms } from "../uniformArtworkPreview";
 import {
     BrassFinishPicker,
     LightingControl,
@@ -92,6 +98,7 @@ export function SettingsPanel({
     const kitId = useView3dSceneStore((s) => s.kitId);
     const hasStands = !!kit && kit.seatRows.length > 0;
     const [tab, setTab] = useState<SettingsTab>(() => loadSettingsTab());
+    const customUniforms = useCustomUniforms();
 
     return (
         <section
@@ -180,9 +187,24 @@ export function SettingsPanel({
                         icon={FileIcon}
                         text={t("view3d.settings.showNote")}
                     />
-                    <Row label={t("view3d.settings.uniforms")} stacked>
+                    <Row
+                        label={
+                            customUniforms ? (
+                                <PreviewTitle>
+                                    {t("view3d.settings.uniforms")}
+                                </PreviewTitle>
+                            ) : (
+                                t("view3d.settings.uniforms")
+                            )
+                        }
+                        stacked
+                    >
                         <UniformPicker />
+                        <UniformTemplateControls />
+                        <UniformImportControls />
                     </Row>
+                    <UniformModesControls />
+                    <UniformItemsControls />
                     <Row label={t("view3d.settings.brassFinish")}>
                         <BrassFinishPicker />
                     </Row>
@@ -212,6 +234,7 @@ export function SettingsPanel({
                     <ResolutionRow />
                     <ControlsRow />
                     <FollowRows />
+                    <CustomUniformsRow />
                     <Row label={t("view3d.settings.shortcuts")} stacked>
                         <ShortcutList />
                     </Row>
@@ -261,7 +284,7 @@ function Row({
     stacked = false,
     children,
 }: {
-    label: string;
+    label: ReactNode;
     /** Puts the control under the label instead of beside it. */
     stacked?: boolean;
     children: ReactNode;
@@ -393,54 +416,6 @@ function EndZoneTextField({
                 }
             }}
         />
-    );
-}
-
-/**
- * A color swatch. The native picker updates the swatch while it is open and
- * saves once when it closes, so one pick is one undo step.
- */
-function ColorField({
-    label,
-    value,
-    onCommit,
-    testId,
-}: {
-    label: string;
-    value: string;
-    onCommit: (color: string) => void;
-    testId?: string;
-}) {
-    const ref = useRef<HTMLInputElement>(null);
-    const commitRef = useRef(onCommit);
-    commitRef.current = onCommit;
-
-    // React's onChange fires on every `input`; saving waits for `change`.
-    useEffect(() => {
-        const el = ref.current;
-        if (!el) return;
-        const onChange = () => commitRef.current(el.value.toLowerCase());
-        el.addEventListener("change", onChange);
-        return () => el.removeEventListener("change", onChange);
-    }, []);
-    useEffect(() => {
-        if (ref.current && ref.current.value !== value) {
-            ref.current.value = value;
-        }
-    }, [value]);
-
-    return (
-        <label className="flex items-center gap-6" title={label}>
-            <span className="text-sub text-text/60">{label}</span>
-            <input
-                ref={ref}
-                type="color"
-                defaultValue={value}
-                aria-label={label}
-                data-testid={testId}
-                className="border-stroke rounded-4 size-28 shrink-0 cursor-pointer border bg-transparent p-2"
-            />
-        </label>
     );
 }
 

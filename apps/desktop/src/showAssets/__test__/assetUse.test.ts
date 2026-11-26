@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { ShowAsset } from "@/db-functions/showAssets";
-import { LARGE_SHOW_ASSET_BYTES, showAssetUse, sizeParts } from "../assetUse";
+import {
+    LARGE_SHOW_ASSET_BYTES,
+    keptForHistory,
+    showAssetUse,
+    sizeParts,
+} from "../assetUse";
 
 const asset = (
     id: string,
@@ -80,5 +85,39 @@ describe("sizeParts", () => {
         });
         expect(sizeParts(820 * 1024)).toEqual({ value: "820", unit: "kb" });
         expect(sizeParts(2 * 1024 ** 3)).toEqual({ value: "2", unit: "gb" });
+    });
+});
+
+describe("keptForHistory", () => {
+    const uniforms = ["library:a@x", "library:b@x"];
+
+    it("keeps every uniform until the history has been read, or when it can't be", () => {
+        expect([...keptForHistory(uniforms, undefined)]).toEqual(uniforms);
+    });
+
+    it("keeps only the ones history names once it has been read", () => {
+        expect([...keptForHistory(uniforms, new Set(["library:b@x"]))]).toEqual(
+            ["library:b@x"],
+        );
+    });
+
+    it("so the unused note never counts a uniform an undo may need while the check runs", () => {
+        const uniform: ShowAsset = { ...chair, kind: "uniform" };
+        const use = showAssetUse(
+            [uniform],
+            sizes,
+            [],
+            keptForHistory([value(uniform)], undefined),
+        );
+        expect(use.unused).toEqual([]);
+        const checked = showAssetUse(
+            [uniform],
+            sizes,
+            [],
+            keptForHistory([value(uniform)], new Set()),
+        );
+        expect(checked.unused.map((row) => row.value)).toEqual([
+            value(uniform),
+        ]);
     });
 });

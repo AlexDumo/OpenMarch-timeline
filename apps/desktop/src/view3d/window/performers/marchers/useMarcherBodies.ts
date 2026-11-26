@@ -26,6 +26,7 @@ import {
 import {
     MarcherBodies,
     bakeForBodies,
+    type FlatsResources,
     type MarcherQuality,
     type MarcherSlotLook,
     type StepOffFoot,
@@ -160,6 +161,8 @@ export function useMarcherBodies(
     rows?: readonly string[],
     /** The Horn/Equipment rows marchers play. */
     hornRows: readonly string[] = [],
+    /** Flats art for the looks that wear it (`useMarcherFlats`). */
+    flats?: FlatsResources,
 ): MarcherBodies | null {
     const namesKey = [...new Set(names)].sort().join(",");
     const rowsKey = rows ? [...new Set(rows)].sort().join("|") : null;
@@ -203,8 +206,8 @@ export function useMarcherBodies(
 
     const bodies = useMemo(() => {
         if (!assets || !bake || !looks || looks.length === 0) return null;
-        return new MarcherBodies(assets.bodies, bake, looks, quality);
-    }, [assets, bake, looks, quality]);
+        return new MarcherBodies(assets.bodies, bake, looks, quality, flats);
+    }, [assets, bake, looks, quality, flats]);
     useEffect(() => () => bodies?.dispose(), [bodies]);
     return bodies;
 }
