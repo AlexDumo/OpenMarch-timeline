@@ -17,13 +17,12 @@ import { seedShowSql, type SeedPosition } from "../seed.mjs";
 // hover: a tap on the gap shows them, and a tap on them splits. A long press on
 // the gap opens the field menu with Shape: Split here, as a right-click does.
 
-const HOME: SeedPosition[] = [
-    [1, 500, 300],
-    [2, 600, 350],
-    [3, 700, 280],
-    [4, 800, 400],
-    [5, 520, 450],
-];
+// Twelve trumpets scattered on the field
+const HOME: SeedPosition[] = Array.from({ length: 12 }, (_, i) => [
+    i + 1,
+    480 + (i % 4) * 90,
+    280 + Math.floor(i / 4) * 70,
+]);
 const ALL = HOME.map(([id]) => id);
 
 const SEED = seedShowSql({
@@ -60,11 +59,15 @@ const byId = (rows: readonly Position[]) =>
     [...rows].sort((a, b) => a.id - b.id);
 
 /**
- * Everyone on a straight Line, placed with the mouse and left selected: five
- * marchers twelve steps apart. Returns the middle of the gap between the second
- * and third along it, on screen.
+ * Everyone on a straight Line, placed with the mouse and left selected: twelve
+ * marchers `apart` steps apart (6 by default). Returns the middle of the gap
+ * between the fourth and fifth along it, clear of the line's handles at its ends
+ * and middle, on screen; and a point on empty field behind the line.
  */
-async function placeLine(show: Show): Promise<Point> {
+async function placeLine(
+    show: Show,
+    apart = 6,
+): Promise<Point & { away: Point }> {
     const { page } = show;
     const grid = await fieldGrid(show);
     const S = grid.pixelsPerStep;
@@ -75,8 +78,9 @@ async function placeLine(show: Show): Promise<Point> {
         .toEqual(ALL);
     await page.keyboard.press("l");
     const y = cf.y - 20 * S;
-    const from = { x: cf.x - 24 * S, y };
-    const to = { x: cf.x + 24 * S, y };
+    const half = ((ALL.length - 1) / 2) * apart * S;
+    const from = { x: cf.x - half, y };
+    const to = { x: cf.x + half, y };
     const a = await toScreen(page, from);
     const b = await toScreen(page, to);
     await page.mouse.move(a.x, a.y);
@@ -87,7 +91,9 @@ async function placeLine(show: Show): Promise<Point> {
     await page.keyboard.press("Enter");
     await expect.poll(async () => (await recipes(show)).length).toBe(1);
     await waitForIdle(page);
-    return toScreen(page, { x: from.x + 1.5 * 12 * S, y });
+    const gap = await toScreen(page, { x: from.x + 3.5 * apart * S, y });
+    const away = await toScreen(page, { x: cf.x, y: y - 30 * S });
+    return { ...gap, away };
 }
 
 /** The middle of the scissors drawn, on screen */
@@ -146,6 +152,27 @@ test.describe("with a mouse", () => {
         await page.keyboard.press("ControlOrMeta+z");
         await expect.poll(async () => (await recipes(show)).length).toBe(1);
     });
+
+    test("change: on a line with marchers two steps apart, hovering the middle of a gap shows the scissors; Escape takes them away", async ({
+        show,
+    }) => {
+        const { page } = show;
+        const gap = await placeLine(show, 2);
+        const before = byId(await savedPositions(show, 0));
+        await page.mouse.move(gap.x, gap.y, { steps: 4 });
+        const at = await scissorsAt(page);
+        await page.keyboard.press("Escape");
+        await expect(page.getByTestId("fieldSplitScissors")).toHaveCount(0);
+
+        await page.keyboard.press("ControlOrMeta+a");
+        await page.mouse.move(gap.x + 1, gap.y, { steps: 2 });
+        await page.mouse.move(gap.x, gap.y, { steps: 2 });
+        const again = await scissorsAt(page);
+        expect(Math.hypot(again.x - at.x, again.y - at.y)).toBeLessThan(2);
+        await page.mouse.move(again.x, again.y, { steps: 6 });
+        await page.mouse.click(again.x, again.y);
+        await expectSplit(show, before);
+    });
 });
 
 test.describe("with a finger", () => {
@@ -172,11 +199,55 @@ test.describe("with a finger", () => {
         await expect(page.getByTestId("fieldSplitScissors")).toHaveCount(0);
         await tap(page, gap);
         const at = await scissorsAt(page);
-        // They stay after the finger lifts
-        await page.waitForTimeout(400);
+        // They stay after the finger lifts, through the next frames
+        await page.evaluate(
+            () =>
+                new Promise((done) =>
+                    requestAnimationFrame(() => requestAnimationFrame(done)),
+                ),
+        );
         await expect(page.getByTestId("fieldSplitScissors")).toBeVisible();
         await tap(page, at);
         await expectSplit(show, before);
+    });
+
+    test("change: on a line with marchers two steps apart, a tap in the middle of a gap shows the scissors, and they split it", async ({
+        show,
+    }) => {
+        const { page } = show;
+        const gap = await placeLine(show, 2);
+        await page.mouse.move(5, 5);
+        const before = byId(await savedPositions(show, 0));
+        await tap(page, gap);
+        await tap(page, await scissorsAt(page));
+        await expectSplit(show, before);
+    });
+
+    test("change: scissors a tap showed go away when the line is put down, by a tap on empty field or Escape", async ({
+        show,
+    }) => {
+        const { page } = show;
+        const gap = await placeLine(show);
+        await page.mouse.move(5, 5);
+        const scissors = page.getByTestId("fieldSplitScissors");
+        await tap(page, gap);
+        await expect(scissors).toBeVisible();
+        await tap(page, gap.away);
+        await expect
+            .poll(async () => (await readField(page)).selection)
+            .toEqual([]);
+        await expect(scissors).toHaveCount(0);
+
+        // Selected again, then Escape
+        await page.keyboard.press("ControlOrMeta+a");
+        await expect
+            .poll(async () => (await readField(page)).selection)
+            .toEqual(ALL);
+        await tap(page, gap);
+        await expect(scissors).toBeVisible();
+        await page.keyboard.press("Escape");
+        await expect(scissors).toHaveCount(0);
+        expect(await recipes(show)).toHaveLength(1);
     });
 
     test("change: a long press on a gap of the selected line offers Shape: Split here in the field menu", async ({

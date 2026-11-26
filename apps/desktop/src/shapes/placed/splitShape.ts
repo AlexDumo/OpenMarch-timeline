@@ -88,7 +88,7 @@ export function splitCheck(
         return refused(
             tolgee.t(
                 "shapes.placed.splitEnd",
-                "Right-click between two marchers to split there",
+                "Open this menu between two marchers to split there",
             ),
         );
     const spots = lineSpots(p, box.spots)
@@ -106,9 +106,11 @@ export interface Scissors {
 
 /**
  * The scissors for field point `at` on placed line `box` (#1336, owner's mockup): over the line in
- * a gap between two marchers, not on a dot, with room for them (a gap of three reaches or more).
- * They sit two reaches off the line, on the side toward the back of the field (up the screen).
- * Null anywhere else, and on a shape that isn't a line or can't be split.
+ * a gap between two marchers, not on a dot. On a short gap, only the middle third of it counts as
+ * the gap, so a press on a marcher stays the marcher's. They sit two reaches off the line, square
+ * to the gap from its middle, on the side toward the back of the field (up the screen), so they
+ * cover no dot or handle however short the gap. Null anywhere else, and on a shape that isn't a
+ * line or can't be split.
  */
 export function scissorsAt(
     box: PlacedBox,
@@ -117,18 +119,19 @@ export function scissorsAt(
 ): Scissors | null {
     if (!isLineKind(box)) return null;
     if (!onLine(box.params, box.spots, at, env)) return null;
-    const reach = env.hitRadius;
-    if (
-        box.recipe.members.some(
-            (m) => Math.hypot(m.x - at.x, m.y - at.y) <= reach,
-        )
-    )
-        return null;
     const check = splitCheck(box, at);
     if (!check?.ok) return null;
     const { from, to } = check.gap;
     const length = Math.hypot(to.x - from.x, to.y - from.y);
-    if (length < 3 * reach) return null;
+    if (length === 0) return null;
+    const reach = env.hitRadius;
+    const onDot = Math.min(reach, length / 3);
+    if (
+        box.recipe.members.some(
+            (m) => Math.hypot(m.x - at.x, m.y - at.y) <= onDot,
+        )
+    )
+        return null;
     let n = { x: -(to.y - from.y) / length, y: (to.x - from.x) / length };
     if (n.y > 0 || (n.y === 0 && n.x > 0)) n = { x: -n.x, y: -n.y };
     const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };

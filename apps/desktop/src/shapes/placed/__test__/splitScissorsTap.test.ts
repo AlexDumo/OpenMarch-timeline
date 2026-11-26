@@ -13,6 +13,7 @@ import { LiveBoxMode } from "../liveBoxMode";
 import { boxesAt, type PlacedBox, type PlacedRecipe } from "../placedBox";
 import { splitShape } from "../splitShape";
 import { useSplitPreviewStore } from "../splitPreview";
+import { splitCheckAt } from "../useSplitHere";
 
 vi.mock("../commitBox", async (original) => ({
     ...(await original<typeof import("../commitBox")>()),
@@ -36,11 +37,12 @@ const FROM = { x: 30 * STEP + 1, y: 20 * STEP + 1 };
 /** Five marchers ten steps apart along a straight line: gaps wide enough for a finger's scissors */
 const TO = { x: FROM.x + 40 * STEP, y: FROM.y };
 
-function placedLine(): PlacedBox<LineParams> {
+/** The line, `dy` further down the field */
+function placedLine(dy = 0): PlacedBox<LineParams> {
     const params: LineParams = {
         points: [
-            { ...FROM, tension: 0 },
-            { ...TO, tension: 0 },
+            { x: FROM.x, y: FROM.y + dy, tension: 0 },
+            { x: TO.x, y: TO.y + dy, tension: 0 },
         ],
         spacing: { mode: "fit" },
     };
@@ -106,7 +108,7 @@ beforeEach(() => {
                     .map((m) => [m.marcherId, { x: m.x, y: m.y }] as const),
             ),
     });
-    useSplitPreviewStore.setState({ gap: null, scissors: null });
+    useSplitPreviewStore.setState({ gap: null, scissors: null, hot: false });
     vi.mocked(splitShape).mockClear();
 });
 
@@ -145,6 +147,20 @@ describe("scissors on a tablet", () => {
         expect(splitShape).not.toHaveBeenCalled();
     });
 
+    it("the shape changed under them (an undo) puts them away", () => {
+        const mode = new LiveBoxMode(line, new QueryClient());
+        tap(mode, pointer(GAP, "touch"));
+        expect(shown()).not.toBeNull();
+        const moved = placedLine(5 * STEP);
+        mode.setBox(moved);
+        expect(shown()).toBeNull();
+        // Read again unchanged, they'd have stayed
+        tap(mode, pointer({ x: GAP.x, y: GAP.y + 5 * STEP }, "touch"));
+        expect(shown()).not.toBeNull();
+        mode.setBox(placedLine(5 * STEP));
+        expect(shown()).not.toBeNull();
+    });
+
     it("a drag from a gap shows no scissors", () => {
         const mode = new LiveBoxMode(line, new QueryClient());
         const p = pointer(GAP, "touch");
@@ -164,5 +180,33 @@ describe("scissors on a tablet", () => {
         }
         mode.leave();
         expect(shown()).toBeNull();
+    });
+});
+
+describe("scissors with a mouse", () => {
+    it("light up under the pointer, and a click anywhere on the button as drawn splits", () => {
+        const mode = new LiveBoxMode(line, new QueryClient());
+        mode.cursorAt(pointer(GAP, "mouse"));
+        const at = shown()!;
+        expect(useSplitPreviewStore.getState().hot).toBe(false);
+        // On the ring, past a mouse's 10 px reach but on the 11 px button and its ring
+        const rim = pointer({ x: at.x + 12, y: at.y }, "mouse");
+        expect(mode.cursorAt(rim)).toBe("pointer");
+        expect(useSplitPreviewStore.getState().hot).toBe(true);
+        expect(tap(mode, rim)).toBe(true);
+        expect(splitShape).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("Split here from a long press", () => {
+    // 15 px before the third marcher's spot: a mouse's reach (10) doesn't get there, a finger's
+    // (22) does, which keeps that marcher in the first piece
+    const nearThird = { x: FROM.x + 20 * STEP - 15, y: FROM.y };
+
+    it("judges on a marcher with a finger's reach", () => {
+        const touch = splitCheckAt(line, nearThird, "touch");
+        expect(touch).toMatchObject({ ok: true, k: 3 });
+        const mouse = splitCheckAt(line, nearThird, "mouse");
+        expect(mouse).toMatchObject({ ok: true, k: 2 });
     });
 });

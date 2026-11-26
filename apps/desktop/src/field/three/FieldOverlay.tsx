@@ -28,7 +28,12 @@ import type { PropToolShape } from "@/field/editor/propTool";
 import type { FieldMarchers } from "./fieldMarchers";
 import type { FieldItems } from "./fieldItems";
 import { fieldToElement, useFieldViewStore } from "./fieldView";
-import { useSplitPreviewStore } from "@/shapes/placed/splitPreview";
+import { ScissorsIcon } from "@phosphor-icons/react";
+import {
+    SCISSORS_RADIUS_PX,
+    SCISSORS_RING_PX,
+    useSplitPreviewStore,
+} from "@/shapes/placed/splitPreview";
 import {
     drawnSelectionBox,
     selectionHandles,
@@ -819,11 +824,6 @@ const TOP_LAYERS: readonly FieldLayerKind[] = ["task", "cover", "pill"];
 type MirrorShown = NonNullable<FieldModeDrawing["mirror"]>;
 
 /**
- * A mirrored paste's mirror point (Paste mirrored): a line through it each way across the whole
- * canvas, at any zoom, and the point itself, which drags. The lines the paste mirrors across are
- * dashed and strong; the other is faint, so which way it mirrors reads before anything is pressed.
- */
-/**
  * Where a split would cut a placed line (#1336): a dashed stroke across the gap, at its middle,
  * square to it, while Split here is pointed at in a menu; over a gap of the selected line, up to
  * the scissors a click splits on
@@ -831,6 +831,7 @@ type MirrorShown = NonNullable<FieldModeDrawing["mirror"]>;
 function SplitMark() {
     const gap = useSplitPreviewStore((s) => s.gap);
     const scissors = useSplitPreviewStore((s) => s.scissors);
+    const hot = useSplitPreviewStore((s) => s.hot);
     const view = useFieldViewStore();
     if (!gap) return null;
     const a = fieldToElement(view, gap.from.x, gap.from.y);
@@ -871,34 +872,47 @@ function SplitMark() {
                 strokeWidth={MIRROR_LINE_WIDTH}
                 strokeDasharray="6 4"
             />
-            {tip && <SplitScissors at={tip} />}
+            {tip && <SplitScissors at={tip} hot={hot} />}
         </g>
     );
 }
 
 /** The scissors a click splits a placed line on (#1336): a round button with scissors in it */
-function SplitScissors({ at }: { at: { x: number; y: number } }) {
+function SplitScissors({
+    at,
+    hot,
+}: {
+    at: { x: number; y: number };
+    hot: boolean;
+}) {
     return (
         <g
             transform={`translate(${at.x},${at.y})`}
             data-testid="fieldSplitScissors"
+            data-hot={hot || undefined}
         >
-            <circle r={11} fill="white" stroke={MIRROR_COLOR} strokeWidth={2} />
-            <g
+            <circle
+                r={SCISSORS_RADIUS_PX}
+                fill={hot ? MIRROR_COLOR : "white"}
                 stroke={MIRROR_COLOR}
-                strokeWidth={1.6}
-                fill="none"
-                strokeLinecap="round"
-            >
-                <circle cx={-3.2} cy={3.4} r={2.2} />
-                <circle cx={3.2} cy={3.4} r={2.2} />
-                <line x1={-1.8} y1={1.6} x2={3.5} y2={-5} />
-                <line x1={1.8} y1={1.6} x2={-3.5} y2={-5} />
-            </g>
+                strokeWidth={SCISSORS_RING_PX}
+            />
+            <ScissorsIcon
+                x={-7}
+                y={-7}
+                size={14}
+                weight="bold"
+                color={hot ? "white" : MIRROR_COLOR}
+            />
         </g>
     );
 }
 
+/**
+ * A mirrored paste's mirror point (Paste mirrored): a line through it each way across the whole
+ * canvas, at any zoom, and the point itself, which drags. The lines the paste mirrors across are
+ * dashed and strong; the other is faint, so which way it mirrors reads before anything is pressed.
+ */
 function MirrorMark({
     mirror,
     at,

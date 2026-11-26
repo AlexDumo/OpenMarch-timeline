@@ -10,7 +10,13 @@ import type { XY } from "../types";
 export const useSplitPreviewStore = create<{
     readonly gap: { readonly from: XY; readonly to: XY } | null;
     readonly scissors: XY | null;
-}>(() => ({ gap: null, scissors: null }));
+    /** The pointer is on the scissors: they light up, as a button does under the pointer */
+    readonly hot: boolean;
+}>(() => ({ gap: null, scissors: null, hot: false }));
+
+/** The scissors' round button as drawn, in screen pixels: its radius, and its ring's width */
+export const SCISSORS_RADIUS_PX = 11;
+export const SCISSORS_RING_PX = 2;
 
 /** Shows `gap` (and `scissors`), or nothing, setting the store only when that changes */
 export function showSplit(
@@ -26,5 +32,12 @@ export function showSplit(
         same(now.scissors, scissors)
     )
         return;
-    useSplitPreviewStore.setState({ gap, scissors });
+    useSplitPreviewStore.setState({ gap, scissors, hot: false });
+}
+
+/** Whether the pointer is on the scissors shown */
+export function showScissorsHot(hot: boolean): void {
+    const now = useSplitPreviewStore.getState();
+    if (now.hot === hot || (hot && !now.scissors)) return;
+    useSplitPreviewStore.setState({ hot });
 }

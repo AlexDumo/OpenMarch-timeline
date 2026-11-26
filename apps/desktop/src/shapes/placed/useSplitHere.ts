@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { PointerKind } from "@/field/editor/pointerThresholds";
 import { useFieldMenuPointStore } from "@/field/three/fieldMenuPoint";
+import { notifyActionHandlersChanged } from "@/shortcuts/registry";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { currentShapeField } from "../field/shapeFieldContext";
 import { fieldToFrame } from "../frame/frame";
@@ -17,6 +18,7 @@ import {
     type SplitCheck,
 } from "./splitShape";
 import type { PlacedBox } from "./placedBox";
+import { scissorsSplit } from "./splitAction";
 import { showSplit } from "./splitPreview";
 
 /** Whether field point `at` is on placed shape `box`: inside its frame, a step round it */
@@ -33,7 +35,11 @@ function onShape(box: PlacedBox, at: XY, step: number): boolean {
  * What Split here says where the menu was opened on `box` by a press of `kind`, or null where it
  * doesn't apply. A finger's long press reaches a marcher from further than a mouse (tablet parity)
  */
-function checkAt(box: PlacedBox, at: XY, kind: PointerKind): SplitCheck | null {
+export function splitCheckAt(
+    box: PlacedBox,
+    at: XY,
+    kind: PointerKind,
+): SplitCheck | null {
     const field = currentShapeField();
     if (!field) return null;
     const env = toolEnvFor(field, undefined, { kind });
@@ -61,16 +67,32 @@ export function useSplitHere(): void {
     const at = useFieldMenuPointStore((s) => s.at);
     const kind = useFieldMenuPointStore((s) => s.kind);
     const check = useMemo(
-        () => (enabled && box && at ? checkAt(box, at, kind) : null),
+        () => (enabled && box && at ? splitCheckAt(box, at, kind) : null),
         [enabled, box, at, kind],
+    );
+    // On where the menu was opened, or while the scissors or a line's own menu run it
+    // (`splitThroughAction`), which say where themselves
+    const ok = check?.ok === true;
+    const okRef = useRef(ok);
+    useLayoutEffect(() => {
+        if (okRef.current === ok) return;
+        okRef.current = ok;
+        notifyActionHandlersChanged();
+    }, [ok]);
+    const isEnabled = useCallback(
+        () => scissorsSplit() !== null || okRef.current,
+        [],
     );
     useActionHandler(
         "shapeSplitHere",
         () => {
-            if (check?.ok) void splitShape(check.box, check.k, queryClient);
+            const asked = scissorsSplit();
+            if (asked) void splitShape(asked.box, asked.k, queryClient);
+            else if (check?.ok)
+                void splitShape(check.box, check.k, queryClient);
         },
         {
-            enabled: check?.ok === true,
+            enabled: isEnabled,
             ignoreRepeat: true,
             disabledReason: check && !check.ok ? check.reason : undefined,
             // Pointed at in the menu, the cut is marked where it falls

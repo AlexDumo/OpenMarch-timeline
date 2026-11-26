@@ -146,13 +146,23 @@ describe("scissorsAt", () => {
         expect(s?.at.x).toBeCloseTo(37.5);
         expect(s?.at.y).toBeCloseTo(-6);
     });
-    unitIt("not on a marcher, off the line, or on a gap too short", () => {
+    unitIt("not on a marcher, nor off the line", () => {
         expect(scissorsAt(line!, { x: 25, y: 1 }, env)).toBeNull();
         expect(scissorsAt(line!, { x: 33, y: 40 }, env)).toBeNull();
-        expect(
-            scissorsAt(line!, { x: 33, y: 0 }, { stepPx: 12, hitRadius: 9 }),
-        ).toBeNull();
     });
+    unitIt(
+        "on a gap shorter than three reaches, in its middle third: the rest is the marchers'",
+        () => {
+            // A finger's reach, 9 here, against a gap of 25
+            const finger = { stepPx: 12, hitRadius: 9 };
+            const s = scissorsAt(line!, { x: 37.5, y: 0 }, finger);
+            expect(s?.check.k).toBe(2);
+            // Two reaches off the line, clear of the dots either side
+            expect(s?.at.y).toBeCloseTo(-18);
+            expect(scissorsAt(line!, { x: 32, y: 0 }, finger)).toBeNull();
+            expect(scissorsAt(line!, { x: 43, y: 0 }, finger)).toBeNull();
+        },
+    );
 });
 
 describe("splitPlacement", () => {

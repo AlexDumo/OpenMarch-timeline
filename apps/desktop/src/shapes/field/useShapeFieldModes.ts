@@ -5,6 +5,7 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { useBoxSelection } from "../placed/boxSelection";
 import { useSplitHere } from "../placed/useSplitHere";
+import { showSplit } from "../placed/splitPreview";
 import {
     clearReleasedPreview,
     previewPlacedBox,
@@ -108,6 +109,9 @@ export function useShapeFieldModes(
     // Another box (or none) drops any preview, held or not; so does the tool opening, which takes
     // the editor and with it a drag's release (review of #516)
     useEffect(() => () => previewPlacedBox(null), [live, toolOpen]);
+    // So do the scissors over a gap of it (#1336): the shape put down (Escape, a click away, an
+    // undo that takes it away) takes them with it, wherever the pointer is
+    useEffect(() => () => showSplit(null), [live, toolOpen]);
 
     const order = useOrderSweepMode(isPlaying);
     // A tool opened by its key (O for Circle, P for the pen) while Set order is on closes Set
