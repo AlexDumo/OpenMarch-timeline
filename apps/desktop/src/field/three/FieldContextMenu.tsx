@@ -713,6 +713,7 @@ export default function FieldContextMenu({
             key={SELECT_MENU}
             testId="field-menu-select"
             label={t("field.menu.select")}
+            checkSlot={false}
         >
             {entry("selectSameSection")}
             <DropdownMenu.Separator className={MENU_SEPARATOR_CLASS} />
@@ -721,6 +722,7 @@ export default function FieldContextMenu({
                     key={by}
                     testId={`field-menu-select-${by}`}
                     label={t(selectByLabelKey(by))}
+                    checkSlot={false}
                 >
                     <SelectByMenuItems by={by} />
                 </SubMenu>
@@ -731,12 +733,14 @@ export default function FieldContextMenu({
                     <SubMenu
                         testId="field-menu-select-holding"
                         label={t("field.menu.holding")}
+                        checkSlot={false}
                     >
                         {FAMILY_MENUS.map((m) => (
                             <SubMenu
                                 key={m.family}
                                 testId={`field-menu-select-holding-${m.family}`}
                                 label={t(`cues.family.${m.family}`)}
+                                checkSlot={false}
                             >
                                 {entry(m.select[0])}
                                 <DropdownMenu.Separator
@@ -901,10 +905,16 @@ export default function FieldContextMenu({
 function SubMenu({
     testId,
     label,
+    checkSlot = true,
     children,
 }: {
     testId: string;
     label: string;
+    /**
+     * Room for a check in front of its name, lining it up with checkable entries beside it.
+     * Off where nothing beside it can be checked (Select and its lists)
+     */
+    checkSlot?: boolean;
     children: React.ReactNode;
 }) {
     return (
@@ -913,7 +923,7 @@ function SubMenu({
                 data-testid={testId}
                 className={MENU_ITEM_CLASS}
             >
-                <span className={CHECK_SLOT_CLASS} />
+                {checkSlot && <span className={CHECK_SLOT_CLASS} />}
                 {label}
                 <CaretRightIcon size={12} className="ml-auto" />
             </DropdownMenu.SubTrigger>

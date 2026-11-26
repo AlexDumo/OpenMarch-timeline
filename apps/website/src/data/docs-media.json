@@ -375,7 +375,7 @@
         "chapter": "marchers",
         "kind": "still",
         "width": 1468,
-        "height": 1404
+        "height": 1468
     },
     "marchers-equipment-show-flags": {
         "chapter": "marchers",
@@ -466,6 +466,12 @@
         "width": 1120,
         "height": 720,
         "seconds": 5
+    },
+    "marchers-select-menu": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 1100,
+        "height": 1328
     },
     "marchers-select-tab": {
         "chapter": "marchers",

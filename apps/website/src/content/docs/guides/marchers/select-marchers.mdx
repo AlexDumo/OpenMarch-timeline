@@ -1,6 +1,6 @@
 ---
 title: Select marchers
-description: Select marchers on the field by clicking, with a box or a lasso, or a whole section, tag, family or drill prefix at once, with a mouse or on a tablet.
+description: Select marchers on the field by clicking, with a box or a lasso, or a whole section, tag, family or drill prefix at once (all the trumpets from one trumpet), with a mouse or on a tablet.
 type: how-to
 covers:
   - apps/desktop/src/field/editor/selectionRules.ts
@@ -8,6 +8,11 @@ covers:
   - apps/desktop/src/field/editor/selectionArea.ts
   - apps/desktop/src/components/toolbar/tabs/SelectTab.tsx
   - apps/desktop/src/components/toolbar/tabs/ChipSelector.tsx
+  - apps/desktop/src/selection/selectBy.ts
+  - apps/desktop/src/field/three/SelectByMenuItems.tsx
+  - action:selectSameSection
+  - i18n:field.menu.select
+  - i18n:field.menu.holding
   - action:selectAllMarchers
   - action:cancelAlignmentUpdates
   - i18n:toolbar.select
@@ -27,7 +32,7 @@ import Kbd from "@/components/docs/Kbd.astro";
 import Ui from "@/components/docs/Ui.astro";
 import InShort from "@/components/docs/InShort.astro";
 
-<InShort>Click a marcher, <Kbd keys="Shift" gesture="click" /> to add more, or drag a box around them on empty field. Press <Kbd action="selectAllMarchers" /> for everyone.</InShort>
+<InShort>Click a marcher, <Kbd keys="Shift" gesture="click" /> to add more, or drag a box around them on empty field. Press <Kbd action="selectAllMarchers" /> for everyone. For a whole section, right-click one of its marchers and choose <Ui k="field.menu.select" plain /> › <Ui k="actions.select.sameSection" plain />.</InShort>
 
 Most tools act on the selected marchers: moving, aligning, placing them in a shape, holding them on a page. The inspector lists the selected marchers' drill numbers.
 
@@ -77,9 +82,22 @@ The tool you pick stays picked on this device until you change it. To draw one l
 
 Press <Kbd action="selectAllMarchers" />, or right-click empty field and choose <Ui k="actions.select.selectAll" />. Props are included, but not [locked](/guides/3d-view/props/#lock-a-prop) ones such as the pit's equipment.
 
+## Select a whole section from one marcher
+
+1. Right-click a marcher on the field, such as one trumpet. On a tablet, press and hold it.
+2. Open <Ui k="field.menu.select" />.
+3. Choose <Ui k="actions.select.sameSection" />.
+
+<Media
+  id="marchers-select-menu"
+  alt="The field's right-click menu on a trumpet, with its Select submenu open: Select same section, then Section, Family and Tag, each opening a submenu, then Holding. Select all is under Select in the main menu."
+/>
+
+Every marcher in that marcher's section is selected. With several marchers selected, it takes in all of their sections. With nobody selected, the entry is greyed out and says why. It's in the command palette too.
+
 ## Select a whole section, tag, family or drill prefix
 
-The toolbar's <Ui k="inspector.shape.selectTab" /> tab selects marchers by what they are rather than where they stand.
+The field's right-click menu has the same groups under <Ui k="field.menu.select" plain />: <Ui k="toolbar.select.selectBy.section" plain />, <Ui k="toolbar.select.selectBy.family" plain /> and <Ui k="toolbar.select.selectBy.tag" plain /> each list their groups, and choosing one selects it. The toolbar's <Ui k="inspector.shape.selectTab" /> tab has them all, drill prefixes too.
 
 <Media
   id="marchers-select-tab"
@@ -90,13 +108,13 @@ The toolbar's <Ui k="inspector.shape.selectTab" /> tab selects marchers by what 
 2. Open <Ui k="toolbar.select.selectByText" /> and choose <Ui k="toolbar.select.selectBy.section" />, <Ui k="toolbar.select.selectBy.tag" />, <Ui k="toolbar.select.selectBy.family" /> or <Ui k="toolbar.select.selectBy.drillPrefix" />.
 3. Select a group.
 
-The group replaces the selection. <Kbd keys="Shift" gesture="click" /> a group to add it instead, for example the trumpets and the mellophones together.
+The group replaces the selection. <Kbd keys="Shift" gesture="click" /> a group to add it instead, for example the trumpets and the mellophones together. That works in the right-click menu too.
 
 <Ui k="toolbar.select.selectBy.family" /> groups sections into Woodwind, Brass, Battery, Guard, Other and Pit. <Ui k="toolbar.select.selectBy.tag" /> lists the tags you've made; see [Change how marchers look](/guides/marchers/appearance/#make-a-tag). With many groups, a search box appears.
 
 ## Select by what they hold
 
-To select everyone holding a rifle at the playhead, whatever their section, right-click a marcher, open <Ui k="field.menu.selectByEquipment" />, then <Ui k="cues.family.guard" />, and choose Select <Ui k="cues.plural.rifle" />. Every item works the same way, and each family's submenu can select all of it, such as <Ui k="actions.cues.selectHoldingFamily.brass" />. See [Change what performers hold](/guides/marchers/equipment/#see-who-holds-what).
+To select everyone holding a rifle at the playhead, whatever their section, right-click the field, open <Ui k="field.menu.select" /> › <Ui k="field.menu.holding" /> › <Ui k="cues.family.guard" />, and choose Select <Ui k="cues.plural.rifle" />. Every item works the same way, and each family's submenu can select all of it, such as <Ui k="actions.cues.selectHoldingFamily.brass" />. See [Change what performers hold](/guides/marchers/equipment/#see-who-holds-what).
 
 ## Select one marcher in a placed shape
 
@@ -106,7 +124,7 @@ Clicking a marcher in a placed shape selects the whole shape. To select only tha
 
 Tap a marcher to select it, and tap empty field to clear the selection. [Use OpenMarch on a tablet](/guides/workspace/on-a-tablet/) has the rules every touch shares. For selecting, two things differ:
 
-- To add marchers, tap <Ui k="touch.modifiers.add" /> over the field, then tap or draw around them. <Ui k="touch.modifiers.subtract" /> takes them out instead.
+- To add marchers, tap <Ui k="touch.modifiers.add" /> over the field, then tap or draw around them. <Ui k="touch.modifiers.subtract" /> takes them out instead. With <Ui k="touch.modifiers.add" plain /> on, a group chosen from the field's <Ui k="field.menu.select" plain /> menu is added too.
 - What one finger does on empty field depends on the drag mode, the first button over the field. <Ui k="touch.dragMode.auto" />, the starting mode, moves the view with a finger and draws a box with a pen; to draw a box with a finger, hold still for half a second, then drag. <Ui k="touch.dragMode.box" /> and <Ui k="touch.dragMode.lasso" /> draw with a finger, and two fingers move the view. <Ui k="touch.dragMode.pan" /> only moves the view.
 
 ## Related

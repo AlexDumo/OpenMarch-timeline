@@ -7,11 +7,18 @@ import {
     screen,
 } from "@testing-library/react";
 import { TolgeeProvider } from "@tolgee/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import tolgee from "@/global/singletons/Tolgee";
 import type { ActionId } from "@/shortcuts/definitions";
 import { registerActionHandler } from "@/shortcuts/registry";
 import { setFollowTheLeader } from "@/pathways/followTheLeader";
+import {
+    allMarchersQueryOptions,
+    allMarcherRowsQueryOptions,
+    allTagsQueryOptions,
+    marcherIdsForAllTagIdsQueryOptions,
+} from "@/hooks/queries";
 import type { FieldEditor } from "@/field/editor/fieldEditor";
 import FieldContextMenu, {
     FIELD_MENU_ACTIONS,
@@ -69,18 +76,52 @@ function open({
 } = {}) {
     render(
         <TolgeeProvider tolgee={tolgee} fallback="Loading...">
-            <FieldContextMenu
-                at={{ x: 120, y: 80 }}
-                actions={actions}
-                marcher={marcher}
-                onClose={onClose}
-                selectedCount={selectedCount}
-                timelineMode={timelineMode}
-            />
+            <QueryClientProvider client={showQueries()}>
+                <FieldContextMenu
+                    at={{ x: 120, y: 80 }}
+                    actions={actions}
+                    marcher={marcher}
+                    onClose={onClose}
+                    selectedCount={selectedCount}
+                    timelineMode={timelineMode}
+                />
+            </QueryClientProvider>
         </TolgeeProvider>,
     );
     return { onClose };
 }
+
+/** A show's performers and tags, as the Select submenu's lists read them (`useSelectBy`) */
+function showQueries() {
+    const client = new QueryClient({
+        defaultOptions: { queries: { staleTime: Infinity, retry: false } },
+    });
+    const performers = [
+        { id: 1, section: "Trumpet", drill_prefix: "T" },
+        { id: 2, section: "Trumpet", drill_prefix: "T" },
+        { id: 3, section: "Flute", drill_prefix: "F" },
+    ];
+    client.setQueryData(
+        allMarchersQueryOptions().queryKey,
+        performers as never,
+    );
+    client.setQueryData(
+        allMarcherRowsQueryOptions().queryKey,
+        performers as never,
+    );
+    client.setQueryData(allTagsQueryOptions().queryKey, [
+        { id: 7, name: "Soloists" },
+    ] as never);
+    client.setQueryData(
+        marcherIdsForAllTagIdsQueryOptions().queryKey,
+        new Map([[7, [2]]]) as never,
+    );
+    return client;
+}
+
+/** Opens a submenu by its trigger's test id */
+const openSub = (testId: string) =>
+    fireEvent.click(screen.getByTestId(`field-menu-${testId}`));
 
 const item = (id: ActionId) => screen.queryByTestId(`field-menu-${id}`);
 
@@ -352,6 +393,8 @@ describe("FieldContextMenu", () => {
                 "pasteFormationInPlace",
                 "pasteMirrored",
             ],
+            // The selection's own: Select › and Select all
+            ["select", "selectAllMarchers"],
             ["editPath", "editLine"],
             ["detachPath", "detachAllPath", "removePath"],
             [
@@ -365,11 +408,10 @@ describe("FieldContextMenu", () => {
                 "timelineHoldStyleMarkTime",
                 "timelineHoldStyleHighMarkTime",
             ],
-            // #992: what the selection holds, and selecting by it, as submenus; the picked cue's
-            // performers while they can change
+            // #992: what the selection holds and faces, as submenus (selecting by what's held is
+            // under Select ›); the picked cue's performers while they can change
             [
                 "equipment",
-                "select-holding",
                 // Facing (#993)
                 "facing",
                 "cueAddSelected",
@@ -386,7 +428,6 @@ describe("FieldContextMenu", () => {
                 "swapMarchers",
                 "setSelectedMarchersToNextPage",
             ],
-            ["selectAllMarchers"],
             ["fieldEditMode"],
         ]);
         expect(item("copyFormation")).toHaveTextContent("Copy");
@@ -679,6 +720,128 @@ describe("FieldContextMenu", () => {
             expect(
                 item("selectAllMarchers")!.querySelector("kbd"),
             ).not.toBeNull();
+        });
+    });
+
+    describe("Select › (#1359)", () => {
+        /** The direct children of an open submenu, as test ids without the prefix */
+        const entries = (testId: string) =>
+            Array.from(
+                screen.getByTestId(`field-menu-${testId}-content`).children,
+            ).map((el) =>
+                el.getAttribute("role") === "separator"
+                    ? "---"
+                    : el
+                          .getAttribute("data-testid")!
+                          .replace("field-menu-", ""),
+            );
+
+        it("holds Select same section, the Select tab's lists, then Holding", () => {
+            for (const id of FIELD_MENU_ACTIONS) handle(id);
+            open();
+            openSub("select");
+            expect(entries("select")).toEqual([
+                "selectSameSection",
+                "---",
+                "select-section",
+                "select-family",
+                "select-tag",
+                "---",
+                "select-holding",
+            ]);
+            expect(item("selectSameSection")).toHaveTextContent(
+                "Select same section",
+            );
+            expect(item("select-section")).toHaveTextContent("Section");
+            expect(item("select-family")).toHaveTextContent("Family");
+            expect(item("select-tag")).toHaveTextContent("Tag");
+            expect(item("select-holding")).toHaveTextContent("Holding");
+            // Nothing in Select can be checked: no room for a check in front of its names, so
+            // they line up with Select same section and Select all
+            expect(item("select")!.querySelector(".w-\\[14px\\]")).toBeNull();
+            expect(
+                item("select-section")!.querySelector(".w-\\[14px\\]"),
+            ).toBeNull();
+            expect(
+                item("equipment")!.querySelector(".w-\\[14px\\]"),
+            ).not.toBeNull();
+            // Select by equipment is gone from the top level
+            expect(item("select-holding-guard")).toBeNull();
+        });
+
+        it("lists the show's sections, every family and its tags, by the Select tab's names", () => {
+            for (const id of FIELD_MENU_ACTIONS) handle(id);
+            open();
+            openSub("select");
+            openSub("select-section");
+            expect(entries("select-section")).toEqual([
+                "select-section-Flute",
+                "select-section-Trumpet",
+            ]);
+            expect(item("select-section-Trumpet")).toHaveTextContent("Trumpet");
+            openSub("select-family");
+            expect(entries("select-family")).toContain("select-family-Brass");
+            expect(item("select-family-Brass")).toHaveTextContent("Brass");
+            openSub("select-tag");
+            expect(item("select-tag-7")).toHaveTextContent("Soloists");
+        });
+
+        it("runs Select same section, and Shift adds the section instead of replacing", () => {
+            const run = handle("selectSameSection");
+            open();
+            openSub("select");
+            fireEvent.click(item("selectSameSection")!);
+            expect(run).toHaveBeenLastCalledWith({ add: false });
+            cleanup();
+            open();
+            openSub("select");
+            fireEvent.click(item("selectSameSection")!, { shiftKey: true });
+            expect(run).toHaveBeenLastCalledWith({ add: true });
+        });
+
+        it("shows Select same section greyed out with its reason with nobody selected", () => {
+            const run = handle("selectSameSection", {
+                enabled: false,
+                reason: "Select a performer first",
+            });
+            open({ selectedCount: 0 });
+            openSub("select");
+            const same = item("selectSameSection")!;
+            expect(same).toHaveAttribute("aria-disabled", "true");
+            fireEvent.click(same);
+            expect(run).not.toHaveBeenCalled();
+        });
+
+        it("keeps Holding's families, the show's flags and empty hands, in timeline mode only", () => {
+            for (const id of FIELD_MENU_ACTIONS) handle(id);
+            open();
+            openSub("select");
+            openSub("select-holding");
+            expect(entries("select-holding")).toEqual([
+                "select-holding-guard",
+                "select-holding-brass",
+                "select-holding-woodwinds",
+                "select-holding-drums",
+                "---",
+                "selectHoldingNone",
+            ]);
+            openSub("select-holding-guard");
+            expect(entries("select-holding-guard")[0]).toBe(
+                "selectHoldingFamilyGuard",
+            );
+            cleanup();
+            open({ timelineMode: false });
+            openSub("select");
+            expect(item("select-holding")).toBeNull();
+        });
+
+        it("is there on empty field with nobody selected, beside Select all", () => {
+            for (const id of FIELD_MENU_ACTIONS) handle(id);
+            open({ selectedCount: 0 });
+            expect(item("select")).toBeTruthy();
+            expect(item("select")!.nextElementSibling).toBe(
+                item("selectAllMarchers"),
+            );
         });
     });
 
