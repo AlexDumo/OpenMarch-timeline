@@ -10,6 +10,7 @@ import { useUnlockedOnly } from "@/items/lockedItems";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import {
     allFamilies,
+    idsAmong,
     drillPrefixesOf,
     idsInFamily,
     idsInSameSections,
@@ -75,7 +76,8 @@ export function useSelectBy() {
                     ? tagMembers.get(tagId)
                     : undefined;
                 if (ids == null) return false;
-                selectIds(ids, add);
+                // never a locked item, as Select all and the other groups
+                selectIds(idsAmong(ids, unlocked), add);
                 return true;
             },
             selectDrillPrefix: (prefix: string, add: boolean) =>

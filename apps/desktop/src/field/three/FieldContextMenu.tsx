@@ -257,6 +257,9 @@ const CUE_EDITS: readonly ActionId[] = ["cueAddSelected", "cueRemoveSelected"];
 const USUAL = equipmentActionOf("usual");
 const NOTHING = equipmentActionOf("none");
 const SELECT_NOTHING = selectHoldingActionOf("none");
+/** Select entries that Shift (or Add on the touch pill) adds to the selection, as the Select tab does */
+const ADDS_TO_SELECTION = (id: ActionId) =>
+    id === "selectSameSection" || id.startsWith("selectHolding");
 
 /** The Select submenu's actions: Same section, and Holding's */
 const SELECT_ACTIONS: readonly ActionId[] = [
@@ -567,8 +570,8 @@ export default function FieldContextMenu({
                 id,
                 ON_A_MARCHER.has(id) && marcher !== null
                     ? { marcherId: marcher }
-                    : // Shift, or Add on the touch pill, adds the section to the selection
-                      id === "selectSameSection"
+                    : // Shift, or Add on the touch pill, adds the group to the selection
+                      ADDS_TO_SELECTION(id)
                       ? { add: pickAdds() }
                       : undefined,
             );
@@ -593,7 +596,7 @@ export default function FieldContextMenu({
                 key={keyPrefix + id}
                 data-testid={testId}
                 disabled={!enabled(id)}
-                {...(id === "selectSameSection" ? addPickProps : {})}
+                {...(ADDS_TO_SELECTION(id) ? addPickProps : {})}
                 onSelect={run}
                 onFocus={() => previewAction(id, true)}
                 onBlur={() => previewAction(id, false)}
@@ -666,7 +669,13 @@ export default function FieldContextMenu({
                     </span>
                 </DropdownMenu.CheckboxItem>
             );
-        const run = () => runAction(id, { value: flag.value });
+        const run = () =>
+            runAction(
+                id,
+                select
+                    ? { value: flag.value, add: pickAdds() }
+                    : { value: flag.value },
+            );
         const reason = enabled(id) ? undefined : actionDisabledReason(id);
         if (reason)
             return (
@@ -685,6 +694,7 @@ export default function FieldContextMenu({
             <DropdownMenu.Item
                 key={testId}
                 data-testid={testId}
+                {...(select ? addPickProps : {})}
                 onSelect={run}
                 className={MENU_ITEM_CLASS}
             >

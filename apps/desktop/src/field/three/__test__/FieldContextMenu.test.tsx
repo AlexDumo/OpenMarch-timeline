@@ -823,6 +823,26 @@ describe("FieldContextMenu", () => {
             expect(run).toHaveBeenLastCalledWith({ add: true });
         });
 
+        it("adds whoever holds a piece with Shift, as the rest of Select does", () => {
+            for (const id of FIELD_MENU_ACTIONS) handle(id);
+            const run = handle("selectHoldingNone");
+            open();
+            openSub("select");
+            openSub("select-holding");
+            fireEvent.click(item("selectHoldingNone")!);
+            expect(run).toHaveBeenLastCalledWith(
+                expect.objectContaining({ add: false }),
+            );
+            cleanup();
+            open();
+            openSub("select");
+            openSub("select-holding");
+            fireEvent.click(item("selectHoldingNone")!, { shiftKey: true });
+            expect(run).toHaveBeenLastCalledWith(
+                expect.objectContaining({ add: true }),
+            );
+        });
+
         it("shows Select same section greyed out with its reason with nobody selected", () => {
             const run = handle("selectSameSection", {
                 enabled: false,

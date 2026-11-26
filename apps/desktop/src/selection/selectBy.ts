@@ -85,6 +85,15 @@ export const idsInSameSections = (
  * The selection after choosing a group: the group's performers in place of the selection, or
  * added to it (Shift, or Add on a tablet), keeping the order they were selected in.
  */
+/** The ids in `ids` that belong to one of `rows`: a tag's members, without its locked items */
+export const idsAmong = (
+    ids: readonly number[],
+    rows: readonly { readonly id: number }[],
+): number[] => {
+    const allowed = new Set(rows.map((r) => r.id));
+    return ids.filter((id) => allowed.has(id));
+};
+
 export function selectionWith<T extends { readonly id: number }>(
     all: readonly T[],
     current: readonly T[],

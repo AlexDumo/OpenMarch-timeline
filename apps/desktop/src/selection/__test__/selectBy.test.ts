@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     drillPrefixesOf,
+    idsAmong,
     idsInFamily,
     idsInSameSections,
     idsInSections,
@@ -54,5 +55,12 @@ describe("selectBy", () => {
             a,
             c,
         ]);
+    });
+});
+
+describe("idsAmong", () => {
+    it("keeps a tag's members that can be picked, leaving a locked prop out", () => {
+        // 9 is a locked prop with the tag: not among the unlocked rows
+        expect(idsAmong([2, 9, 4], band)).toEqual([2, 4]);
     });
 });
