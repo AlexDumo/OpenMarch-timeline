@@ -156,7 +156,7 @@ test("a finger's tap on empty lane space moves the playhead there; a tap on the 
 });
 
 // The Lanes button (#992): an icon in the timeline's bottom-left corner. It is found by its name,
-// its count badge follows the hidden lanes, and it stays in the corner while the timeline scrolls.
+// the count beside its icon follows the hidden lanes, and it stays in the corner while the timeline scrolls.
 test("the Lanes button sits in the bottom-left corner, counts hidden lanes, stays put while the timeline scrolls, and never covers a lane label", async ({
     show,
 }) => {
@@ -199,19 +199,27 @@ test("the Lanes button sits in the bottom-left corner, counts hidden lanes, stay
             );
         })
         .toBeLessThanOrEqual(1);
-    // Scrolled, the lane's labels stick clear of the button rather than under it
+    // Scrolled, the lane's labels stick clear of the button rather than under it. Measured from
+    // where a label's content starts: on touch the 44 px button may overlap its padding, by design
+    // By test id: its name changes once a lane is hidden
     const buttonRight = async () => {
-        const box = (await lanes.boundingBox())!;
+        const box = (await page
+            .getByTestId("timeline-lanes-button")
+            .boundingBox())!;
         return box.x + box.width;
     };
     for (const id of ["equipment-lane-header", "equipment-lane-row-name"]) {
         await expect
             .poll(async () => {
-                const label = (await page
+                const contentLeft = await page
                     .getByTestId(id)
                     .first()
-                    .boundingBox())!;
-                return label.x - (await buttonRight());
+                    .evaluate(
+                        (el) =>
+                            el.getBoundingClientRect().left +
+                            parseFloat(getComputedStyle(el).paddingLeft),
+                    );
+                return contentLeft - (await buttonRight());
             })
             .toBeGreaterThanOrEqual(0);
     }
@@ -219,11 +227,24 @@ test("the Lanes button sits in the bottom-left corner, counts hidden lanes, stay
         v.scrollLeft = 0;
     });
 
+    const rightWithoutCount = await buttonRight();
     await page.getByTestId("equipment-lane-hide").click();
     await expect(
         page.getByRole("button", { name: "Lanes · 1 hidden", exact: true }),
     ).toBeVisible();
     await expect(page.getByTestId("timeline-lanes-hidden-count")).toHaveText(
         "1",
+    );
+    // The count widens the button, but no further right than where lane labels stick (or, on
+    // touch, where the 44 px button already reached)
+    const edge = await viewport.evaluate(
+        (v) =>
+            v.getBoundingClientRect().left +
+            parseFloat(
+                getComputedStyle(v).getPropertyValue("--lane-label-inset"),
+            ),
+    );
+    expect(await buttonRight()).toBeLessThanOrEqual(
+        Math.max(edge, rightWithoutCount) + 0.5,
     );
 });

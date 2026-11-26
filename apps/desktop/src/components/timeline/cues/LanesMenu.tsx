@@ -206,16 +206,21 @@ export function LanesButton() {
                         // after a click is still Play. Escape from the menu does bring focus back
                         // here, as a menu button should
                         onMouseDown={(e) => e.preventDefault()}
+                        // A solid tile with a hairline edge: it stays readable over the lane bars
+                        // that scroll under it. With lanes hidden, it widens for their count
                         className={clsx(
-                            "focus-visible:ring-accent rounded-4 bg-bg-1 enabled:hover:text-accent enabled:hover:bg-fg-2 touch:size-44 relative flex size-24 items-center justify-center outline-hidden transition-[color,background-color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent enabled:active:translate-y-px",
+                            "focus-visible:ring-accent rounded-4 bg-bg-1 border-stroke enabled:hover:text-accent enabled:hover:bg-fg-2 touch:h-44 touch:min-w-44 flex h-24 min-w-24 items-center justify-center gap-2 border outline-hidden transition-[color,background-color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent enabled:active:translate-y-px",
+                            hidden > 0 && "px-4",
                             open ? "text-accent" : "text-text",
                         )}
                     >
                         <ListChecksIcon size={16} />
                         {hidden > 0 && (
+                            // Beside the icon, in the accent: a count of what the view leaves
+                            // out, as a filter shows it, not a notification badge
                             <span
                                 data-testid="timeline-lanes-hidden-count"
-                                className="text-micro bg-accent text-text-invert absolute -top-4 -right-4 flex h-14 min-w-14 items-center justify-center rounded-full px-3 font-medium"
+                                className="text-micro text-accent leading-none font-semibold tabular-nums"
                             >
                                 {hidden}
                             </span>
