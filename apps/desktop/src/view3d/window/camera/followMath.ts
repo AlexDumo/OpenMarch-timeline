@@ -27,6 +27,17 @@ export interface PerformerPose {
      */
     eye: [number, number, number];
     hasEye: boolean;
+    /**
+     * How far their head is turned from their chest (radians, in the
+     * heading's sense), as bass drums look toward the front (`eyesFrontYaw`);
+     * 0 or left out for a head that faces where the chest does.
+     */
+    headYaw?: number;
+}
+
+/** Where a performer's eyes look (radians about +Y): their heading, turned by their head. */
+export function lookHeading(pose: PerformerPose): number {
+    return pose.heading + (pose.headYaw ?? 0);
 }
 
 /** A click picks the performer nearest the ray, up to this angle off it (radians). */
@@ -225,7 +236,7 @@ export function clampPitch(pitch: number): number {
 }
 
 /**
- * Looking out of the performer's eyes, `look` off where they face. With
+ * Looking out of the performer's eyes, `look` off where their head faces. With
  * `inHead` (their body drawn) the view sits in the eyes, inside the head;
  * without, a little in front, clear of the face and hat brim. At the
  * animated eye when the pose has one, else guessed from the axis and height.
@@ -235,9 +246,10 @@ export function povPose(
     look: PovLook,
     inHead = false,
 ): { position: Vector3Tuple; target: Vector3Tuple } {
-    const facing = pose.heading + look.yaw;
-    const fx = Math.sin(pose.heading);
-    const fz = Math.cos(pose.heading);
+    const ahead = lookHeading(pose);
+    const facing = ahead + look.yaw;
+    const fx = Math.sin(ahead);
+    const fz = Math.cos(ahead);
     const forward = pose.hasEye
         ? inHead
             ? 0

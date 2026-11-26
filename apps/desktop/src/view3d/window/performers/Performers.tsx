@@ -786,6 +786,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 out.y = meshes.lift[i];
                 out.heading = headings[i];
                 out.height = heightsRef.current?.[i] ?? PERFORMER_HEIGHT;
+                out.headYaw = bodiesRef.current?.headYaw(i) ?? 0;
                 out.hasEye =
                     bodiesRef.current?.eyeInto(
                         i,

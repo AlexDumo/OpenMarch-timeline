@@ -401,6 +401,8 @@ export class MarcherBodies {
     private readonly meshOf: Int32Array;
     private readonly instanceOf: Int32Array;
     private readonly scaleOf: Float32Array;
+    /** Each slot's head turn from its chest, as last set (`setHeadYaw`). */
+    private readonly headYawOf: Float32Array;
     /** The hold id each slot plays (`slotHoldId`). */
     private readonly holdIds: string[];
     /** Per slot: which of its held looks draws (`heldLooks`). */
@@ -439,6 +441,7 @@ export class MarcherBodies {
         this.meshOf = new Int32Array(looks.length).fill(-1);
         this.instanceOf = new Int32Array(looks.length);
         this.scaleOf = new Float32Array(looks.length);
+        this.headYawOf = new Float32Array(looks.length);
         this.holdIds = looks.map((l) => slotHoldId(l.uniform));
         this.heldOf = new Uint8Array(looks.length);
 
@@ -644,7 +647,13 @@ export class MarcherBodies {
 
     /** Turns slot `slot`'s head from its chest by `yaw` radians (`eyesFrontYaw`); 0 for none. */
     setHeadYaw(slot: number, yaw: number): void {
+        this.headYawOf[slot] = yaw;
         this.composer.writeHeadYaw(slot, yaw);
+    }
+
+    /** How far slot `slot`'s head is turned from its chest (radians, `setHeadYaw`). */
+    headYaw(slot: number): number {
+        return this.headYawOf[slot] ?? 0;
     }
 
     /**
