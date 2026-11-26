@@ -4605,13 +4605,13 @@ test("change: the pivot of a box placed on a page and again on the next one chan
 });
 
 /**
- * The field menu's first entry after Copy, Paste and Paste exactly (#961), which always lead it:
- * where the shape entries (Group, Ungroup) start
+ * The field menu's first entry after Copy, Paste and Paste exactly (#961), then Select › and
+ * Select all (#1359), which always lead it: where the shape entries (Group, Ungroup) start
  */
 const firstShapeItem = (menu: Locator) =>
     menu
         .getByRole("menuitem")
-        .filter({ hasNotText: /^(Copy|Paste)/ })
+        .filter({ hasNotText: /^(Copy|Paste|Select)/ })
         .first();
 
 test.describe("a box carried onto a page with no positions of its own (#485)", () => {
