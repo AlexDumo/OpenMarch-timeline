@@ -139,6 +139,59 @@ describe("the shape tool's reach by pointer kind", () => {
     });
 });
 
+describe("dragging a handle with a pen or finger (#873)", () => {
+    const done = () => finishPoints(clicking(), shapeContextFor(field()));
+    const p1Of = (t: ToolState) =>
+        lineTool
+            .handles(t.params, t.marchers.length)
+            .find((h) => h.key === "p1")!.at;
+    /** Where the finished Line's point p1 (clicked at B) stands */
+    const p1 = () => p1Of(done());
+    /** p1 dragged from `grab` by `by`, as `kind` presses: where it lands */
+    function dragP1(kind: PointerKind, grab: XY, by: XY, snapOn = false) {
+        const env = toolEnvFor(field(), undefined, { kind, snapOn });
+        let t = pointerMove(done(), grab, env);
+        t = press(t, grab, env);
+        expect(t.gesture).toMatchObject({ type: "handle", key: "p1" });
+        t = pointerMove(t, { x: grab.x + by.x, y: grab.y + by.y }, env);
+        return p1Of(t);
+    }
+    const by = { x: 4 * STEP, y: 2 * STEP };
+
+    it("keeps the offset from the press: the point moves by the drag, not onto the finger or pen", () => {
+        const from = p1();
+        for (const [kind, off] of [
+            ["touch", 13],
+            ["pen", 9],
+        ] as const) {
+            const at = dragP1(kind, { x: from.x + off, y: from.y - off }, by);
+            expect(at.x).toBeCloseTo(from.x + by.x);
+            expect(at.y).toBeCloseTo(from.y + by.y);
+        }
+    });
+
+    it("snaps where the point goes, as a press right on it would", () => {
+        const from = p1();
+        const nudge = { x: by.x + 2, y: by.y - 1 };
+        const fromOn = dragP1("touch", from, nudge, true);
+        const fromOff = dragP1(
+            "touch",
+            { x: from.x + 13, y: from.y - 13 },
+            nudge,
+            true,
+        );
+        expect(fromOff).toEqual(fromOn);
+    });
+
+    it("leaves a mouse as it was: the point goes to the pointer", () => {
+        const from = p1();
+        const grab = { x: from.x + 6, y: from.y - 6 };
+        const at = dragP1("mouse", grab, by);
+        expect(at.x).toBeCloseTo(grab.x + by.x);
+        expect(at.y).toBeCloseTo(grab.y + by.y);
+    });
+});
+
 describe("tapping a line's points", () => {
     it("keeps the points already down when a press is lost (a second finger lands to pan)", () => {
         openShapeTool(clicking(), null, null);

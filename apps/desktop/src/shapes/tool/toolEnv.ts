@@ -58,7 +58,7 @@ export const NO_ROLES: Roles = {
  * settings when the env is made unless given, so a change mid-drag applies on the next move. A
  * dragged pivot snaps to every marcher drawn, and to `spots` (an open shape's, where its marchers
  * will stand). `kind` is what presses: a pen or finger reaches handles from further away (tablet
- * 1.4); a mouse when absent.
+ * 1.4) and drags them keeping its offset from the press (#873); a mouse when absent.
  */
 export function toolEnvFor(
     field: ShapeField,
@@ -96,6 +96,7 @@ export function toolEnvFor(
         },
         hitRadius: thresholdsFor(kind).shapeHandleReach / (field.zoom() || 1),
         stemUnit: HANDLE_REACH_PX / (field.zoom() || 1),
+        keepGrab: kind !== "mouse",
         zoom: field.zoom() || 1,
         fieldLines: fieldLinesOf(fieldProperties),
         pullRadius: EDGE_PULL_PX / (field.zoom() || 1),

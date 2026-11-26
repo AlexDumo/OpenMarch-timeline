@@ -51,6 +51,11 @@ export interface ToolEnv {
      */
     readonly stemUnit?: number;
     /**
+     * A pen or finger pressed: a dragged handle, center dot or pivot keeps its offset from the
+     * press rather than jumping to the pointer (#873). A mouse's drag when absent.
+     */
+    readonly keepGrab?: boolean;
+    /**
      * Screen pixels per field unit, for what depends on how far the field is zoomed in (a Line's
      * dragged interval snapping to half steps rather than whole ones); unknown when absent
      */
