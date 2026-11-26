@@ -896,7 +896,9 @@ const shots = [
             await giveFlag(page, guard.slice(0, 4), "Opener silk");
             await page.mouse.move(1596, 996);
             await ctx.wait(800);
-            return { box: await ctx.around(page.getByTestId("show-flags"), 12) };
+            return {
+                box: await ctx.around(page.getByTestId("show-flags"), 12),
+            };
         },
     },
     {

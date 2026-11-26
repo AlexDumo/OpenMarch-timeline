@@ -992,7 +992,9 @@ const shots = [
             await page.mouse.move(800, 990);
             await wait(1000);
             await hideToasts(page);
-            const b = bounds(named(await marchers(page), [...SABRES, ...TUBAS]));
+            const b = bounds(
+                named(await marchers(page), [...SABRES, ...TUBAS]),
+            );
             return {
                 box: {
                     x: b.left - 70,
