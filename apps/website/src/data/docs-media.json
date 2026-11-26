@@ -702,6 +702,24 @@
         "width": 800,
         "height": 800
     },
+    "shapes-rows-front-to-back": {
+        "chapter": "shapes",
+        "kind": "still",
+        "width": 760,
+        "height": 600
+    },
+    "shapes-rows-go-arc": {
+        "chapter": "shapes",
+        "kind": "still",
+        "width": 1600,
+        "height": 732
+    },
+    "shapes-rows-menu": {
+        "chapter": "shapes",
+        "kind": "still",
+        "width": 1600,
+        "height": 708
+    },
     "shapes-snap-button": {
         "chapter": "shapes",
         "kind": "still",
