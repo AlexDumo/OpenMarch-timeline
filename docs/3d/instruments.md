@@ -137,7 +137,7 @@ Bolt heads and lug casings are drawn at high detail only.
 current aluminum vest carriers: flat satin bars from a yoke on the chest up
 over the shoulders (padded where they sit) and down the back, a plate down
 the sternum onto a belly plate, a bar across the upper back, and J-bars
-from the belly plate to the drum. Its clearances come from the seven body
+from the belly plate to the drum. Its clearances come from the body
 meshes: shoulder tops at 1.46 m, chests reaching z 0.17, upper backs
 z −0.19.
 

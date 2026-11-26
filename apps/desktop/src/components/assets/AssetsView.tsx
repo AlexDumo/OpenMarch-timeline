@@ -24,14 +24,23 @@ import { ModelThumbnail } from "@/components/items/modelImport/ImportedModels";
 import { CreditFields } from "@/components/items/modelImport/ModelImportReview";
 import { allItemsQueryOptions } from "@/hooks/queries/useItems";
 import { allCuesQueryOptions } from "@/hooks/queries/useCues";
+import { storedVenueSettingsQueryOptions } from "@/hooks/queries/useVenueSettings";
 import {
     removeUnusedShowAssetsMutationOptions,
     setShowAssetCreditsMutationOptions,
+    showAssetKeys,
     showAssetsQueryOptions,
     showAssetSizesQueryOptions,
+    uniformsInHistoryKeys,
+    uniformsInHistoryQueryOptions,
 } from "@/hooks/queries/useShowAssets";
 import {
+    removableCount,
+    removableLines,
+    groupAssetVersions,
+    type AssetGroup,
     LARGE_SHOW_ASSET_BYTES,
+    keptForHistory,
     showAssetUse,
     sizeParts,
     type AssetUse,
@@ -39,6 +48,20 @@ import {
 import { withoutEmpty } from "@/showAssets/modelImport/review/modelImportSession";
 import type { ModelCredits } from "@/showAssets/modelImport/types";
 import type { JsonObject } from "@/showAssets/hash";
+import { UNIFORM_ASSET_KIND } from "@/view3d/core/uniformPack/format";
+import {
+    wornPackProblem,
+    type WornPackProblem,
+} from "@/view3d/core/uniformPack/wornPack";
+import {
+    uniformPackIsNewer,
+    uniformPackQueryOptions,
+} from "@/hooks/queries/useUniformPack";
+import {
+    useCustomUniforms,
+    useCustomUniformsAvailable,
+} from "@/view3d/window/uniformArtworkPreview";
+import { parseShowAssetRef, showAssetRefValue } from "@/showAssets/ref";
 
 /**
  * The show's own assets (fork #1001, owner 2026-11-17): every imported model with its picture,
@@ -56,30 +79,138 @@ export function useSizeText() {
     };
 }
 
-/** The show's assets and who uses them, live */
+/**
+ * The show's assets and who uses them, live (`use`, null until they've loaded); whether the
+ * list of assets couldn't be loaded (`listFailed`); and Try again, which reads again whatever
+ * failed: the list, or the band's uniform ("loadFailed"), and whether it's running (`retrying`).
+ *
+ * Try again invalidates rather than fetching again itself: the editor relays every invalidation
+ * to the 3D View window (`relayInvalidations`), whose own read of the uniform is what dresses the
+ * band, so one Try again here reads it again there too.
+ */
 function useAssetUse() {
-    const { data: assets } = useQuery(showAssetsQueryOptions());
-    const { data: sizes } = useQuery(showAssetSizesQueryOptions());
+    const queryClient = useQueryClient();
+    const assetsQuery = useQuery(showAssetsQueryOptions());
+    const sizesQuery = useQuery(showAssetSizesQueryOptions());
+    const { data: assets } = assetsQuery;
+    const { data: sizes } = sizesQuery;
     const { data: items } = useQuery(allItemsQueryOptions());
     const { data: cues } = useQuery(allCuesQueryOptions());
+    // the band's imported uniform is a use too (fork #1257)
+    const { data: venue } = useQuery(storedVenueSettingsQueryOptions());
     const armed = useItemDrawingStore((state) =>
         state.placing?.kind === "model" ? state.placing.modelValue : null,
     );
-    return useMemo(() => {
-        if (!assets || !sizes || !items || !cues) return null;
-        const use = showAssetUse(assets, sizes, [
-            ...items.map((item) => item.model),
-            ...cues.map((cue) => cue.value),
-            armed,
-        ]);
+    const uniforms = useMemo(
+        () =>
+            (assets ?? [])
+                .filter((asset) => asset.kind === UNIFORM_ASSET_KIND)
+                .map(showAssetRefValue),
+        [assets],
+    );
+    // uniforms an undo or redo would bring back are never offered for removal; the list shows
+    // while that's checked, and every uniform counts as kept until it's known
+    const { data: inHistory, isError: historyFailed } = useQuery(
+        uniformsInHistoryQueryOptions(uniforms),
+    );
+    const worn =
+        typeof venue?.uniformArtwork === "string" &&
+        venue.uniformArtwork.startsWith("library:")
+            ? venue.uniformArtwork
+            : null;
+    // whether the band's uniform reads: when it doesn't, the band wears its preset
+    const wornPackQuery = useQuery(uniformPackQueryOptions(worn));
+    const { data: wornPack } = wornPackQuery;
+    // failed after its retries with nothing read: not a damaged file (Try again)
+    const assetsFailed = assetsQuery.isError && assets === undefined;
+    const sizesFailed = sizesQuery.isError && sizes === undefined;
+    const wornFailed = wornPackQuery.isError && wornPack === undefined;
+    // the note Try again was pressed on, kept while it runs: a query with nothing read goes
+    // back to pending when it fetches again, which would otherwise hide the note and its button
+    const [retrying, setRetrying] = useState<"list" | "uniform" | null>(null);
+    const tryAgain = () => {
+        if (retrying) return;
+        const list = assetsFailed || sizesFailed;
+        if (!list && !wornFailed) return;
+        setRetrying(list ? "list" : "uniform");
+        // the assets' key covers their sizes and every uniform read
+        const refreshed = list
+            ? queryClient.invalidateQueries({ queryKey: showAssetKeys.all() })
+            : queryClient.invalidateQueries({
+                  queryKey: uniformPackQueryOptions(worn).queryKey,
+                  exact: true,
+              });
+        void refreshed.finally(() => setRetrying(null));
+    };
+    const use = useMemo(() => {
+        // `venue` is null with no venue row, undefined while it loads
+        if (!assets || !sizes || !items || !cues || venue === undefined)
+            return null;
+        const use = showAssetUse(
+            assets,
+            sizes,
+            [
+                ...items.map((item) => item.model),
+                ...cues.map((cue) => cue.value),
+                armed,
+                worn,
+                // a version the band wears in place of a removed one the venue names (see
+                // `resolveStoredUniformPack`) is in use too, so Remove unused… never offers it
+                wornPack && wornPack.value !== worn ? wornPack.value : null,
+            ],
+            // a failed read keeps every uniform, even if an older read succeeded
+            keptForHistory(uniforms, historyFailed ? undefined : inHistory),
+        );
         const known = new Set(use.assets.map((row) => row.value));
         // Props naming a model the show doesn't have: an undo brought one back, say
         const missingProps = items.filter(
             (item) =>
                 item.model?.startsWith("library:") && !known.has(item.model),
         ).length;
-        return { ...use, missingProps };
-    }, [assets, sizes, items, cues, armed]);
+        // The band's uniform when the show doesn't have it (an undo after Remove unused…), or
+        // has it but its file doesn't read, or was made by a newer OpenMarch
+        // any version of it: a version an item edit just replaced still counts (fork #1258)
+        const wornId = parseShowAssetRef(worn)?.id;
+        const uniformProblem = wornPackProblem(
+            worn,
+            known.has(worn ?? "") ||
+                use.assets.some(
+                    (row) =>
+                        row.asset.id === wornId &&
+                        row.asset.kind === UNIFORM_ASSET_KIND,
+                ),
+            wornPack,
+            uniformPackIsNewer(worn),
+            wornFailed || retrying === "uniform",
+        );
+        return {
+            ...use,
+            groups: groupAssetVersions(use.assets, sizes),
+            missingProps,
+            uniformProblem,
+            historyFailed,
+        };
+    }, [
+        assets,
+        sizes,
+        items,
+        cues,
+        armed,
+        venue,
+        worn,
+        uniforms,
+        inHistory,
+        historyFailed,
+        wornPack,
+        wornFailed,
+        retrying,
+    ]);
+    return {
+        use,
+        listFailed: assetsFailed || sizesFailed || retrying === "list",
+        tryAgain,
+        retrying: retrying !== null,
+    };
 }
 
 export function AssetsContents({
@@ -88,8 +219,25 @@ export function AssetsContents({
     /** Opens Remove unused… at once (the `removeUnusedAssets` action) */
     openRemove?: boolean;
 }) {
-    const use = useAssetUse();
+    const { use, listFailed, tryAgain, retrying } = useAssetUse();
     const [removing, setRemoving] = useState(openRemove);
+    // Remove unused… reads again which uniforms undo or redo names: an edit elsewhere may have
+    // cleared the redo steps since. Its list and size wait for that read.
+    const queryClient = useQueryClient();
+    const [checked, setChecked] = useState(false);
+    useEffect(() => {
+        setChecked(false);
+        if (!removing) return;
+        let live = true;
+        void queryClient
+            .refetchQueries({ queryKey: uniformsInHistoryKeys.all() })
+            .finally(() => {
+                if (live) setChecked(true);
+            });
+        return () => {
+            live = false;
+        };
+    }, [removing, queryClient]);
     const { setContent } = useSidebarModalStore();
     return (
         <div className="animate-scale-in text-text flex h-full w-fit flex-col gap-16">
@@ -101,13 +249,34 @@ export function AssetsContents({
                 className="flex w-[28rem] grow flex-col gap-16 overflow-y-auto"
                 data-testid="assets-view"
             >
+                {!use && listFailed && (
+                    <div
+                        className="bg-fg-2 border-stroke rounded-6 text-sub flex items-center justify-between gap-12 border p-12"
+                        role="status"
+                        data-testid="assets-load-failed-note"
+                    >
+                        <span>
+                            <T keyName="assets.notes.loadFailed" />
+                        </span>
+                        <TryAgainButton
+                            onClick={tryAgain}
+                            retrying={retrying}
+                            testId="assets-try-again"
+                        />
+                    </div>
+                )}
                 {use && (
                     <AssetNotes
                         unused={use.unused}
+                        all={use.assets}
                         unusedBytes={use.unusedBytes}
                         totalBytes={use.totalBytes}
                         missingProps={use.missingProps}
+                        uniformProblem={use.uniformProblem}
+                        historyFailed={use.historyFailed}
                         onRemove={() => setRemoving(true)}
+                        onTryAgain={tryAgain}
+                        retrying={retrying}
                     />
                 )}
                 {use && use.assets.length === 0 && (
@@ -116,8 +285,12 @@ export function AssetsContents({
                     </p>
                 )}
                 <ul className="flex flex-col gap-8">
-                    {use?.assets.map((row) => (
-                        <AssetRow key={row.value} row={row} />
+                    {use?.groups.map((group) => (
+                        <AssetRow
+                            key={group.row.asset.id}
+                            row={group.row}
+                            group={group}
+                        />
                     ))}
                 </ul>
             </div>
@@ -125,7 +298,9 @@ export function AssetsContents({
                 <RemoveUnusedDialog
                     open={removing}
                     onOpenChange={setRemoving}
+                    checking={!checked}
                     unused={use.unused}
+                    all={use.assets}
                     unusedBytes={use.unusedBytes}
                 />
             )}
@@ -133,21 +308,61 @@ export function AssetsContents({
     );
 }
 
+/** Try again, disabled and saying "Loading…" while it runs, so a click never starts it over */
+function TryAgainButton({
+    onClick,
+    retrying,
+    testId,
+}: {
+    onClick: () => void;
+    retrying: boolean;
+    testId: string;
+}) {
+    return (
+        <Button
+            size="compact"
+            variant="secondary"
+            className="shrink-0"
+            onClick={onClick}
+            disabled={retrying}
+            data-testid={testId}
+        >
+            <T keyName={retrying ? "assets.loading" : "assets.tryAgain"} />
+        </Button>
+    );
+}
+
 /** The quiet notes at the top: unused assets, props whose model is gone, a large show */
 function AssetNotes({
     unused,
+    all,
     unusedBytes,
     totalBytes,
     missingProps,
+    uniformProblem,
+    historyFailed,
     onRemove,
+    onTryAgain,
+    retrying,
 }: {
     unused: readonly AssetUse[];
+    /** Every asset version, to count unused ones as the Remove unused… list groups them */
+    all: readonly AssetUse[];
     unusedBytes: number;
     totalBytes: number;
     missingProps: number;
+    uniformProblem: WornPackProblem | null;
+    historyFailed: boolean;
     onRemove: () => void;
+    /** Reads the band's uniform again after it couldn't be loaded */
+    onTryAgain: () => void;
+    /** Try again is running */
+    retrying: boolean;
 }) {
+    const tally = removableCount(removableLines(unused, all));
     const sizeText = useSizeText();
+    const customUniforms = useCustomUniforms();
+    const customUniformsAvailable = useCustomUniformsAvailable();
     const notes: React.ReactNode[] = [];
     if (unused.length > 0)
         notes.push(
@@ -158,9 +373,13 @@ function AssetNotes({
             >
                 <span>
                     <T
-                        keyName="assets.notes.unused"
+                        keyName={
+                            tally.unit === "versions"
+                                ? "assets.notes.unusedVersions"
+                                : "assets.notes.unused"
+                        }
                         params={{
-                            count: unused.length,
+                            count: tally.count,
                             size: sizeText(unusedBytes),
                         }}
                     />
@@ -182,6 +401,67 @@ function AssetNotes({
                     keyName="assets.notes.missing"
                     params={{ count: missingProps }}
                 />
+            </li>,
+        );
+    // with Custom uniforms (preview) off there's no Import button: the notes say how to get one,
+    // unless the build has no custom uniforms at all (a release, until the format is final)
+    if (uniformProblem === "missing")
+        notes.push(
+            <li key="missingUniform" data-testid="assets-missing-uniform-note">
+                <T
+                    keyName={
+                        customUniforms
+                            ? "assets.notes.missingUniform"
+                            : customUniformsAvailable
+                              ? "assets.notes.missingUniformPreviewOff"
+                              : "assets.notes.missingUniformUnavailable"
+                    }
+                />
+            </li>,
+        );
+    if (uniformProblem === "unreadable")
+        notes.push(
+            <li
+                key="unreadableUniform"
+                data-testid="assets-unreadable-uniform-note"
+            >
+                <T
+                    keyName={
+                        customUniforms
+                            ? "assets.notes.unreadableUniform"
+                            : "assets.notes.unreadableUniformPreviewOff"
+                    }
+                />
+            </li>,
+        );
+    // couldn't be loaded just now: the file may be fine, so this isn't the damaged note
+    if (uniformProblem === "loadFailed")
+        notes.push(
+            <li
+                key="loadFailedUniform"
+                className="flex items-center justify-between gap-12"
+                data-testid="assets-load-failed-uniform-note"
+            >
+                <span>
+                    <T keyName="assets.notes.loadFailedUniform" />
+                </span>
+                <TryAgainButton
+                    onClick={onTryAgain}
+                    retrying={retrying}
+                    testId="assets-uniform-try-again"
+                />
+            </li>,
+        );
+    if (uniformProblem === "newer")
+        notes.push(
+            <li key="newerUniform" data-testid="assets-newer-uniform-note">
+                <T keyName="assets.notes.newerUniform" />
+            </li>,
+        );
+    if (historyFailed)
+        notes.push(
+            <li key="historyFailed" data-testid="assets-history-failed-note">
+                <T keyName="assets.notes.historyFailed" />
             </li>,
         );
     if (totalBytes > LARGE_SHOW_ASSET_BYTES)
@@ -211,7 +491,7 @@ const licenseOf = (credits: JsonObject): string | null => {
 };
 
 /** One asset: its picture, name, kind, size and use, and its credits to read or edit */
-function AssetRow({ row }: { row: AssetUse }) {
+function AssetRow({ row, group }: { row: AssetUse; group: AssetGroup }) {
     const { t } = useTranslate();
     const sizeText = useSizeText();
     const [open, setOpen] = useState(false);
@@ -249,6 +529,22 @@ function AssetRow({ row }: { row: AssetUse }) {
                                 : t("assets.unused"),
                         ].join(" · ")}
                     </span>
+                    {group.others.length > 0 && (
+                        <span
+                            className="text-sub text-text-subtitle"
+                            data-testid="asset-other-versions"
+                        >
+                            {t(
+                                group.allOlder
+                                    ? "assets.olderVersions"
+                                    : "assets.otherVersions",
+                                {
+                                    count: group.others.length,
+                                    size: sizeText(group.othersBytes),
+                                },
+                            )}
+                        </span>
+                    )}
                     <span className="text-sub text-text-subtitle flex items-center gap-4">
                         {license ? (
                             license === "LicenseRef-Proprietary" ? (
@@ -278,7 +574,11 @@ function AssetRow({ row }: { row: AssetUse }) {
             </button>
             {open && (
                 <div id={panelId}>
-                    <AssetCredits row={row} />
+                    {asset.kind === UNIFORM_ASSET_KIND ? (
+                        <FixedCredits credits={asset.credits} />
+                    ) : (
+                        <AssetCredits row={row} />
+                    )}
                 </div>
             )}
         </li>
@@ -297,6 +597,43 @@ const textCredits = (credits: JsonObject): ModelCredits => {
         if (typeof credits[key] === "string") out[key] = credits[key];
     return out;
 };
+
+/**
+ * An imported uniform's credits, read only: they live in its pack file too, and Save uniform
+ * file writes the stored file as it is, so an edit here would leave the two disagreeing (fork
+ * #1257). Editable once a uniform can be re-packed.
+ */
+function FixedCredits({ credits }: { credits: JsonObject }) {
+    const { t } = useTranslate();
+    const text = (key: string) =>
+        typeof credits[key] === "string" && credits[key] !== ""
+            ? (credits[key] as string)
+            : null;
+    const rows = [
+        ["license", text("license")],
+        ["author", text("author")],
+        ["sourceUrl", text("source")],
+    ] as const;
+    return (
+        <div className="flex flex-col gap-6" data-testid="asset-fixed-credits">
+            <dl className="text-sub grid grid-cols-[auto_1fr] gap-x-12 gap-y-4">
+                {rows.map(([key, value]) => (
+                    <div key={key} className="contents">
+                        <dt className="text-text-subtitle">
+                            {t(`props.import.credits.${key}`)}
+                        </dt>
+                        <dd className="min-w-0 break-words">
+                            {value ?? t("props.import.credits.unknown")}
+                        </dd>
+                    </div>
+                ))}
+            </dl>
+            <p className="text-sub text-text-subtitle">
+                {t("assets.uniformCreditsFixed")}
+            </p>
+        </div>
+    );
+}
 
 /** Saves after typing pauses, so each keystroke isn't a write */
 const SAVE_AFTER_MS = 600;
@@ -348,14 +685,25 @@ function AssetCredits({ row }: { row: AssetUse }) {
 function RemoveUnusedDialog({
     open,
     onOpenChange,
-    unused,
+    checking,
+    unused: given,
+    all,
     unusedBytes,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    /** Still reading what undo or redo names: lists nothing and offers nothing yet */
+    checking: boolean;
     unused: readonly AssetUse[];
+    /** Every asset version, to tell older versions of a kept asset from whole assets */
+    all: readonly AssetUse[];
     unusedBytes: number;
 }) {
+    const { t } = useTranslate();
+    const unused = checking ? [] : given;
+    // one line per asset, and a count that matches the lines
+    const lines = removableLines(unused, all);
+    const tally = removableCount(lines);
     const queryClient = useQueryClient();
     const sizeText = useSizeText();
     const { mutate, isPending } = useMutation(
@@ -365,13 +713,23 @@ function RemoveUnusedDialog({
         <AlertDialog open={open} onOpenChange={onOpenChange}>
             <AlertDialogContent data-testid="assets-remove-dialog">
                 <AlertDialogTitle>
-                    <T
-                        keyName="assets.removeUnused.title"
-                        params={{ count: unused.length }}
-                    />
+                    {checking ? (
+                        <T keyName="assets.removeUnused.button" />
+                    ) : (
+                        <T
+                            keyName={
+                                tally.unit === "versions"
+                                    ? "assets.removeUnused.titleVersions"
+                                    : "assets.removeUnused.title"
+                            }
+                            params={{ count: tally.count }}
+                        />
+                    )}
                 </AlertDialogTitle>
                 <AlertDialogDescription>
-                    {unused.length > 0 ? (
+                    {checking ? (
+                        <T keyName="assets.removeUnused.checking" />
+                    ) : unused.length > 0 ? (
                         <T
                             keyName="assets.removeUnused.description"
                             params={{ size: sizeText(unusedBytes) }}
@@ -385,16 +743,31 @@ function RemoveUnusedDialog({
                         className="text-body flex max-h-[16rem] flex-col gap-4 overflow-y-auto"
                         data-testid="assets-remove-list"
                     >
-                        {unused.map((row) => (
+                        {lines.map((line) => (
                             <li
-                                key={row.value}
+                                key={line.id}
                                 className="flex justify-between gap-12"
                             >
                                 <span className="truncate">
-                                    {row.asset.name}
+                                    {line.olderOnly
+                                        ? t(
+                                              line.allOlder
+                                                  ? "assets.removeUnused.olderVersions"
+                                                  : "assets.removeUnused.otherVersions",
+                                              {
+                                                  count: line.count,
+                                                  name: line.name,
+                                              },
+                                          )
+                                        : line.count > 1
+                                          ? t("assets.removeUnused.versions", {
+                                                count: line.count,
+                                                name: line.name,
+                                            })
+                                          : line.name}
                                 </span>
                                 <span className="text-text-subtitle shrink-0">
-                                    {sizeText(row.bytes)}
+                                    {sizeText(line.bytes)}
                                 </span>
                             </li>
                         ))}
@@ -423,8 +796,12 @@ function RemoveUnusedDialog({
                                 }
                             >
                                 <T
-                                    keyName="assets.removeUnused.confirm"
-                                    params={{ count: unused.length }}
+                                    keyName={
+                                        tally.unit === "versions"
+                                            ? "assets.removeUnused.confirmVersions"
+                                            : "assets.removeUnused.confirm"
+                                    }
+                                    params={{ count: tally.count }}
                                 />
                             </Button>
                         </AlertDialogAction>

@@ -172,7 +172,8 @@ function crc32(bytes: Uint8Array): number {
     return (c ^ 0xffffffff) >>> 0;
 }
 
-function chunk(type: string, data: Uint8Array): Uint8Array {
+/** One PNG chunk: length, type, data and CRC. */
+export function pngChunk(type: string, data: Uint8Array): Uint8Array {
     const out = new Uint8Array(12 + data.length);
     const view = new DataView(out.buffer);
     view.setUint32(0, data.length);
@@ -236,12 +237,12 @@ function pngFile(
 
     const parts = [
         new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-        chunk("IHDR", ihdr),
-        chunk("PLTE", plte),
-        chunk("pHYs", phys),
-        ...(comment ? [chunk("tEXt", textData(comment))] : []),
-        chunk("IDAT", idat),
-        chunk("IEND", new Uint8Array(0)),
+        pngChunk("IHDR", ihdr),
+        pngChunk("PLTE", plte),
+        pngChunk("pHYs", phys),
+        ...(comment ? [pngChunk("tEXt", textData(comment))] : []),
+        pngChunk("IDAT", idat),
+        pngChunk("IEND", new Uint8Array(0)),
     ];
     const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
     let at = 0;

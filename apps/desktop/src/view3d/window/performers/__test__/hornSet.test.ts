@@ -34,7 +34,7 @@ async function setup() {
         scene: body.scene,
         mesh: mesh!,
     } as LoadedBody);
-    bodies.set("neutral-slim", {
+    bodies.set("feminine-slim", {
         scene: body.scene,
         mesh: mesh!,
     } as LoadedBody);
@@ -65,7 +65,7 @@ describe("HornSet", () => {
             bodies,
             [
                 look(1, "neutral-average", "Trumpet"),
-                look(2, "neutral-slim", "Trumpet"),
+                look(2, "feminine-slim", "Trumpet"),
                 look(3, "neutral-average", "Drum Major"),
             ],
             "high",
@@ -86,7 +86,7 @@ describe("HornSet", () => {
             bodies,
             [
                 look(1, "neutral-average", "Trumpet"),
-                look(2, "neutral-slim", "Trumpet"),
+                look(2, "feminine-slim", "Trumpet"),
             ],
             "high",
             material(),
@@ -108,7 +108,7 @@ describe("HornSet", () => {
             bodies,
             [
                 look(1, "neutral-average", "Trumpet"),
-                look(2, "neutral-slim", "Trumpet"),
+                look(2, "feminine-slim", "Trumpet"),
             ],
             "high",
             material(),
@@ -173,7 +173,7 @@ describe("HornSet", () => {
             bodies,
             [
                 look(1, "neutral-average", "Trumpet"),
-                look(2, "neutral-slim", "Trumpet"),
+                look(2, "feminine-slim", "Trumpet"),
             ],
             "high",
             material(),

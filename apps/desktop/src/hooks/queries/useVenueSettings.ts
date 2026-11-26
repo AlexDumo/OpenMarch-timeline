@@ -1,9 +1,7 @@
 import {
     mutationOptions,
     queryOptions,
-    useMutation,
     useQueries,
-    useQueryClient,
     type QueryClient,
     type UseQueryResult,
 } from "@tanstack/react-query";
@@ -20,7 +18,12 @@ import {
 import { conToastError } from "@/utilities/utils";
 import tolgee from "@/global/singletons/Tolgee";
 import { DEFAULT_STALE_TIME } from "./constants";
+import {
+    pickOnStoredUniform,
+    type VenuePickBase,
+} from "@/view3d/sync/venuePick";
 import { fieldPropertiesQueryOptions } from "./useFieldProperties";
+import { uniformPackModes } from "./useUniformPack";
 
 /**
  * The key base matches the table name, so undo and redo (which invalidate by
@@ -95,17 +98,45 @@ export const useVenueSettings = (): UseVenueSettingsReturn => {
 };
 
 /**
- * Validates and stores venue settings with history, so undo covers it, then
- * invalidates `["view3d_venue"]`. Rejects settings that don't match the schema.
+ * A 3D View venue pick, validated and stored with history (so undo covers it), then
+ * `["view3d_venue"]` invalidated. Rebased on the venue stored now, in the write's transaction,
+ * when the window sent the uniform it was made against (`pickOnStoredUniform`). Rejects settings
+ * that don't match the schema.
  */
-export const updateVenueSettingsMutationOptions = (qc: QueryClient) =>
+export const venuePickMutationOptions = (qc: QueryClient) =>
     mutationOptions({
-        mutationFn: (settings: VenueSettings) =>
-            updateVenueSettings({ db, settings }),
+        mutationFn: async ({
+            settings,
+            base,
+        }: {
+            settings: VenueSettings;
+            base?: VenuePickBase;
+        }) => {
+            if (!base) return await updateVenueSettings({ db, settings });
+            // the modes of the version the pick will land on, read before the write (in the
+            // worker, without decoding): a picked mode another version lacks is dropped
+            const target = pickOnStoredUniform(
+                settings,
+                base,
+                await getStoredVenueSettings({ db }),
+            ).uniformArtwork;
+            const modes =
+                typeof target === "string" && target !== base.uniformArtwork
+                    ? await uniformPackModes(target)
+                    : undefined;
+            return await updateVenueSettings({
+                db,
+                settings,
+                rebase: (next, stored) =>
+                    pickOnStoredUniform(next, base, stored, (value) =>
+                        value === target ? modes : undefined,
+                    ),
+            });
+        },
         onSuccess: async () => {
             await qc.invalidateQueries({ queryKey: venueSettingsKeys.all() });
         },
-        onError: (error, settings) => {
+        onError: (error, { settings }) => {
             conToastError(
                 tolgee.t("view3d.venue.updateFailed"),
                 error,
@@ -113,8 +144,3 @@ export const updateVenueSettingsMutationOptions = (qc: QueryClient) =>
             );
         },
     });
-
-export const useUpdateVenueSettings = () => {
-    const queryClient = useQueryClient();
-    return useMutation(updateVenueSettingsMutationOptions(queryClient));
-};

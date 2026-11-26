@@ -31,8 +31,15 @@ export interface PlacedBoxDrawing {
         readonly right: number;
         readonly bottom: number;
     };
-    /** Its outline as drawn, half a step out, turned with it: a box's back-left corner first */
+    /**
+     * Its outline as drawn, turned with it: a box's back-left corner first, half a step out. A
+     * line's runs along its path through its marchers, as the selected one's does.
+     */
     readonly corners: readonly { readonly x: number; readonly y: number }[];
+    /** Whether the outline is open, drawn without joining its last point to its first (a line) */
+    readonly open: boolean;
+    /** Its other rows (spec #1190), each drawn as its own line is */
+    readonly rows: readonly (readonly XY[])[];
     readonly label: string;
 }
 
@@ -62,6 +69,27 @@ export function boxLabel(box: PlacedBox, stepPx: number): string {
 }
 
 /**
+ * How the field outlines `box` when it isn't the one being edited. A line, curve or arc (a kind
+ * with an open outline, closed or not) is drawn as the selected one is (`LiveBoxMode`): along its
+ * path through its marchers, with its other rows, never as the box around its chord. Other kinds
+ * are outlined half a step out (`pad`).
+ */
+export function placedOutline(
+    box: PlacedBox,
+    pad: number,
+    stepPx: number,
+): Pick<PlacedBoxDrawing, "corners" | "open" | "rows"> {
+    const { kind, params, spots } = box;
+    if (kind.outlineOpen === undefined)
+        return { corners: outlineOut(box, pad), open: false, rows: [] };
+    return {
+        corners: shapeOutline(kind, params, spots),
+        open: kind.outlineOpen(params, spots),
+        rows: kind.rowOutlines?.(params, spots, stepPx) ?? [],
+    };
+}
+
+/**
  * The shape's outline `pad` further out. A shape with corners (or none of its own) grows its
  * frame, so every edge moves out the same; a round one grows from its center.
  */
@@ -86,9 +114,12 @@ function outlineOut(box: PlacedBox, pad: number): XY[] {
     });
 }
 
-/** The field-aligned rectangle around the shape's outline, however it's turned */
-function boundsOf(box: PlacedBox) {
-    const outline = shapeOutline(box.kind, box.params, box.spots);
+/** The field-aligned rectangle around the shape's outline and rows, however it's turned */
+function boundsOf(box: PlacedBox, rows: readonly (readonly XY[])[]) {
+    const outline = [
+        ...shapeOutline(box.kind, box.params, box.spots),
+        ...rows.flat(),
+    ];
     const xs = outline.map((p) => p.x);
     const ys = outline.map((p) => p.y);
     return {
@@ -151,8 +182,8 @@ export function PlacedBoxesOverlay({
                         box.recipe.members.some((m) => ids.has(m.marcherId))),
             )
             .map((box): PlacedBoxDrawing => {
-                const corners = outlineOut(box, pad);
-                const f = boundsOf(box);
+                const outline = placedOutline(box, pad, stepPx);
+                const f = boundsOf(box, outline.rows);
                 return {
                     id: box.recipe.id,
                     rect: {
@@ -161,7 +192,7 @@ export function PlacedBoxesOverlay({
                         right: f.right + pad,
                         bottom: f.bottom + pad,
                     },
-                    corners,
+                    ...outline,
                     label: boxLabel(box, stepPx),
                 };
             });
@@ -193,22 +224,48 @@ export function PlacedBoxesOverlay({
             className="pointer-events-none absolute inset-0 h-full w-full"
             data-testid="placedBoxes"
         >
-            {drawings.map(({ id, corners, label }) => {
-                const points = corners.map((c) =>
-                    fieldToElement(view, c.x, c.y),
-                );
-                // The label sits over the corner highest on screen
-                const a = points.reduce((top, p) => (p.y < top.y ? p : top));
+            {drawings.map(({ id, corners, open, rows, label }) => {
+                const toPoints = (line: readonly XY[]) =>
+                    line.map((c) => fieldToElement(view, c.x, c.y));
+                const points = toPoints(corners);
+                const rowPoints = rows.map(toPoints);
+                const attr = (line: readonly XY[]) =>
+                    line.map((p) => `${p.x},${p.y}`).join(" ");
+                // The label sits over the point highest on screen; nothing to draw without one
+                const all = [...points, ...rowPoints.flat()];
+                if (all.length === 0) return null;
+                const a = all.reduce((top, p) => (p.y < top.y ? p : top));
                 return (
                     <g key={id} data-testid="placedBox">
-                        <polygon
-                            points={points
-                                .map((p) => `${p.x},${p.y}`)
-                                .join(" ")}
-                            fill="none"
-                            stroke={color}
-                            strokeWidth={1}
-                        />
+                        {open ? (
+                            // A line is drawn along its path, as the selected one is
+                            <polyline
+                                points={attr(points)}
+                                fill="none"
+                                stroke={color}
+                                strokeWidth={1}
+                                strokeLinejoin="round"
+                                strokeLinecap="round"
+                            />
+                        ) : (
+                            <polygon
+                                points={attr(points)}
+                                fill="none"
+                                stroke={color}
+                                strokeWidth={1}
+                            />
+                        )}
+                        {rowPoints.map((row, i) => (
+                            <polyline
+                                key={i}
+                                points={attr(row)}
+                                fill="none"
+                                stroke={color}
+                                strokeWidth={1}
+                                strokeLinejoin="round"
+                                strokeLinecap="round"
+                            />
+                        ))}
                         <text
                             x={a.x}
                             y={a.y - LABEL_GAP_PX}

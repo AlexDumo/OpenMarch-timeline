@@ -26,6 +26,33 @@ import { saveImportedModel } from "@/showAssets/modelImport/saveImportedModel";
 import { env, picked } from "@/showAssets/modelImport/__test__/fixtures";
 import { openItemEditor } from "@/components/items/openItemEditor";
 import { showAssetsView } from "../openAssets";
+import { sql } from "drizzle-orm";
+import {
+    saveUniformItemsPack,
+    setUniformPack,
+} from "@/db-functions/view3dUniformPack";
+import { parseShowAssetRef } from "@/showAssets/ref";
+import {
+    getStoredVenueSettings,
+    updateVenueSettings,
+} from "@/db-functions/view3dVenue";
+import { tableNamesToQueryKeys } from "@/hooks/queries/utils";
+import { uniformPackQueryOptions } from "@/hooks/queries/useUniformPack";
+import { showAssetKeys } from "@/hooks/queries/useShowAssets";
+import { useCustomUniformsStore } from "@/view3d/window/uniformArtworkPreview";
+import { strToU8, zipSync } from "fflate";
+import {
+    readUniformPack,
+    writeUniformPack,
+} from "@/view3d/core/uniformPack/format";
+import {
+    fakePng,
+    sampleManifest,
+} from "@/view3d/core/uniformPack/__test__/fixtures";
+import FootballTemplates from "@/global/classes/fieldTemplates/Football";
+
+const fieldPropertiesOf = async (_db: DbConnection) =>
+    FootballTemplates.HIGH_SCHOOL_FOOTBALL_FIELD_WITH_END_ZONES;
 
 /**
  * The Assets view (fork #1001): the show's imported assets with their size, use and credits,
@@ -40,6 +67,89 @@ vi.mock("@/App", () => ({
     },
 }));
 app.client = harnessQueryClient;
+
+// The uniform pack worker doesn't run in jsdom: read packs here, with the same reader, refusing
+// as the worker does, and skipping images by hash as it does. Decoding is stood in for: a PNG
+// whose tag byte is 0xdd (its header reads, its image data doesn't decode) is refused when asked
+// to decode; while `refusalsLeft` is above 0 a decode is refused as one that couldn't allocate
+// its bitmap is; and while `passingFailures` is above 0 a job fails as a dead worker does.
+const worker = vi.hoisted(() => ({
+    passingFailures: 0,
+    refusalsLeft: 0,
+    jobs: 0,
+    decodes: 0,
+}));
+const UNDECODABLE = 0xdd;
+vi.mock("@/view3d/uniformPack/runUniformPackJob", async () => {
+    const { readUniformPack, UniformPackError } =
+        await import("@/view3d/core/uniformPack/format");
+    const { UniformPackJobError, decodedImageKey } =
+        await import("@/view3d/uniformPack/protocol");
+    const { sha256Hex } = await import("@/showAssets/hash");
+    return {
+        UniformPackJobError,
+        runUniformPackJob: async (request: {
+            type: string;
+            bytes: Uint8Array;
+            decode?: boolean;
+            decoded?: string[];
+        }) => {
+            if (request.type !== "pack")
+                throw new Error(`no ${request.type} jobs in this test`);
+            worker.jobs++;
+            if (worker.passingFailures > 0) {
+                worker.passingFailures--;
+                throw new UniformPackJobError("failed", "the worker failed");
+            }
+            let pack;
+            try {
+                pack = readUniformPack(request.bytes);
+            } catch (error) {
+                throw new UniformPackJobError(
+                    error instanceof UniformPackError
+                        ? error.code
+                        : "unreadable",
+                    String(error),
+                );
+            }
+            let decoded: string[] | undefined;
+            if (request.decode) {
+                const before = new Set(request.decoded ?? []);
+                decoded = [];
+                const images = [
+                    ...pack.layers.map(({ png }) => ({ png, kind: "layer" })),
+                    ...pack.itemFiles.map(({ png }) => ({ png, kind: "item" })),
+                ] as const;
+                for (const { png, kind } of images) {
+                    const hash = decodedImageKey(kind, await sha256Hex(png));
+                    if (!before.has(hash)) {
+                        worker.decodes++;
+                        if (worker.refusalsLeft > 0) {
+                            worker.refusalsLeft--;
+                            throw new UniformPackJobError(
+                                "unreadable",
+                                "couldn't allocate the bitmap",
+                            );
+                        }
+                        if (png[32] === 0xdd)
+                            throw new UniformPackJobError(
+                                "unreadable",
+                                "the image data doesn't decode",
+                            );
+                    }
+                    decoded.push(hash);
+                }
+            }
+            return {
+                type: "pack",
+                manifest: pack.manifest,
+                notes: [],
+                itemSizes: {},
+                decoded,
+            };
+        },
+    };
+});
 
 const JsdomBlob = globalThis.Blob;
 afterAll(() => {
@@ -263,5 +373,540 @@ describeDbTests("Assets view", (it) => {
         await act(async () => showAssetsView({ openRemove: true }));
         expect(await screen.findByTestId("assets-remove-dialog")).toBeTruthy();
         void db;
+    });
+
+    it("refreshes which uniforms undo names when the venue changes, undo runs, or Remove unused… opens", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        const field = await fieldPropertiesOf(db);
+        const wear = async (name: string, tag: number) => {
+            const pack = writeUniformPack(sampleManifest(name), {
+                "layers/base.png": fakePng(3360, 2816, tag),
+            });
+            return await setUniformPack({
+                db,
+                pack,
+                manifest: readUniformPack(pack).manifest,
+                field,
+            });
+        };
+        // what the app's venue write and undo refresh: the venue's key, by table name
+        const venueChanged = () =>
+            act(async () => {
+                for (const queryKey of tableNamesToQueryKeys(
+                    new Set(["view3d_venue"]),
+                ))
+                    await harnessQueryClient()!.invalidateQueries({ queryKey });
+            });
+        const assetsChanged = () =>
+            act(async () =>
+                harnessQueryClient()!.invalidateQueries({
+                    queryKey: ["show_assets"],
+                }),
+            );
+
+        // the band wears A, and the Assets view is open
+        await wear("Uniform A", 1);
+        await setUpFeature(<SidebarModal />, 1, []);
+        await act(async () => showAssetsView());
+        const view = await screen.findByTestId("assets-view");
+        await waitFor(() =>
+            expect(within(view).getAllByTestId("asset-row")).toHaveLength(1),
+        );
+        expect(screen.queryByTestId("assets-unused-note")).toBeNull();
+
+        // The band switches to a preset in the 3D View: undo would dress it in A again, so A
+        // isn't called unused
+        const venue = (await getStoredVenueSettings({ db }))!;
+        const { uniformArtwork: _a, ...preset } = venue;
+        await updateVenueSettings({ db, settings: preset });
+        await venueChanged();
+        await waitFor(() =>
+            expect(within(view).getByTestId("asset-row")).toHaveTextContent(
+                "Not used",
+            ),
+        );
+        expect(screen.queryByTestId("assets-unused-note")).toBeNull();
+
+        // Import B, then undo: only redo names B now, so B isn't called unused either
+        await wear("Uniform B", 2);
+        await assetsChanged();
+        await venueChanged();
+        await waitFor(() =>
+            expect(within(view).getAllByTestId("asset-row")).toHaveLength(2),
+        );
+        await performUndo(db);
+        await venueChanged();
+        await waitFor(() =>
+            expect(
+                within(view)
+                    .getAllByTestId("asset-row")
+                    .map((row) => row.textContent?.includes("Not used")),
+            ).toEqual([true, true]),
+        );
+        expect(screen.queryByTestId("assets-unused-note")).toBeNull();
+
+        // An edit elsewhere clears history without touching the venue: Remove unused… reads
+        // again as it opens, and lists both
+        await db.run(sql`DELETE FROM history_undo`);
+        await db.run(sql`DELETE FROM history_redo`);
+        await act(async () => showAssetsView({ openRemove: true }));
+        const list = await screen.findByTestId("assets-remove-list");
+        expect(
+            within(list)
+                .getAllByRole("listitem")
+                .map((row) => row.textContent),
+        ).toEqual([
+            expect.stringContaining("Uniform A"),
+            expect.stringContaining("Uniform B"),
+        ]);
+    });
+
+    /** Stores a uniform pack and dresses the band in it, as the editor does */
+    const wearUniform = async (db: DbConnection, name: string, tag: number) => {
+        const pack = writeUniformPack(sampleManifest(name), {
+            "layers/base.png": fakePng(3360, 2816, tag),
+        });
+        return await setUniformPack({
+            db,
+            pack,
+            manifest: readUniformPack(pack).manifest,
+            field: await fieldPropertiesOf(db),
+        });
+    };
+
+    it("says when the band's uniform is in the show but doesn't read, and when it isn't in the show", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        const value = await wearUniform(db, "Readable", 11);
+        await setUpFeature(<SidebarModal />, 1, []);
+        await act(async () => showAssetsView());
+        const view = await screen.findByTestId("assets-view");
+        await waitFor(() =>
+            expect(within(view).getAllByTestId("asset-row")).toHaveLength(1),
+        );
+        // it reads: no note
+        await act(async () => {
+            await harnessQueryClient()!.refetchQueries();
+        });
+        expect(
+            screen.queryByTestId("assets-unreadable-uniform-note"),
+        ).toBeNull();
+        expect(screen.queryByTestId("assets-missing-uniform-note")).toBeNull();
+
+        // the band wears one whose stored file is damaged
+        const broken = await wearUniform(db, "Damaged", 12);
+        const [asset] = (await getShowAssets({ db })).filter(
+            (a) => a.name === "Damaged",
+        );
+        await db.run(
+            sql`UPDATE show_asset_blobs SET data = x'00' WHERE hash = ${asset.parts.pack}`,
+        );
+        expect(broken).not.toBe(value);
+        await refresh();
+        await waitFor(() =>
+            expect(
+                screen.getByTestId("assets-unreadable-uniform-note"),
+            ).toHaveTextContent("can't be read"),
+        );
+        expect(screen.queryByTestId("assets-missing-uniform-note")).toBeNull();
+
+        // the venue names one the show doesn't have
+        const venue = (await getStoredVenueSettings({ db }))!;
+        await updateVenueSettings({
+            db,
+            settings: {
+                ...venue,
+                uniformArtwork: `library:gone@${"c".repeat(64)}`,
+            },
+        });
+        await refresh();
+        await waitFor(() =>
+            expect(
+                screen.getByTestId("assets-missing-uniform-note"),
+            ).toHaveTextContent("isn't in this show anymore"),
+        );
+        expect(
+            screen.queryByTestId("assets-unreadable-uniform-note"),
+        ).toBeNull();
+    });
+
+    it("says to update OpenMarch for a uniform made by a newer one, and words each note for Custom uniforms (preview) off", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        // the band wears a pack of a later format version, as a later build stored it
+        const later = zipSync({
+            "manifest.json": strToU8(
+                JSON.stringify({
+                    ...sampleManifest("Later"),
+                    formatVersion: 4,
+                }),
+            ),
+        });
+        await setUniformPack({
+            db,
+            pack: later,
+            manifest: sampleManifest("Later"),
+            field: await fieldPropertiesOf(db),
+        });
+        await setUpFeature(<SidebarModal />, 1, []);
+        await act(async () => showAssetsView());
+        await waitFor(() =>
+            expect(
+                screen.getByTestId("assets-newer-uniform-note"),
+            ).toHaveTextContent(
+                "made with a newer version of OpenMarch, so the band wears its preset. Update OpenMarch to see it.",
+            ),
+        );
+        expect(
+            screen.queryByTestId("assets-unreadable-uniform-note"),
+        ).toBeNull();
+
+        // with the preview off, a missing uniform's note says how to get Import back
+        void act(() => useCustomUniformsStore.getState().setEnabled(false));
+        try {
+            const venue = (await getStoredVenueSettings({ db }))!;
+            await updateVenueSettings({
+                db,
+                settings: {
+                    ...venue,
+                    uniformArtwork: `library:gone@${"c".repeat(64)}`,
+                },
+            });
+            await refresh();
+            await waitFor(() =>
+                expect(
+                    screen.getByTestId("assets-missing-uniform-note"),
+                ).toHaveTextContent(
+                    "turn on Custom uniforms (preview) in the 3D View settings' Preferences, then import it again",
+                ),
+            );
+
+            // a release build has no such setting: the note only says what happened
+            void act(() =>
+                useCustomUniformsStore.setState({ available: false }),
+            );
+            await waitFor(() =>
+                expect(
+                    screen.getByTestId("assets-missing-uniform-note"),
+                ).toHaveTextContent(
+                    /^The band's custom uniform isn't in this show anymore, so the band wears its preset\.$/,
+                ),
+            );
+        } finally {
+            void act(() =>
+                useCustomUniformsStore.setState({ available: true }),
+            );
+            void act(() => useCustomUniformsStore.getState().setEnabled(true));
+        }
+    });
+
+    it("says the uniform can't be read when its header reads but its image data doesn't decode", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        await wearUniform(db, "Undecodable", UNDECODABLE);
+        await setUpFeature(<SidebarModal />, 1, []);
+        await act(async () => showAssetsView());
+        await waitFor(() =>
+            expect(
+                screen.getByTestId("assets-unreadable-uniform-note"),
+            ).toHaveTextContent("can't be read"),
+        );
+        expect(screen.queryByTestId("assets-missing-uniform-note")).toBeNull();
+    });
+
+    it("believes a refusal only when a fresh worker refuses too", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        const value = await wearUniform(db, "Tight memory", 14);
+        // one decode can't allocate its bitmap (two workers at once, an integrated GPU)
+        worker.refusalsLeft = 1;
+        worker.jobs = 0;
+        await setUpFeature(<SidebarModal />, 1, []);
+        await act(async () => showAssetsView());
+        const read = () =>
+            harnessQueryClient()!.getQueryData(
+                uniformPackQueryOptions(value).queryKey,
+            );
+        await waitFor(() => expect(read()).toBeTruthy());
+        // the second, fresh worker read it
+        expect(worker.jobs).toBe(2);
+        expect(
+            screen.queryByTestId("assets-unreadable-uniform-note"),
+        ).toBeNull();
+    });
+
+    it("decodes a version's images once, and an image another version shares not again", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        await wearUniform(db, "Decoded once", 15);
+        worker.decodes = 0;
+        await setUpFeature(<SidebarModal />, 1, []);
+        await act(async () => showAssetsView());
+        await waitFor(() => expect(worker.decodes).toBe(1));
+        // any asset change reads the pack again: its version decoded already
+        const jobs = worker.jobs;
+        await refresh();
+        await waitFor(() => expect(worker.jobs).toBeGreaterThan(jobs));
+        expect(worker.decodes).toBe(1);
+        // another uniform with the same page: a new version, but its image decoded already
+        await wearUniform(db, "Same page", 15);
+        await refresh();
+        await waitFor(() =>
+            expect(screen.queryAllByTestId("asset-row")).toHaveLength(2),
+        );
+        await act(async () => {
+            await harnessQueryClient()!.refetchQueries();
+        });
+        expect(worker.decodes).toBe(1);
+    });
+
+    it("reads the uniform again after a worker failure instead of keeping it as damaged", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        const value = await wearUniform(db, "Flaky", 13);
+        worker.passingFailures = 1;
+        worker.jobs = 0;
+        await setUpFeature(<SidebarModal />, 1, []);
+        await act(async () => showAssetsView());
+        const read = () =>
+            harnessQueryClient()!.getQueryData(
+                uniformPackQueryOptions(value).queryKey,
+            );
+        // the first read fails as a dead worker does; the retry reads it
+        await waitFor(() => expect(read()).toBeTruthy(), { timeout: 5000 });
+        expect(worker.jobs).toBeGreaterThanOrEqual(2);
+        expect(
+            screen.queryByTestId("assets-unreadable-uniform-note"),
+        ).toBeNull();
+    });
+
+    it("says with Custom uniforms (preview) off that the band's uniform can't be read, and only to pick another", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        await wearUniform(db, "Undecodable off", UNDECODABLE);
+        void act(() => useCustomUniformsStore.getState().setEnabled(false));
+        try {
+            await setUpFeature(<SidebarModal />, 1, []);
+            await act(async () => showAssetsView());
+            await waitFor(() =>
+                expect(
+                    screen.getByTestId("assets-unreadable-uniform-note"),
+                ).toHaveTextContent(
+                    "The band's custom uniform is in this show, but its file can't be read (it may be damaged), so the band wears its preset. Pick another uniform in the 3D View settings.",
+                ),
+            );
+            expect(
+                screen.queryByTestId("assets-load-failed-uniform-note"),
+            ).toBeNull();
+        } finally {
+            void act(() => useCustomUniformsStore.getState().setEnabled(true));
+        }
+    });
+
+    it("says the band's uniform couldn't be loaded, not that it's damaged, when every read fails, and Try again reads it", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        const value = await wearUniform(db, "Never loads", 16);
+        // every job fails as a dead worker does, however often it's retried
+        worker.passingFailures = 1000;
+        worker.jobs = 0;
+        try {
+            await setUpFeature(<SidebarModal />, 1, []);
+            await act(async () => showAssetsView());
+            await waitFor(
+                () =>
+                    expect(
+                        screen.getByTestId("assets-load-failed-uniform-note"),
+                    ).toHaveTextContent(
+                        "The band's custom uniform couldn't be loaded just now. Its file may be fine. Until it loads, the band wears its preset.",
+                    ),
+                // the read is retried, with the usual waits, before it fails
+                { timeout: 15000 },
+            );
+            // tried, and tried again, before saying so
+            expect(worker.jobs).toBeGreaterThan(1);
+            expect(
+                screen.queryByTestId("assets-unreadable-uniform-note"),
+            ).toBeNull();
+
+            worker.passingFailures = 0;
+            // an invalidation, which the editor relays to the 3D View window, never a refetch
+            // only this window would see
+            const invalidate = vi.spyOn(
+                harnessQueryClient()!,
+                "invalidateQueries",
+            );
+            fireEvent.click(screen.getByTestId("assets-uniform-try-again"));
+            // the note stays while it runs, its button disabled
+            const busy = screen.getByTestId("assets-uniform-try-again");
+            expect(busy).toHaveTextContent("Loading…");
+            expect(busy).toBeDisabled();
+            expect(invalidate).toHaveBeenCalledWith({
+                queryKey: uniformPackQueryOptions(value).queryKey,
+                exact: true,
+            });
+            await waitFor(() =>
+                expect(
+                    harnessQueryClient()!.getQueryData(
+                        uniformPackQueryOptions(value).queryKey,
+                    ),
+                ).toBeTruthy(),
+            );
+            await waitFor(() =>
+                expect(
+                    screen.queryByTestId("assets-load-failed-uniform-note"),
+                ).toBeNull(),
+            );
+        } finally {
+            worker.passingFailures = 0;
+        }
+    });
+
+    it("says when the show's assets couldn't be listed, and Try again lists them", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        await wearUniform(db, "Listed later", 17);
+        // the assets can't be read: their table isn't where the read looks
+        await db.run(sql`ALTER TABLE show_assets RENAME TO show_assets_away`);
+        await setUpFeature(<SidebarModal />, 1, []);
+        await act(async () => showAssetsView());
+        // the list is retried, with the usual waits, before it fails
+        await screen.findByTestId("assets-load-failed-note", undefined, {
+            timeout: 15000,
+        });
+        expect(screen.queryAllByTestId("asset-row")).toHaveLength(0);
+
+        await db.run(sql`ALTER TABLE show_assets_away RENAME TO show_assets`);
+        const invalidate = vi.spyOn(harnessQueryClient()!, "invalidateQueries");
+        fireEvent.click(screen.getByTestId("assets-try-again"));
+        // the assets' key: their list, sizes and uniform reads, relayed to the 3D View too
+        expect(invalidate).toHaveBeenCalledWith({
+            queryKey: showAssetKeys.all(),
+        });
+        await waitFor(() =>
+            expect(screen.getAllByTestId("asset-row")).toHaveLength(1),
+        );
+        expect(screen.queryByTestId("assets-load-failed-note")).toBeNull();
+    });
+
+    it("counts the version the band wears in place of a removed one as in use (#1287)", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        const origin = await wearUniform(db, "fjm-page", 21);
+        const id = parseShowAssetRef(origin)!.id;
+        // an item edit: a second version, Y, which the band wears
+        const withCrest = writeUniformPack(
+            {
+                ...sampleManifest("fjm-page"),
+                items: [
+                    {
+                        id: "crest",
+                        file: "items/crest.png",
+                        panel: "front",
+                        at: [17, 25.32],
+                        width: 6,
+                    },
+                ],
+            },
+            {
+                "layers/base.png": fakePng(3360, 2816, 21),
+                "items/crest.png": fakePng(64, 64, 1),
+            },
+        );
+        const y = await saveUniformItemsPack({
+            db,
+            pack: withCrest,
+            manifest: readUniformPack(withCrest).manifest,
+            field: await fieldPropertiesOf(db),
+            versionOf: id,
+            expect: origin,
+        });
+        // the venue names a version of the same uniform that a burst removed: the band wears Y
+        const venue = (await getStoredVenueSettings({ db }))!;
+        await updateVenueSettings({
+            db,
+            settings: {
+                ...venue,
+                uniformArtwork: `library:${id}@${"d".repeat(64)}`,
+            },
+        });
+        // nothing in history keeps either version
+        await db.run(sql`DELETE FROM history_undo`);
+        await db.run(sql`DELETE FROM history_redo`);
+        await setUpFeature(<SidebarModal />, 1, []);
+        await act(async () => showAssetsView());
+        const view = await screen.findByTestId("assets-view");
+        await refresh();
+        // one row for the uniform, showing Y, in use; its older version is counted
+        await waitFor(() => {
+            const rows = within(view).getAllByTestId("asset-row");
+            expect(rows).toHaveLength(1);
+            expect(rows[0]).not.toHaveTextContent("Not used");
+            expect(
+                within(rows[0]).getByTestId("asset-other-versions"),
+            ).toHaveTextContent("1 older version");
+        });
+        expect(y.value).not.toBe(origin);
+        // Remove unused… offers only the older version, never the one worn
+        await act(async () => showAssetsView({ openRemove: true }));
+        const list = await screen.findByTestId("assets-remove-list");
+        expect(within(list).getAllByRole("listitem")).toHaveLength(1);
+        expect(list).toHaveTextContent("An older version of fjm-page");
+        expect(screen.queryByTestId("assets-missing-uniform-note")).toBeNull();
+    });
+
+    it("lists the assets when the undo history can't be read, keeps every uniform, and says so", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        // the band wore this uniform, then a preset: only history names it now
+        await wearUniform(db, "Old uniform", 13);
+        const venue = (await getStoredVenueSettings({ db }))!;
+        const { uniformArtwork: _worn, ...preset } = venue;
+        await updateVenueSettings({ db, settings: preset });
+        // the history scan fails
+        await db.run(sql`ALTER TABLE history_redo RENAME TO history_redo_gone`);
+
+        await setUpFeature(<SidebarModal />, 1, []);
+        await act(async () => showAssetsView());
+        const view = await screen.findByTestId("assets-view");
+        await waitFor(() =>
+            expect(within(view).getAllByTestId("asset-row")).toHaveLength(1),
+        );
+        await waitFor(
+            () =>
+                expect(
+                    screen.getByTestId("assets-history-failed-note"),
+                ).toBeInTheDocument(),
+            // the query tries a few times first, as every query does
+            { timeout: 15_000 },
+        );
+        // not offered for removal: an undo may still need it
+        expect(screen.queryByTestId("assets-unused-note")).toBeNull();
+        await db.run(sql`ALTER TABLE history_redo_gone RENAME TO history_redo`);
     });
 });

@@ -31,6 +31,11 @@ export function useEditorMenu(): [boolean, (open: boolean) => void] {
  */
 export function useMenuFocus(
     focusTarget: (content: HTMLElement) => HTMLElement | null,
+    /**
+     * Opened inside another of the editor's menus (the Rows menu's "Rows go", #1193): that menu
+     * stays open, so closing this one always hands focus back to its own button
+     */
+    nested = false,
 ) {
     /** Whether the menu was last opened, or closed, by a pointer press */
     const pressed = useRef(false);
@@ -77,7 +82,7 @@ export function useMenuFocus(
                 // Not when another menu opening closed it: focus stays with that one
                 if (
                     !pressed.current &&
-                    useEditorMenuStore.getState().open === null
+                    (nested || useEditorMenuStore.getState().open === null)
                 )
                     button.current?.focus();
             },

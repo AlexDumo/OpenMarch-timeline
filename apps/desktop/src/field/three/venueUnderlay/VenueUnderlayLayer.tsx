@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useThree } from "@react-three/fiber";
 import {
     Box3,
@@ -45,7 +45,13 @@ import type {
 } from "@/view3d/core/environment";
 import { useTheme } from "@/context/ThemeContext";
 import type { FieldVenueAround } from "@/stores/UiSettingsStore";
-import { planBaseColor, venuePasses, type VenueLook } from "./fieldVenue";
+import { NOTHING_PAINTED, type PaintedMarkings } from "@/field/fieldPlan";
+import {
+    planBaseColor,
+    venuePaintedMarkings,
+    venuePasses,
+    type VenueLook,
+} from "./fieldVenue";
 
 /**
  * The show's 3D venue under the 2D grid (fork #1207). The field surface is the
@@ -454,12 +460,20 @@ export default function VenueUnderlayLayer({
     fieldProperties,
     look,
     around,
+    onPainted,
 }: {
     fieldProperties: FieldProperties;
     /** The look's numbers, or null when the venue is off. */
     look: VenueLook | null;
     around: FieldVenueAround;
+    /**
+     * The markings the shown surface paints (`venuePaintedMarkings`), for the 2D grid to leave
+     * out; called with the surface, so the grid's copies drop out as the venue's appear.
+     */
+    onPainted?: (painted: PaintedMarkings) => void;
 }) {
+    const onPaintedRef = useRef(onPainted);
+    onPaintedRef.current = onPainted;
     const gl = useThree((s) => s.gl);
     const { data: venue } = useVenueSettings();
     const { image } = useFieldImage();
@@ -501,6 +515,7 @@ export default function VenueUnderlayLayer({
     useEffect(() => {
         if (!look) {
             setField(null);
+            onPaintedRef.current?.(NOTHING_PAINTED);
             return;
         }
         // Wait for the kit's look, so its field isn't painted plain first
@@ -522,6 +537,9 @@ export default function VenueUnderlayLayer({
             image,
         );
         setField(surface);
+        onPaintedRef.current?.(
+            venuePaintedMarkings(plan, look, fieldProperties),
+        );
         return () => surface.dispose();
         // `lookKey` stands for `look`
         // eslint-disable-next-line react-hooks/exhaustive-deps

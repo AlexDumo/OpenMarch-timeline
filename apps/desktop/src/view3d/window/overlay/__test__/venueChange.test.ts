@@ -1,6 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { defaultVenueForKit } from "@/view3d/core/venueSettings";
+import {
+    defaultVenueForKit,
+    parseVenueSettingsJson,
+} from "@/view3d/core/venueSettings";
+import { uniformArtworkOf } from "@/view3d/core/marchers/uniformArtwork";
 import type { LightingPreset } from "@/view3d/core/types";
 import { applyVenueChange, venueChanged } from "../venueChange";
 
@@ -161,5 +165,91 @@ describe("venueChanged", () => {
         expect(
             venueChanged(hsDusk, { ...hsDusk, params: { ...hsDusk.params } }),
         ).toBe(false);
+    });
+});
+
+describe("the band's flats uniform (fork #1255)", () => {
+    const venue = defaultVenueForKit("hs");
+
+    it("is set by picking the sample and cleared by picking a preset", () => {
+        const flats = applyVenueChange(venue, {
+            kind: "uniformArtwork",
+            uniformArtwork: "sample",
+        });
+        expect(flats.uniformArtwork).toBe("sample");
+        expect(venueChanged(venue, flats)).toBe(true);
+        const preset = applyVenueChange(flats, {
+            kind: "uniforms",
+            uniforms: "sash",
+        });
+        expect("uniformArtwork" in preset).toBe(false);
+        expect(preset.uniforms).toBe("sash");
+    });
+
+    it("holds a built-in id or a show asset's id, and older venues parse without it", () => {
+        expect(
+            parseVenueSettingsJson(
+                JSON.stringify({ ...venue, uniformArtwork: 12 }),
+            )?.uniformArtwork,
+        ).toBe(12);
+        expect(
+            parseVenueSettingsJson(
+                JSON.stringify({ ...venue, uniformArtwork: "later-pack" }),
+            )?.uniformArtwork,
+        ).toBe("later-pack");
+        expect(parseVenueSettingsJson(JSON.stringify(venue))).toBeDefined();
+        // ids this build can't draw fall back to the preset
+        expect(uniformArtworkOf(12)).toBeNull();
+        expect(uniformArtworkOf("later-pack")).toBeNull();
+        expect(uniformArtworkOf("sample")).toBe("sample");
+    });
+});
+
+describe("the band's uniform mode (fork #1257 step 5)", () => {
+    const pack = `library:modes@${"a".repeat(64)}` as const;
+    const other = `library:away@${"b".repeat(64)}` as const;
+    const wearing = applyVenueChange(defaultVenueForKit("hs"), {
+        kind: "uniformArtwork",
+        uniformArtwork: pack,
+    });
+
+    it("switches the mode the band wears, as a venue change", () => {
+        const sash = applyVenueChange(wearing, {
+            kind: "uniformMode",
+            uniformMode: "sash-out",
+        });
+        expect(sash).toEqual({ ...wearing, uniformMode: "sash-out" });
+        expect(venueChanged(wearing, sash)).toBe(true);
+        const unzipped = applyVenueChange(sash, {
+            kind: "uniformMode",
+            uniformMode: "unzipped",
+        });
+        expect(unzipped.uniformMode).toBe("unzipped");
+        expect(unzipped.uniformArtwork).toBe(pack);
+    });
+
+    it("starts another uniform, or a preset, in its default mode", () => {
+        const sash = { ...wearing, uniformMode: "sash-out" };
+        expect(
+            applyVenueChange(sash, {
+                kind: "uniformArtwork",
+                uniformArtwork: other,
+            }).uniformMode,
+        ).toBeUndefined();
+        expect(
+            applyVenueChange(sash, { kind: "uniforms", uniforms: "westPoint" })
+                .uniformMode,
+        ).toBeUndefined();
+    });
+
+    it("parses without it, and drops a value that isn't a mode id on its own", () => {
+        expect(
+            parseVenueSettingsJson(JSON.stringify(wearing))?.uniformMode,
+        ).toBeUndefined();
+        const bad = parseVenueSettingsJson(
+            JSON.stringify({ ...wearing, uniformMode: "Sash Out!" }),
+        );
+        expect(bad?.uniformMode).toBeUndefined();
+        expect(bad?.uniformArtwork).toBe(pack);
     });
 });

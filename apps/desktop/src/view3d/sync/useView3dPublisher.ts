@@ -51,12 +51,15 @@ import {
     effectivePlaybackSpeed,
     usePlaybackSpeedStore,
 } from "@/stores/PlaybackSpeedStore";
-import { updateVenueSettingsMutationOptions } from "@/hooks/queries/useVenueSettings";
+import { venuePickMutationOptions } from "@/hooks/queries/useVenueSettings";
+import { parseVenuePickBase } from "./venuePick";
 import { venueSettingsSchema } from "@/view3d/core/venueSettings";
 import { updateShowCamerasMutationOptions } from "@/hooks/queries/useShowCameras";
 import { showCamerasSchema } from "@/view3d/core/cameraList";
 import { setSilkArtworkMutationOptions } from "@/hooks/queries/useSilkArtwork";
 import { silkArtworkImportSchema } from "@/view3d/core/silkArtwork";
+import { setUniformPackMutationOptions } from "@/hooks/queries/useUniformPack";
+import { storeUniformPackRequest } from "./uniformPackRequest";
 import { pressAction, type ReleaseReason } from "@/shortcuts/registry";
 import { subscribeTimelineChanges } from "@/db-functions/timelineChanges";
 import { useTimelineDisplayStore } from "@/db-functions/timelineDisplay";
@@ -167,7 +170,7 @@ export function useView3dPublisher() {
     // What Play does, for the window's Play tooltip, as the editor's transport reads it
     const playLoops = useTimelineSelectionStore((s) => loopBounds(s) !== null);
     const { mutate: updateVenue } = useMutation(
-        updateVenueSettingsMutationOptions(queryClient),
+        venuePickMutationOptions(queryClient),
     );
     // Without history: camera lists aren't undoable.
     const { mutate: updateCameras } = useMutation(
@@ -176,6 +179,10 @@ export function useView3dPublisher() {
     // With history: an Artwork import or removal is one undo step.
     const { mutate: setSilkArtwork } = useMutation(
         setSilkArtworkMutationOptions(queryClient),
+    );
+    // With history: dressing the band in an imported uniform is one undo step.
+    const { mutateAsync: setUniformPack } = useMutation(
+        setUniformPackMutationOptions(queryClient),
     );
     const windowOpen = useView3dWindowStore((s) => s.open);
     const setWindowOpen = useView3dWindowStore((s) => s.setOpen);
@@ -288,6 +295,13 @@ export function useView3dPublisher() {
                 sendCameraWanted();
             }),
             electron.onView3dVenueChangeRequest((request) => {
+                if (request?.uniformPack !== undefined) {
+                    void storeUniformPackRequest(
+                        request.uniformPack,
+                        setUniformPack,
+                    );
+                    return;
+                }
                 if (request?.silkArtwork !== undefined) {
                     if (request.silkArtwork === null) {
                         setSilkArtwork(null);
@@ -326,7 +340,10 @@ export function useView3dPublisher() {
                 }
                 // Writes with history, then invalidates ["view3d_venue"],
                 // which the relay below forwards to the window.
-                updateVenue(parsed.data);
+                updateVenue({
+                    settings: parsed.data,
+                    base: parseVenuePickBase(request?.base),
+                });
             }),
         ];
         return () => {
@@ -341,6 +358,7 @@ export function useView3dPublisher() {
         updateVenue,
         updateCameras,
         setSilkArtwork,
+        setUniformPack,
         setWindowOpen,
     ]);
 
