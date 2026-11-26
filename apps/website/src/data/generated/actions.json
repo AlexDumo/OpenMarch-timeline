@@ -1147,6 +1147,11 @@
         "category": "ui",
         "bindings": []
     },
+    "togglePerformerFigures": {
+        "label": "Show or hide performer figures",
+        "category": "ui",
+        "bindings": []
+    },
     "toggleFacingArrows": {
         "label": "Show or hide which way performers face",
         "category": "ui",

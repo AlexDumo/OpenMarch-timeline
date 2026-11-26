@@ -253,6 +253,18 @@
         "width": 880,
         "height": 628
     },
+    "figures-on-field": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 1080,
+        "height": 756
+    },
+    "figures-with-dots": {
+        "chapter": "3d-view",
+        "kind": "still",
+        "width": 1080,
+        "height": 756
+    },
     "files-export-charts": {
         "chapter": "files",
         "kind": "still",

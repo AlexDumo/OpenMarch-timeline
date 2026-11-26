@@ -424,6 +424,73 @@ const viewClip = (gesture) => ({
     },
 });
 
+/** In the demo at its start: tubas U1–U3, baritones B1–B4 and trumpets T1–T4 in rows (ids) */
+const LOW_BRASS_AND_BASS = [37, 38, 39, 11, 12, 13, 14, 25, 26, 27, 28];
+
+/** The figures shots: the show's start, Figures on (with dots or not), zoomed on the brass */
+async function figuresShot(ctx, withDots) {
+    const { page } = ctx;
+    await tidy(page);
+    await showFigures(page, ctx.wait, withDots);
+    await page.keyboard.press("Escape");
+    await zoomOnMarchers(page, LOW_BRASS_AND_BASS, 3);
+    await page.mouse.move(4, ctx.window.height / 2);
+    await ctx.wait(800);
+    return { box: await boxAroundMarchers(page, LOW_BRASS_AND_BASS, 60) };
+}
+
+/**
+ * Turns on Show on field's Figures (fork #1319), with dots when `withDots`, and waits for the
+ * editor to bake the show's figures; the panel stays open.
+ */
+async function showFigures(page, wait, withDots = false) {
+    const logs = [];
+    page.on("console", (m) => logs.push(m.text()));
+    await page.getByTestId("field-display-overlays").click();
+    await page.getByTestId("field-display-figures-on").click();
+    if (withDots)
+        await page.getByTestId("field-display-figures-withDots").click();
+    for (let i = 0; i < 120 && !logs.some((l) => l.includes("Performer figures: baked")); i++)
+        await wait(250);
+    if (!logs.some((l) => l.includes("Performer figures: baked")))
+        throw new Error("the show's figures weren't baked");
+    await wait(800);
+}
+
+/** Zooms the field by `factor` about the middle of the marchers `ids` (Ctrl + wheel), off camera. */
+async function zoomOnMarchers(page, ids, factor) {
+    const at = await page.evaluate((ids) => {
+        const ms = window.fieldTest.marchers().filter((m) => ids.includes(m.id));
+        const sum = ms.reduce((a, m) => ({ x: a.x + m.screen.x, y: a.y + m.screen.y }), { x: 0, y: 0 });
+        return { x: sum.x / ms.length, y: sum.y / ms.length };
+    }, ids);
+    await page.mouse.move(at.x, at.y);
+    await page.keyboard.down("Control");
+    const total = (2 * Math.log(factor)) / Math.log(0.99);
+    for (let i = 0; i < 10; i++) {
+        await page.mouse.wheel(0, total / 10);
+        await page.waitForTimeout(30);
+    }
+    await page.keyboard.up("Control");
+    await page.waitForTimeout(600);
+}
+
+/** The screen box around the marchers `ids`, `pad` px out, inside the window */
+async function boxAroundMarchers(page, ids, pad) {
+    const pts = await page.evaluate(
+        (ids) => window.fieldTest.marchers().filter((m) => ids.includes(m.id)).map((m) => m.screen),
+        ids,
+    );
+    const x = Math.max(0, Math.floor(Math.min(...pts.map((p) => p.x)) - pad));
+    const y = Math.max(0, Math.floor(Math.min(...pts.map((p) => p.y)) - pad));
+    return {
+        x,
+        y,
+        width: Math.min(1600, Math.ceil(Math.max(...pts.map((p) => p.x)) + pad)) - x,
+        height: Math.min(1000, Math.ceil(Math.max(...pts.map((p) => p.y)) + pad)) - y,
+    };
+}
+
 const shots = [
     {
         id: "3d-window",
@@ -1571,6 +1638,29 @@ const shots = [
             await page.mouse.move(4, ctx.window.height / 2);
             await ctx.wait(1500);
             return { box: await ctx.around(canvas, 0) };
+        },
+    },
+    {
+        id: "figures-on-field",
+        kind: "still",
+        // Show on field's Figures (fork #1319): at the show's start, tubas, baritones and trumpets
+        // in rows, as their instruments seen from above, to scale
+        covers: [
+            "apps/desktop/src/components/canvas/display/OverlaysButton.tsx",
+            "apps/desktop/src/field/three/figures",
+            "apps/desktop/src/field/three/layers/FiguresLayer.tsx",
+        ],
+        async setup(ctx) {
+            return figuresShot(ctx, false);
+        },
+    },
+    {
+        id: "figures-with-dots",
+        kind: "still",
+        // The same, With dots: each performer's dot on their figure (fork #1319)
+        covers: ["apps/desktop/src/field/three/layers/FiguresLayer.tsx"],
+        async setup(ctx) {
+            return figuresShot(ctx, true);
         },
     },
 ];

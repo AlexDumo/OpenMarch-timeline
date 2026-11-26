@@ -157,6 +157,9 @@
                     "label": "Facing"
                 },
                 {
+                    "label": "Figures"
+                },
+                {
                     "label": "Shape outlines"
                 },
                 {
@@ -429,6 +432,9 @@
                 },
                 {
                     "label": "Facing"
+                },
+                {
+                    "label": "Figures"
                 },
                 {
                     "label": "Shape outlines"
