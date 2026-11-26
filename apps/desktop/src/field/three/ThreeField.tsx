@@ -158,7 +158,10 @@ import { shownKit } from "@/view3d/core/venueSettings";
 import MarchersLayer from "./layers/MarchersLayer";
 import ItemsLayer from "./layers/ItemsLayer";
 import LabelsLayer, { type LabelStyle } from "./layers/LabelsLayer";
+import FacingCaretsLayer from "./layers/FacingCaretsLayer";
 import { useEquipmentIcons } from "@/cues/useEquipmentIcons";
+import { useFieldFacing } from "@/cues/useFieldFacing";
+import { useShowCues } from "@/cues/useShowCues";
 import { useFlagPictures } from "./useFlagPictures";
 import OverlayLayer from "./layers/OverlayLayer";
 import StartFlagLayers from "./StartFlagLayers";
@@ -362,9 +365,15 @@ function ThreeFieldView() {
         })),
     );
     const numbersOnly = labelForm === "numbers";
+    // The show's cues, compiled once for the equipment icons and the facing carets
+    const showCues = useShowCues();
     // What a performer holds, by their drill number, when it isn't their section's usual (#992)
-    const equipmentIcons = useEquipmentIcons();
+    const equipmentIcons = useEquipmentIcons(showCues);
     const flagPictures = useFlagPictures(equipmentIcons !== null);
+    // Which way each performer faces at the playhead, as a caret in front of their dot (#1316)
+    const facing = useFieldFacing(showCues);
+    // Where the labels layer anchors each label as drawn, for the field test API
+    const labelAnchors = useRef<Float64Array | null>(null);
     const equipmentIconPlace = useUiSettingsStore(
         (s) => s.uiSettings.equipmentIconPlace ?? "beside",
     );
@@ -502,6 +511,7 @@ function ThreeFieldView() {
         theme: fieldProperties?.theme,
         fieldProperties,
         equipmentIcons,
+        facing,
     });
     latest.current = {
         saveItem,
@@ -515,6 +525,7 @@ function ThreeFieldView() {
         moveMarchers,
         fieldProperties,
         equipmentIcons,
+        facing,
     };
     // #315: where a right-click opens the field's menu (`useFieldMenu`, below
     // the editor), and the press that closes it, which does nothing more
@@ -698,6 +709,16 @@ function ThreeFieldView() {
                 equipmentIcons: () =>
                     latest.current.equipmentIcons?.at(marchers.drawnBeat)
                         .icons ?? new Map(),
+                facing: (id) => {
+                    const beat = marchers.drawnBeat;
+                    const source = latest.current.facing;
+                    // A hidden performer's caret isn't drawn
+                    const i = marchers.ids.indexOf(id);
+                    return beat === null || !source || marchers.hidden[i]
+                        ? null
+                        : source.degreesAt(id, beat);
+                },
+                labelAnchors: () => labelAnchors.current,
                 view: () => useFieldViewStore.getState(),
                 element: () => element.current,
                 pageId: () => latest.current.pageId,
@@ -915,6 +936,15 @@ function ThreeFieldView() {
                             icons={equipmentIcons}
                             iconPlace={equipmentIconPlace}
                         />
+                        {/* Which way each performer faces, as a caret in front of their dot (#1316) */}
+                        <FacingCaretsLayer
+                            marchers={marchers}
+                            dimming={dimming}
+                            theme={fieldProperties.theme}
+                            facing={facing}
+                            icons={equipmentIcons}
+                            iconPlace={equipmentIconPlace}
+                        />
                         <LabelsLayer
                             marchers={marchers}
                             dimming={dimming}
@@ -928,6 +958,8 @@ function ThreeFieldView() {
                             pictures={flagPictures}
                             iconPlace={equipmentIconPlace}
                             hovered={hoveredMarcher}
+                            facing={facing}
+                            placed={labelAnchors}
                         />
                         <OverlayLayer
                             plan={timeline.collisions}

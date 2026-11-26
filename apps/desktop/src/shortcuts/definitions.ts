@@ -967,6 +967,16 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["M"],
     },
+    // Facing carets on the field (fork #1316): the display bar's Show facing. Unbound
+    toggleFacingArrows: {
+        labelKey: "actions.ui.toggleFacingArrows",
+        keywordsKey: "actions.ui.toggleFacingArrowsKeywords",
+        toggleOnKey: "actions.ui.showFacingArrows",
+        toggleOffKey: "actions.ui.hideFacingArrows",
+        category: "ui",
+        scope: "canvas",
+        defaultBindings: [],
+    },
     // The show's 3D venue under the 2D grid (#1207), back in the look last picked. Unbound: a
     // view picked now and then, from the display bar's Venue button or the palette
     toggleFieldVenue: {

@@ -58,6 +58,7 @@ beforeEach(() => {
         nextPaths: false,
         equipmentIcons: "changed",
         equipmentIconPlace: "beside",
+        facingArrows: false,
     });
 });
 afterEach(() => {
@@ -206,6 +207,18 @@ describe("FieldDisplayBar", () => {
                 .getByTestId("field-display-equipment-place-dot")
                 .getAttribute("aria-checked"),
         ).toBe("true");
+    });
+
+    it("Show facing: off by default, a press turns the carets on and another off (#1316)", () => {
+        open();
+        const button = screen.getByTestId("field-display-facing");
+        expect(button.getAttribute("aria-label")).toBe("Show facing");
+        expect(button.getAttribute("aria-pressed")).toBe("false");
+        fireEvent.click(button);
+        expect(settings().facingArrows).toBe(true);
+        expect(button.getAttribute("aria-pressed")).toBe("true");
+        fireEvent.click(button);
+        expect(settings().facingArrows).toBe(false);
     });
 
     it("greys Where out while the icons are off, with its reason, and a press changes nothing (#992)", () => {

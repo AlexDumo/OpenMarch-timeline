@@ -1132,6 +1132,11 @@
             }
         ]
     },
+    "toggleFacingArrows": {
+        "label": "Show or hide which way performers face",
+        "category": "ui",
+        "bindings": []
+    },
     "toggleFieldVenue": {
         "label": "Show or hide venue on field",
         "category": "ui",

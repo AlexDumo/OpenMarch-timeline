@@ -383,6 +383,12 @@
         "width": 1472,
         "height": 592
     },
+    "marchers-facing-field": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 1472,
+        "height": 592
+    },
     "marchers-facing-lane": {
         "chapter": "marchers",
         "kind": "still",
@@ -400,6 +406,12 @@
         "kind": "still",
         "width": 1600,
         "height": 396
+    },
+    "marchers-facing-setting": {
+        "chapter": "marchers",
+        "kind": "still",
+        "width": 324,
+        "height": 400
     },
     "marchers-facing-stretch": {
         "chapter": "marchers",

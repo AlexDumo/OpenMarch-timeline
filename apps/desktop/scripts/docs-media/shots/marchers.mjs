@@ -1212,6 +1212,55 @@ const shots = [
             };
         },
     },
+    {
+        id: "marchers-facing-field",
+        kind: "still",
+        // On the field at the end of Page 1 with Show facing on (fork #1316): G6–G10's carets
+        // point to side 2 and G14, G19 and G22's to the back; everyone else's to the front
+        async setup({ page, wait }) {
+            await toPage1(page, wait);
+            await setFacing(page, SABRES, "facingSide2", wait);
+            await setFacing(page, TUBAS, "facingBack", wait);
+            await page.keyboard.press("Escape");
+            await page.getByTestId("field-display-facing").click();
+            await page.mouse.move(800, 990);
+            await wait(1000);
+            await hideToasts(page);
+            const b = bounds(
+                named(await marchers(page), [...SABRES, ...TUBAS]),
+            );
+            return {
+                box: {
+                    x: b.left - 70,
+                    y: b.top - 50,
+                    width: b.right - b.left + 160,
+                    height: b.bottom - b.top + 90,
+                },
+            };
+        },
+    },
+    {
+        id: "marchers-facing-setting",
+        kind: "still",
+        // The field display bar's Show facing button, pressed, with its tooltip (fork #1316)
+        async setup({ page, wait, union, around }) {
+            await toPage1(page, wait);
+            const button = page.getByTestId("field-display-facing");
+            await button.click();
+            // The pointer off the button and back on, so the tooltip opens from a hover rather than
+            // the click
+            await button.blur();
+            await page.mouse.move(800, 500);
+            await wait(300);
+            await button.hover();
+            await wait(1500);
+            const tip = page
+                .locator("[data-radix-popper-content-wrapper]")
+                .first();
+            const bar = page.getByTestId("field-display-bar");
+            return { box: union(await around(bar, 12), await around(tip, 12)) };
+        },
+    },
 ];
 
 export default shots;

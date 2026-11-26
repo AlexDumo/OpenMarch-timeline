@@ -4,6 +4,7 @@ import { useShortcutsDialogStore } from "@/stores/ShortcutsDialogStore";
 import { isBasicMode, useEditorModeStore } from "@/stores/EditorModeStore";
 import tolgee from "@/global/singletons/Tolgee";
 import { useActionHandler } from "../useActionHandler";
+import { toggleFacingArrows } from "@/cues/useFieldFacing";
 import { useTempoModeStore } from "@/tempo/tempoModeStore";
 import {
     openFrontEnsemble,
@@ -19,6 +20,16 @@ export function useUiActionHandlers() {
     useActionHandler("toggleNextPagePaths", () =>
         setUiSettings({ ...settings(), nextPaths: !settings().nextPaths }),
     );
+    // Facing carets on the field (fork #1316); the palette names what it will do
+    const facingOn = () => settings().facingArrows === true;
+    useActionHandler("toggleFacingArrows", toggleFacingArrows, {
+        label: () =>
+            tolgee.t(
+                facingOn()
+                    ? "actions.ui.hideFacingArrows"
+                    : "actions.ui.showFacingArrows",
+            ),
+    });
     // Show or hide venue on field is the field's (useFieldVenueAction), which knows the venue
     const cameraOn = () => settings().view3dCameraOnField === true;
     useActionHandler(

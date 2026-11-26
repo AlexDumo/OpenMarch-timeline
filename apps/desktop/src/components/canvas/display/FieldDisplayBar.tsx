@@ -4,6 +4,7 @@ import { TooltipClassName } from "@openmarch/ui";
 import { useFieldLayerRef } from "@/components/canvas/fieldLayers";
 import {
     BoundingBoxIcon,
+    CompassIcon,
     HandGrabbingIcon,
     ListNumbersIcon,
     QuestionIcon,
@@ -30,6 +31,7 @@ import { DISPLAY_BUTTON_CLASS } from "./displayButton";
 import { StartFlagPositionsButton } from "./StartFlagPositionsButton";
 import SelectToolBar from "./SelectToolBar";
 import VenueButton from "./VenueButton";
+import { toggleFacingArrows } from "@/cues/useFieldFacing";
 import { MENU_BUTTON_CLASS } from "@/components/ui/popupClasses";
 import { useShowsSelectTool } from "@/field/fieldSelectTool";
 import { useFollowTheLeader } from "@/pathways/followTheLeader";
@@ -75,8 +77,8 @@ const ORDER_CHOICES: readonly Choice<ShapeOutlines>[] = [
 /**
  * How the field is displayed, apart from the timeline: a small bar at the field's top right (the
  * zoom controls hold the bottom right). It replaced the toolbar's View tab. Path overlays, marcher
- * labels, equipment icons (fork #992), placed shapes' outlines, the venue under the field (#1207)
- * and a line's order (pathways step 4g). The Select tool's Box
+ * labels, equipment icons (fork #992), facing carets (fork #1316), placed shapes' outlines, the
+ * venue under the field (#1207) and a line's order (pathways step 4g). The Select tool's Box
  * and Lasso sit above it in a bar of their own, outside the touch layout (whose pill has its own
  * drag modes).
  */
@@ -122,6 +124,8 @@ export default function FieldDisplayBar() {
                         keepOpen
                         more={<EquipmentPlaceChoices />}
                     />
+                    {/* Which way performers face, as a caret in front of each dot (fork #1316) */}
+                    <FacingButton />
                     {/* Placed boxes' outlines (docs/timeline/research/shapes/07-placed-boxes.md) */}
                     <ChoiceButton
                         setting="shapes"
@@ -149,6 +153,38 @@ export default function FieldDisplayBar() {
                 </div>
             </div>
         </TransportTooltipProvider>
+    );
+}
+
+/**
+ * Show facing (fork #1316): a caret in front of every performer's dot the way they face, on or
+ * off. Pressed while the carets show; off by default.
+ */
+function FacingButton() {
+    const { t } = useTranslate();
+    const on = useUiSettingsStore((s) => s.uiSettings.facingArrows === true);
+    const label = t("toolbar.view.facing");
+    return (
+        <ShortcutTooltip
+            label={label}
+            hint={t(on ? "toolbar.view.facingOn" : "toolbar.view.facingOff")}
+            side="left"
+            action="toggleFacingArrows"
+        >
+            <button
+                type="button"
+                aria-label={label}
+                aria-pressed={on}
+                data-testid="field-display-facing"
+                onClick={toggleFacingArrows}
+                className={clsx(
+                    DISPLAY_BUTTON_CLASS,
+                    on ? "text-text" : "text-text-disabled",
+                )}
+            >
+                <CompassIcon size={16} />
+            </button>
+        </ShortcutTooltip>
     );
 }
 
