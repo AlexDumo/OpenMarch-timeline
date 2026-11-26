@@ -205,9 +205,16 @@ jobs:
     needs: check-changes
     if: needs.check-changes.outputs.desktop == 'true'
     runs-on: ubuntu-latest
-    # The scenarios take about 13 minutes, and installing system packages from apt (FFmpeg,
-    # Chromium's libraries) anywhere from under a minute to 15 on a slow mirror (#1115); 20
-    # cancelled them
+    # Two shards of the scenarios (#316): the 345 tests that ran here before took about 16
+    # minutes, and all of them would take about 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    name: desktop-browser-e2e (${{ matrix.shard }}/2)
+    # Each shard's scenarios take about 13 minutes, and installing system packages from apt
+    # (FFmpeg, Chromium's libraries) anywhere from under a minute to 15 on a slow mirror (#1115);
+    # 20 cancelled them
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -257,6 +264,7 @@ jobs:
       # desktop-test shards have no browser, so these run here; REQUIRED makes a missing
       # Chromium fail instead of skip
       - name: Uniform pack builder smoke tests
+        if: matrix.shard == 1
         working-directory: apps/desktop
         env:
           UNIFORM_SMOKE_REQUIRED: "1"
@@ -266,21 +274,26 @@ jobs:
         working-directory: apps/desktop
         run: pnpm run build:browser
 
-      # The shape scenarios and the field and timeline ones the shape work rewrote, plus the
-      # field look's (Not defined, Held, keyframe labels, #478) and the video export's; the
-      # whole suite takes about 16 minutes, over this job's budget. The touch and navigation
-      # scenarios, and the mouse cases ported with them (mouse-canvas), cover the tablet work (#594)
+      # Every scenario but the three path tool ones, which check what the pen saved before
+      # exact paths and lanes (#1164) and fail against the app on main (#316). render-compare.spec only runs
+      # with RENDER_COMPARE set; the render project (e2e/browser/render) writes images for a
+      # person to compare and doesn't run here.
       - name: Run browser scenarios
         working-directory: apps/desktop
         run: |
-          specs=$(ls e2e/browser/tests/box-tool.spec.mts e2e/browser/tests/line-tool.spec.mts e2e/browser/tests/hide-marchers.spec.mts e2e/browser/tests/*circle*.spec.mts e2e/browser/tests/*shape*.spec.mts e2e/browser/tests/timeline-interactions.spec.mts e2e/browser/tests/field-actions.spec.mts e2e/browser/tests/field-look.spec.mts e2e/browser/tests/unset-here*.spec.mts e2e/browser/tests/keyframes.spec.mts e2e/browser/tests/video-export.spec.mts e2e/browser/tests/*touch*.spec.mts e2e/browser/tests/mouse-canvas.spec.mts e2e/browser/tests/navigation.spec.mts 2>/dev/null | sort -u)
+          specs=$(ls e2e/browser/tests/*.spec.mts | grep -v -E '/(path-curves|path-group|path-pen)\.spec\.mts$')
           echo "Specs: $specs"
-          pnpm run e2e:browser $specs
+          start=$(date +%s)
+          status=0
+          pnpm run e2e:browser --shard=${{ matrix.shard }}/2 $specs || status=$?
+          elapsed=$(( $(date +%s) - start ))
+          echo "Browser scenarios (shard ${{ matrix.shard }}/2) took $(( elapsed / 60 ))m $(( elapsed % 60 ))s"
+          exit $status
 
       - uses: actions/upload-artifact@v4
         if: ${{ failure() }}
         with:
-          name: desktop-browser-playwright-report-${{ github.run_number }}
+          name: desktop-browser-playwright-report-${{ github.run_number }}-${{ matrix.shard }}
           path: apps/desktop/playwright-report/
           retention-days: 14
 
