@@ -274,14 +274,13 @@ jobs:
         working-directory: apps/desktop
         run: pnpm run build:browser
 
-      # Every scenario but the three path tool ones, which check what the pen saved before
-      # exact paths and lanes (#1164) and fail against the app on main (#316). render-compare.spec only runs
-      # with RENDER_COMPARE set; the render project (e2e/browser/render) writes images for a
-      # person to compare, so only its pixel checks run here (below).
+      # Every scenario, split across the two shards. render-compare.spec only runs with
+      # RENDER_COMPARE set; the render project (e2e/browser/render) writes images for a person to
+      # compare, so only its pixel checks run here (below).
       - name: Run browser scenarios
         working-directory: apps/desktop
         run: |
-          specs=$(ls e2e/browser/tests/*.spec.mts | grep -v -E '/(path-curves|path-group|path-pen)\.spec\.mts$')
+          specs=$(ls e2e/browser/tests/*.spec.mts)
           echo "Specs: $specs"
           start=$(date +%s)
           status=0
