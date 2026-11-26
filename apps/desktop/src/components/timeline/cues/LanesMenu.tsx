@@ -207,9 +207,12 @@ export function LanesButton() {
                         // here, as a menu button should
                         onMouseDown={(e) => e.preventDefault()}
                         // A solid tile with a hairline edge: it stays readable over the lane bars
-                        // that scroll under it. With lanes hidden, it widens for their count
+                        // that scroll under it. With lanes hidden, it widens for their count. On
+                        // touch it is drawn at 28 px, as a checkbox is, and an invisible 8 px
+                        // margin makes the finger's target 44 px: a 44 px tile would loom over
+                        // two lane rows
                         className={clsx(
-                            "focus-visible:ring-accent rounded-4 bg-bg-1 border-stroke enabled:hover:text-accent enabled:hover:bg-fg-2 touch:h-44 touch:min-w-44 flex h-24 min-w-24 items-center justify-center gap-2 border outline-hidden transition-[color,background-color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent enabled:active:translate-y-px",
+                            "focus-visible:ring-accent rounded-4 bg-bg-1 border-stroke enabled:hover:text-accent enabled:hover:bg-fg-2 touch:h-28 touch:min-w-28 touch:before:absolute touch:before:-inset-8 touch:before:content-[''] relative flex h-24 min-w-24 items-center justify-center gap-2 border outline-hidden transition-[color,background-color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent enabled:active:translate-y-px",
                             hidden > 0 && "px-4",
                             open ? "text-accent" : "text-text",
                         )}

@@ -60,10 +60,9 @@ export interface TimelineBand {
  * the timeline scrolls, so the corner control (`TimelineBand.corner`) doesn't cover it. The shell
  * sets it as `--lane-label-inset`, beside the corner: 40 px, the home page's column
  * (`TIMELINE_INITIAL_PAGE_WIDTH`), where labels sit before any scroll, so they never move
- * sideways as the timeline scrolls.
- * - It clears the 24 px control, and the control widened by a one-digit hidden-lane count.
- * - On touch the control is 44 px, so it overlaps the label's 4–6 px padding, never its text.
- *   Clearing it fully would move every label, and its 44 px touch buttons, before a scroll.
+ * sideways as the timeline scrolls. It clears the control as drawn (24 px, 28 px on touch), and
+ * the control widened by a one-digit hidden-lane count. On touch its invisible 44 px target
+ * reaches 8 px further, at most into a label's padding.
  *
  * For inline styles (a bar's name pinned past its row's name); 0 outside a timeline shell.
  */

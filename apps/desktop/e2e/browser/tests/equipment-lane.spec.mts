@@ -199,8 +199,8 @@ test("the Lanes button sits in the bottom-left corner, counts hidden lanes, stay
             );
         })
         .toBeLessThanOrEqual(1);
-    // Scrolled, the lane's labels stick clear of the button rather than under it. Measured from
-    // where a label's content starts: on touch the 44 px button may overlap its padding, by design
+    // Scrolled, the lane's labels stick clear of the button rather than under it, measured from
+    // where a label's content starts (past its padding)
     // By test id: its name changes once a lane is hidden
     const buttonRight = async () => {
         const box = (await page
@@ -235,8 +235,7 @@ test("the Lanes button sits in the bottom-left corner, counts hidden lanes, stay
     await expect(page.getByTestId("timeline-lanes-hidden-count")).toHaveText(
         "1",
     );
-    // The count widens the button, but no further right than where lane labels stick (or, on
-    // touch, where the 44 px button already reached)
+    // The count widens the button, but no further right than where lane labels stick
     const edge = await viewport.evaluate(
         (v) =>
             v.getBoundingClientRect().left +
@@ -247,4 +246,25 @@ test("the Lanes button sits in the bottom-left corner, counts hidden lanes, stay
     expect(await buttonRight()).toBeLessThanOrEqual(
         Math.max(edge, rightWithoutCount) + 0.5,
     );
+});
+
+// On a tablet the Lanes button is drawn small, and a finger's press just off its tile still opens
+// the list
+test("a finger's tap just off the Lanes button's tile opens the lanes list", async ({
+    show,
+}) => {
+    const { page } = show;
+    await waitForField(page);
+    await waitForIdle(page);
+    const stop = await emulateTouchScreen(page);
+    try {
+        const button = page.getByTestId("timeline-lanes-button");
+        await expect(button).toBeVisible();
+        const box = (await button.boundingBox())!;
+        expect(box.height).toBeLessThan(44);
+        await tap(page, { x: box.x + box.width / 2, y: box.y - 5 });
+        await expect(page.getByTestId("timeline-lanes-menu")).toBeVisible();
+    } finally {
+        await stop();
+    }
 });
