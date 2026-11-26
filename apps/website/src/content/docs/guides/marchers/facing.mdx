@@ -25,7 +25,7 @@ covers:
   - i18n:cues.facing
   - i18n:cues.turn
   - i18n:field.menu.facing
-  - i18n:toolbar.view.facing
+  - i18n:fieldDisplay.facing
 sidebar:
   order: 7
 ---
@@ -132,19 +132,19 @@ Double-click a turn's bar in the <Ui k="cues.lane.facing" plain /> lane, or righ
 
 ## See facing on the field
 
-To see which way everyone faces, select <Ui k="toolbar.view.facing" /> (the compass) in the bar at the field's top right. It's off when you start; select it again to hide the carets. The command palette has <Ui k="actions.ui.showFacingArrows" /> and <Ui k="actions.ui.hideFacingArrows" /> too.
+To see which way everyone faces, select <Ui k="fieldDisplay.overlays" /> (the eye) in the bar at the field's top right and turn on <Ui k="fieldDisplay.facing" />. It's off when you start; turn it off again to hide the carets. The View menu has it too, and the command palette has <Ui k="actions.ui.showFacingArrows" /> and <Ui k="actions.ui.hideFacingArrows" />.
 
 <Media
   id="marchers-facing-setting"
-  alt="The bar at the top right of the field, its compass button pressed and its tooltip open beside it: Show facing, On."
-  maxWidth={240}
+  alt="The Show on field panel open beside the bar at the top right of the field, with Facing turned on."
+  maxWidth={480}
 />
 
 While it's on, every marcher has a small caret (^) in front of their dot, its point aimed the way they face: down the field toward the audience for the front, up for the back, and toward side 1 or side 2 for the sides. Marchers without a facing change face the front, so their carets point down; bass drums and flub drums start on side 2, so theirs point toward side 2.
 
 <Media
   id="marchers-facing-field"
-  alt="The field at the end of Page 1 with Show facing on. G6 to G10, along the front of the field, have carets on their right, pointing toward side 2. G14, G19 and G22 have carets above their dots, pointing up the field to the back, with their drill numbers moved below their dots. Every other marcher's caret is below their dot, pointing down to the front."
+  alt="The field at the end of Page 1 with Facing on in Show on field. G6 to G10, along the front of the field, have carets on their right, pointing toward side 2. G14, G19 and G22 have carets above their dots, pointing up the field to the back, with their drill numbers moved below their dots. Every other marcher's caret is below their dot, pointing down to the front."
   maxWidth={720}
 />
 
@@ -154,7 +154,7 @@ The carets follow the playhead: as you scrub or play through a turn, they rotate
 - A drill number moves to the other side of its dot when the caret points through it: below the dot for a marcher facing the back.
 - Props and equipment don't get a caret.
 
-With <Ui k="toolbar.view.equipmentOnDot" plain /> chosen under <Ui k="toolbar.view.equipment" plain />, the caret sits outside the equipment icon instead of the dot ([Change what performers hold](/guides/marchers/equipment/)).
+With <Ui k="settings.field.iconPlace.dot" plain /> chosen for <Ui k="settings.field.iconPlace" plain /> in <Ui k="settings.title" plain /> › <Ui k="settings.field" plain />, the caret sits outside the equipment icon instead of the dot ([Change what performers hold](/guides/marchers/equipment/)).
 
 ## In the 3D View
 

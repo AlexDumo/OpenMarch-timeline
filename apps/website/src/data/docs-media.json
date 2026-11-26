@@ -362,8 +362,8 @@
     "marchers-equipment-icons-setting": {
         "chapter": "marchers",
         "kind": "still",
-        "width": 480,
-        "height": 712
+        "width": 920,
+        "height": 1424
     },
     "marchers-equipment-lane": {
         "chapter": "marchers",
@@ -410,8 +410,8 @@
     "marchers-facing-setting": {
         "chapter": "marchers",
         "kind": "still",
-        "width": 324,
-        "height": 400
+        "width": 920,
+        "height": 652
     },
     "marchers-facing-stretch": {
         "chapter": "marchers",
@@ -756,6 +756,13 @@
         "width": 1280,
         "height": 800,
         "seconds": 5.8
+    },
+    "shapes-split-line": {
+        "chapter": "shapes",
+        "kind": "clip",
+        "width": 1280,
+        "height": 800,
+        "seconds": 8.3
     },
     "shapes-tab": {
         "chapter": "shapes",

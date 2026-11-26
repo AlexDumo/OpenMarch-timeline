@@ -2454,8 +2454,16 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
         latestFollow.current = follow;
     });
     const wasDragging = useRef(fieldDrag);
+    // The shape as the drag found it: a press that changed nothing (a tap on the line, which shows
+    // the scissors there, #1336) is no edit, and leaves the view where it is
+    const atDragStart = useRef<string | null>(null);
     useLayoutEffect(() => {
-        const dragEnded = wasDragging.current && !fieldDrag;
+        if (fieldDrag && !wasDragging.current)
+            atDragStart.current = JSON.stringify(params);
+        const dragEnded =
+            wasDragging.current &&
+            !fieldDrag &&
+            atDragStart.current !== JSON.stringify(params);
         wasDragging.current = fieldDrag;
         if (fieldDrag || room.width === 0) return;
         const edit = performance.now() - edited.current < EDIT_WINDOW_MS;

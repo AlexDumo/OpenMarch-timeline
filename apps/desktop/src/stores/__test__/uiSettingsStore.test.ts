@@ -296,10 +296,10 @@ describe("Show facing setting (fork #1316)", () => {
         expect(parseSettings("{}").facingArrows).toBe(false);
     });
 
-    it("carries the first builds' Facing choice over: Not front or Everyone on, Off off", () => {
+    it("carries the first builds' Facing choice over: Everyone on; Not front (that build's default) and Off off", () => {
         const from = (facingMarks: string) =>
             parseSettings(JSON.stringify({ facingMarks }));
-        expect(from("turned").facingArrows).toBe(true);
+        expect(from("turned").facingArrows).toBe(false);
         expect(from("everyone").facingArrows).toBe(true);
         expect(from("off").facingArrows).toBe(false);
         expect("facingMarks" in from("turned")).toBe(false);
@@ -310,5 +310,62 @@ describe("Show facing setting (fork #1316)", () => {
             JSON.stringify({ facingMarks: "everyone", facingArrows: false }),
         );
         expect(parsed.facingArrows).toBe(false);
+    });
+});
+
+describe("Show on field's drill numbers (fork #1332)", () => {
+    const from = (stored: object) => parseSettings(JSON.stringify(stored));
+
+    it("start as full drill numbers at the Auto size", () => {
+        expect(parseSettings("{}")).toMatchObject({
+            marcherLabels: "names",
+            marcherLabelSize: "auto",
+        });
+    });
+
+    it("carry Auto over as full drill numbers with the Auto size", () => {
+        expect(from({ marcherLabels: "auto" })).toMatchObject({
+            marcherLabels: "names",
+            marcherLabelSize: "auto",
+        });
+        expect(
+            from({ marcherLabels: "auto", marcherLabelSize: "normal" }),
+        ).toMatchObject({ marcherLabels: "names", marcherLabelSize: "auto" });
+    });
+
+    it("keep a Small or Large size picked with Auto, not shrinking the labels", () => {
+        expect(
+            from({ marcherLabels: "auto", marcherLabelSize: "large" }),
+        ).toMatchObject({ marcherLabels: "names", marcherLabelSize: "large" });
+        expect(
+            from({ marcherLabels: "auto", marcherLabelSize: "small" }),
+        ).toMatchObject({ marcherLabels: "names", marcherLabelSize: "small" });
+    });
+
+    it("keep a form picked by hand at the size it had, normal when none was set", () => {
+        expect(from({ marcherLabels: "numbers" })).toMatchObject({
+            marcherLabels: "numbers",
+            marcherLabelSize: "normal",
+        });
+        expect(
+            from({ marcherLabels: "off", marcherLabelSize: "small" }),
+        ).toMatchObject({ marcherLabels: "off", marcherLabelSize: "small" });
+    });
+
+    it("keep only valid remembered choices and section names", () => {
+        expect(
+            from({
+                fieldShowLast: {
+                    marcherLabels: "numbers",
+                    shapes: "off",
+                    lineOrder: "always",
+                    equipmentIcons: 3,
+                },
+                equipmentIconSections: ["Color Guard", 4],
+            }),
+        ).toMatchObject({
+            fieldShowLast: { marcherLabels: "numbers", lineOrder: "always" },
+            equipmentIconSections: ["Color Guard"],
+        });
     });
 });

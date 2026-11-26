@@ -50,6 +50,11 @@ export interface ShapePlacement {
      * of marchers does, and any shape they stood in loses them
      */
     readonly plain?: boolean;
+    /**
+     * More shapes written in the same edit, beside this one and in the same move: a split's other
+     * pieces (#1336). Their members are written as this one's are.
+     */
+    readonly alongside?: readonly Pick<ShapePlacement, "recipe" | "members">[];
 }
 
 /** What placing the open shape would write; null while there is nothing to place */
@@ -142,9 +147,23 @@ export async function writePlacement(
     /** Inside isolation, leave the playhead where it is; always with a `plan`, unless told */
     keepPlayhead: boolean = plan !== null,
 ): Promise<boolean> {
-    const { members, replaces } = placement;
-    const to = new Map(members.map((m) => [m.marcherId, m]));
-    const marcherIds = members.map((m) => m.marcherId);
+    const { members, replaces, alongside = [] } = placement;
+    const everyone = [...members, ...alongside.flatMap((a) => a.members)];
+    const to = new Map(everyone.map((m) => [m.marcherId, m]));
+    const marcherIds = everyone.map((m) => m.marcherId);
+    /** The pieces beside the shape, saved after it in the same edit */
+    const saveAlongside = async (
+        tx: Parameters<typeof saveShapeRecipeInTransaction>[0]["tx"],
+        timelineId: number | null,
+    ) => {
+        for (const piece of alongside)
+            await saveShapeRecipeInTransaction({
+                tx,
+                timelineId,
+                recipe: piece.recipe,
+                members: piece.members,
+            });
+    };
     let saved = false;
     const spotsOf = (current: readonly { readonly marcher_id: number }[]) =>
         current.flatMap((c) => {
@@ -206,6 +225,7 @@ export async function writePlacement(
                             ? replaces.id
                             : undefined,
                 });
+                await saveAlongside(tx, timelineId);
                 if (basic && timelineId !== null)
                     leftOut = await leftOutByOtherCounts(
                         tx,
@@ -218,15 +238,16 @@ export async function writePlacement(
         // Nobody moved and no move here holds the shape's members (a change without `setAll`):
         // the change goes to the recipe shown, in its own move
         if (!saved && replaces) {
-            await transactionWithHistory(db, "editShapeRecipe", (tx) =>
-                saveShapeRecipeInTransaction({
+            await transactionWithHistory(db, "editShapeRecipe", async (tx) => {
+                await saveShapeRecipeInTransaction({
                     tx,
                     timelineId: replaces.timelineId,
                     recipe: placement.recipe,
                     members,
                     replaces: replaces.id,
-                }),
-            );
+                });
+                await saveAlongside(tx, replaces.timelineId);
+            });
             invalidatePlacedBoxes();
         }
     } catch (e) {

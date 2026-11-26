@@ -164,6 +164,18 @@
                 "label": "Label position"
             },
             {
+                "key": "settings.field.iconPlace",
+                "label": "Icon place"
+            },
+            {
+                "key": "fieldDisplay.venueLook",
+                "label": "Look"
+            },
+            {
+                "key": "toolbar.view.venueAround",
+                "label": "Around the field"
+            },
+            {
                 "key": "settings.field.stepSizeWarnings",
                 "label": "Step size warnings"
             },

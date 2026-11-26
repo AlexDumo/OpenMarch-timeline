@@ -9,6 +9,7 @@ import {
     type RefObject,
 } from "react";
 import clsx from "clsx";
+import type { PointerKind } from "@/field/editor/pointerThresholds";
 import { useFieldTopInset } from "@/components/canvas/fieldLayers";
 import { useShallow } from "zustand/react/shallow";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
@@ -356,11 +357,12 @@ function ThreeFieldView() {
     const startOver = useCallback(() => setCanvasKey((key) => key + 1), []);
 
     const marchers = useMemo(() => new FieldMarchers(), []);
-    // The View tab's label form: full drill numbers ("OT12"), or the number only ("12")
+    // Show on field's Drill numbers: full drill numbers ("OT12"), the number only ("12"), or off;
+    // Settings › Field's size (Auto shrinks them where crowded) and position
     const { labelForm, labelSize, labelPosition } = useUiSettingsStore(
         useShallow((s) => ({
-            labelForm: s.uiSettings.marcherLabels ?? "auto",
-            labelSize: s.uiSettings.marcherLabelSize ?? "normal",
+            labelForm: s.uiSettings.marcherLabels ?? "names",
+            labelSize: s.uiSettings.marcherLabelSize ?? "auto",
             labelPosition: s.uiSettings.marcherLabelPosition ?? "above",
         })),
     );
@@ -398,10 +400,10 @@ function ThreeFieldView() {
     const labelStyle = useMemo(
         (): LabelStyle => ({
             form:
-                labelForm === "auto"
-                    ? "auto"
-                    : labelForm === "off"
-                      ? "off"
+                labelForm === "off"
+                    ? "off"
+                    : labelSize === "auto"
+                      ? "auto"
                       : "fixed",
             scale: LABEL_SIZE_SCALE[labelSize],
             beside: labelPosition === "beside",
@@ -534,6 +536,7 @@ function ThreeFieldView() {
             _at: { x: number; y: number },
             _marcher: number | null,
             _actions?: readonly string[],
+            _kind?: PointerKind,
         ) => {},
     );
     const takeMenuPress = useRef((): boolean => false);
@@ -621,7 +624,7 @@ function ThreeFieldView() {
                     propDrawn: (outline) => latest.current.propDrawn(outline),
                     // #315: a right-click opens the field's menu there
                     openMenu: (at, hit, actions) =>
-                        openMenuAt.current(at.screen, hit, actions),
+                        openMenuAt.current(at.screen, hit, actions, at.kind),
                 },
                 {
                     isMac: isMacPlatform(),
