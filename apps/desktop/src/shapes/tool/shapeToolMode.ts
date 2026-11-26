@@ -510,7 +510,8 @@ export function removeLastShapePoint(): boolean {
 
 /**
  * The drawing with picking by hand's marks laid over it (09-who-goes-where.md), while a session is
- * on: no handles or knob then, since presses pick instead of editing the shape
+ * on: no handles or knob then, since presses pick instead of editing the shape, and, picking, no
+ * drill numbers on the spots
  */
 function withPick<D extends FieldModeDrawing | null>(drawing: D): D {
     const tool = useShapeToolStore.getState().tool;
@@ -534,6 +535,9 @@ function withPick<D extends FieldModeDrawing | null>(drawing: D): D {
               barHandles: [],
               knob: undefined,
               centerDot: undefined,
+              // Picking, the spots are bare: who the option put there doesn't matter yet. Swapping
+              // keeps the names, since a spot is clicked for the marcher on it
+              ...(session.kind === "pick" ? { labels: [] } : {}),
               pivotMark: undefined,
               pivotPreview: undefined,
           }

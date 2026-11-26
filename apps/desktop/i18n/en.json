@@ -216,7 +216,7 @@
             "discard": "Shape: Discard",
             "pickByHand": "Shape: Pick who goes where by hand",
             "swapTwo": "Shape: Swap two marchers' spots",
-            "pickSwitchSide": "Shape: Switch between marchers and spots while picking"
+            "pickSwitchSide": "Shape: Switch between source and destination while picking"
         },
         "swap": {
             "selectTwo": "Select 2 marchers to swap them",
@@ -2358,8 +2358,8 @@
                 "clear": "Clear hand picks",
                 "clearTip": "Everyone goes back to the spot Who goes where gives them.",
                 "from": "Pick from",
-                "marchers": "Marchers",
-                "spots": "Spots",
+                "source": "Source",
+                "destination": "Destination",
                 "waitingMarchers": "{count, plural, one {# marcher waits for a spot} other {# marchers wait for spots}}",
                 "waitingSpots": "{count, plural, one {# spot waits for a marcher} other {# spots wait for marchers}}",
                 "ready": "Pick a marcher or a spot",

@@ -104,9 +104,9 @@ Who goes where is worked out when you draw the shape, and again when its spots a
 
 When none of the options is what you want, pick by hand on any open shape:
 
-1. Select <Ui k="shapes.edit.pick.button" /> on the editor's second row (<Kbd action="shapePickByHand" />). The shape's handles go away while you pick.
+1. Select <Ui k="shapes.edit.pick.button" /> on the editor's second row (<Kbd action="shapePickByHand" />). The shape's handles, and the drill numbers on its spots, go away while you pick.
 2. Click or drag through the marchers, where they start, and the shape's spots, in any back-and-forth order. The first marcher you pick takes the first spot you pick, the second the second, and so on. A drag picks from whichever one it touches first, marchers or spots.
-3. The <Ui k="shapes.edit.pick.marchers" plain /> / <Ui k="shapes.edit.pick.spots" plain /> toggle under the editor says which you're picking from; the other fades. Press <Kbd action="shapePickSwitchSide" /> to switch. Where a marcher stands on a spot, a click picks the one you're picking from.
+3. The <Ui k="shapes.edit.pick.source" plain /> / <Ui k="shapes.edit.pick.destination" plain /> toggle under the editor says which you're picking from: the source is the marchers where they start, the destination the shape's spots. The other fades. Press <Kbd action="shapePickSwitchSide" /> to switch. Where a marcher stands on a spot, a click picks the one you're picking from.
 4. Press <Kbd action="shapeRemoveLastPoint" /> to take back a pick still waiting for a partner, or the last pair. Select <Ui k="shapes.edit.pick.done" plain /> or press <Kbd action="applyShape" /> when you're done.
 
 Everyone you don't pick keeps the spot the menu gave them. A marcher whose spot you gave someone else moves to the nearest free spot. Your picks stay when you choose another option; <Ui k="shapes.edit.pick.clear" plain /> drops them.

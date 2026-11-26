@@ -112,8 +112,9 @@ export function PickControls() {
 }
 
 /**
- * While picking or swapping, its own row under the floating editor: which shape is in front, what's
- * paired and waiting, and Done
+ * While picking or swapping, its own row under the floating editor: which shape is in front (the
+ * source, where the marchers start, or the destination, the new shape's spots), what's paired and
+ * waiting, and Done
  */
 export function PickBar() {
     const session = usePickStore((s) => s.session);
@@ -152,11 +153,14 @@ export function PickBar() {
                     >
                         {side(
                             "marchers",
-                            tolgee.t("shapes.edit.pick.marchers", "Marchers"),
+                            tolgee.t("shapes.edit.pick.source", "Source"),
                         )}
                         {side(
                             "spots",
-                            tolgee.t("shapes.edit.pick.spots", "Spots"),
+                            tolgee.t(
+                                "shapes.edit.pick.destination",
+                                "Destination",
+                            ),
                         )}
                     </span>
                     <Shortcut action="shapePickSwitchSide" />
