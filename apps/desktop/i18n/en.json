@@ -179,7 +179,10 @@
             "toggleLasso": "Switch between box and lasso select",
             "useLasso": "Use lasso select",
             "useBox": "Use box select",
-            "toggleLassoKeywords": "lasso box marquee freehand select tool"
+            "toggleLassoKeywords": "lasso box marquee freehand select tool",
+            "sameSection": "Select same section",
+            "sameSectionKeywords": "select section same instrument group players whole all trumpets",
+            "sameSectionNone": "Select a performer first"
         },
         "shape": {
             "noMarchersSelected": "No marchers selected",
@@ -781,7 +784,8 @@
         },
         "menu": {
             "equipment": "Equipment",
-            "selectByEquipment": "Select by equipment",
+            "select": "Select",
+            "holding": "Holding",
             "facing": "Facing"
         },
         "view3dCamera": {

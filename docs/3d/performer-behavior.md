@@ -373,8 +373,8 @@ only when nothing but those types' cues changed.
 These are commands (`shortcuts/definitions.ts`, `cues/useCueCommands.ts`),
 so the command bar finds them. The field's right-click menu has an
 **Equipment** submenu (their own instrument; the last four items picked; a
-submenu per family; Nothing) and a **Select by equipment** submenu grouped the
-same way. The Equipment lane's cue menu offers the cue edits:
+submenu per family; Nothing), and its **Select** submenu has a **Holding**
+submenu grouped the same way. The Equipment lane's cue menu offers the cue edits:
 
 - **Equipment: <item>**, one per catalog item, **their own instrument** and
   **Nothing:** what the selected performers hold from the paused playhead on,

@@ -63,6 +63,8 @@ import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { useIsTouchMode } from "@/stores/InputModeStore";
 import { useShowShortcutHints } from "@/stores/KeyboardSeenStore";
 import type { FieldMarchers } from "./fieldMarchers";
+import SelectByMenuItems, { addPickProps, pickAdds } from "./SelectByMenuItems";
+import { selectByLabelKey } from "@/selection/selectBy";
 import { fieldToElement, useFieldViewStore } from "./fieldView";
 import {
     MENU_CONTENT_CLASS,
@@ -96,6 +98,8 @@ import {
  *   marchers** (the whole group selected: it ends the group path), each saying what it does under
  *   its name, and **Remove path**. Edit <name>'s line and Match group stay in their places, greyed
  *   out with the reason, for any path but a trail; the others show only while they apply.
+ * - Changing the performers: **Equipment ›** (what they hold) and **Facing ›**, with the picked
+ *   cue's entries, in timeline mode with a selection.
  * - The commands that set the selection's state on the current page (holds):
  *   **Hold from last keyframe** (timeline mode only), **Hold from start flag to playhead** while
  *   it's available (Expert with a window, #476), then **Clear this page**. Each says what it
@@ -112,7 +116,13 @@ import {
  * - Arranging the selection: align and distribute, Swap (two marchers), and **Move to next
  *   page's spots**. That one is a positioning edit, not a page state (owner decision, holds wave
  *   2): on a Held page it moves the whole hold, as a drag does, so it sits with the other edits.
- * - **Select all**, which right-clicking empty field reaches for.
+ * - The selection's own entries, after the copy and paste ones: **Select ›** and **Select all**
+ *   (which right-clicking empty field reaches for). Select › picks a group at once: **Select same
+ *   section** (everyone in the selected performers' sections; greyed out with its reason with
+ *   nobody selected), then the Select tab's "Select by" lists, **Section ›**, **Family ›** and
+ *   **Tag ›**, named and picked as the tab picks them (`useSelectBy`; Shift, or Add on the touch
+ *   pill, adds to the selection), then, in timeline mode, **Holding ›**: who holds a piece of
+ *   equipment at the playhead (each family, the show's flags, nothing).
  * - **Edit field**, which puts the canvas into the Edit field mode (#824).
  *
  * Each entry shows its shortcut, except in the touch layout before a hardware keyboard has been
@@ -172,7 +182,12 @@ const HOLD_STYLE_GROUP: readonly ActionId[] = [
     "timelineHoldStyleHighMarkTime",
 ];
 
-const GROUPS: readonly (readonly ActionId[])[] = [
+/** Where the Select submenu goes among the entries (`selectMenu`) */
+const SELECT_MENU = "submenu:select";
+type MenuEntry = ActionId | typeof SELECT_MENU;
+const isAction = (id: MenuEntry): id is ActionId => id !== SELECT_MENU;
+
+const GROUPS: readonly (readonly MenuEntry[])[] = [
     // An item right-clicked: its edit view, its handles and its lock (props epic step 2). A
     // locked one's right-click offers Unlock and Edit alone (`LOCKED_ITEM_MENU`)
     ["editSelectedItem", "resizeSelectedItem", "lockSelectedItem"],
@@ -183,6 +198,8 @@ const GROUPS: readonly (readonly ActionId[])[] = [
         "pasteFormationInPlace",
         "pasteMirrored",
     ],
+    // The selection's own: Select › (a group at once), and everyone
+    [SELECT_MENU, "selectAllMarchers"],
     ["shapeGroup", "shapeUngroup", "shapeEnterBox"],
     PATH,
     PATH_END,
@@ -199,7 +216,6 @@ const GROUPS: readonly (readonly ActionId[])[] = [
         "swapMarchers",
         "setSelectedMarchersToNextPage",
     ],
-    ["selectAllMarchers"],
     // #824: the field's own lines and settings, from where you're looking at it
     ["fieldEditMode"],
 ];
@@ -240,6 +256,18 @@ const USUAL = equipmentActionOf("usual");
 const NOTHING = equipmentActionOf("none");
 const SELECT_NOTHING = selectHoldingActionOf("none");
 
+/** The Select submenu's actions: Same section, and Holding's */
+const SELECT_ACTIONS: readonly ActionId[] = [
+    "selectSameSection",
+    ...FAMILY_MENUS.flatMap((m) => m.select),
+    SELECT_NOTHING,
+];
+/**
+ * Entries shown greyed out with their reason even with nobody selected: picking a group needs no
+ * selection, so they'd otherwise vanish where they're looked for
+ */
+const SHOWN_WITHOUT_SELECTION: ReadonlySet<ActionId> = new Set(SELECT_ACTIONS);
+
 /** The Facing submenu (fork #993): the four directions, the 45° turns, then Angle… */
 const FACING_DIRECTIONS: readonly ActionId[] = [
     "facingFront",
@@ -253,12 +281,11 @@ const FACING_TURNS: readonly ActionId[] = [
     "facingAngle",
 ];
 
-/** The Equipment and Facing actions: set what the selection holds or faces, select by what's held. */
+/** The Equipment and Facing actions: set what the selection holds or faces. */
 const EQUIPMENT_ACTIONS: readonly ActionId[] = [
     USUAL,
-    ...FAMILY_MENUS.flatMap((m) => [...m.set, ...m.select]),
+    ...FAMILY_MENUS.flatMap((m) => m.set),
     NOTHING,
-    SELECT_NOTHING,
     ...FACING_DIRECTIONS,
     ...FACING_TURNS,
     ...CUE_EDITS,
@@ -266,7 +293,8 @@ const EQUIPMENT_ACTIONS: readonly ActionId[] = [
 
 /** The actions the menu offers. */
 export const FIELD_MENU_ACTIONS: readonly ActionId[] = [
-    ...GROUPS.flat(),
+    ...GROUPS.flat().filter(isAction),
+    ...SELECT_ACTIONS,
     ...EQUIPMENT_ACTIONS,
 ];
 
@@ -442,10 +470,15 @@ export default function FieldContextMenu({
     const explained = (id: ActionId) =>
         enabled(id) ||
         isActionChecked(id) ||
-        (selectedCount > 0 && actionDisabledReason(id) !== undefined);
-    const shownGroups = (list: readonly (readonly ActionId[])[]) =>
+        ((selectedCount > 0 || SHOWN_WITHOUT_SELECTION.has(id)) &&
+            actionDisabledReason(id) !== undefined);
+    const shownGroups = (list: readonly (readonly MenuEntry[])[]) =>
         list
-            .map((group) => group.filter((id) => shown(id) && explained(id)))
+            .map((group) =>
+                group.filter(
+                    (id) => !isAction(id) || (shown(id) && explained(id)),
+                ),
+            )
             .filter((group) => group.length > 0);
     // A path's entries show only where they apply, as on a marcher; Detach all and Remove path
     // after a line. A path's menu is only its own: no Equipment
@@ -524,7 +557,10 @@ export default function FieldContextMenu({
                 id,
                 ON_A_MARCHER.has(id) && marcher !== null
                     ? { marcherId: marcher }
-                    : undefined,
+                    : // Shift, or Add on the touch pill, adds the section to the selection
+                      id === "selectSameSection"
+                      ? { add: pickAdds() }
+                      : undefined,
             );
         // Greyed out with a reason: a ? says why, as the timeline's menus do (entries with none aren't shown)
         const reason = enabled(id) ? undefined : actionDisabledReason(id);
@@ -547,6 +583,7 @@ export default function FieldContextMenu({
                 key={keyPrefix + id}
                 data-testid={testId}
                 disabled={!enabled(id)}
+                {...(id === "selectSameSection" ? addPickProps : {})}
                 onSelect={run}
                 onFocus={() => previewAction(id, true)}
                 onBlur={() => previewAction(id, false)}
@@ -667,13 +704,64 @@ export default function FieldContextMenu({
             )}
         </>
     );
-    const separatedGroups = (list: readonly (readonly ActionId[])[]) =>
+    /**
+     * Select ›: a group at once. Same section, the Select tab's lists (each mounted only while
+     * open), then who holds what at the playhead in timeline mode
+     */
+    const selectMenu = (
+        <SubMenu
+            key={SELECT_MENU}
+            testId="field-menu-select"
+            label={t("field.menu.select")}
+        >
+            {entry("selectSameSection")}
+            <DropdownMenu.Separator className={MENU_SEPARATOR_CLASS} />
+            {(["section", "family", "tag"] as const).map((by) => (
+                <SubMenu
+                    key={by}
+                    testId={`field-menu-select-${by}`}
+                    label={t(selectByLabelKey(by))}
+                >
+                    <SelectByMenuItems by={by} />
+                </SubMenu>
+            ))}
+            {timelineMode && (
+                <>
+                    <DropdownMenu.Separator className={MENU_SEPARATOR_CLASS} />
+                    <SubMenu
+                        testId="field-menu-select-holding"
+                        label={t("field.menu.holding")}
+                    >
+                        {FAMILY_MENUS.map((m) => (
+                            <SubMenu
+                                key={m.family}
+                                testId={`field-menu-select-holding-${m.family}`}
+                                label={t(`cues.family.${m.family}`)}
+                            >
+                                {entry(m.select[0])}
+                                <DropdownMenu.Separator
+                                    className={MENU_SEPARATOR_CLASS}
+                                />
+                                {m.select.slice(1).map((id) => entry(id))}
+                                {m.family === "guard" && showFlagEntries(true)}
+                            </SubMenu>
+                        ))}
+                        <DropdownMenu.Separator
+                            className={MENU_SEPARATOR_CLASS}
+                        />
+                        {entry(SELECT_NOTHING)}
+                    </SubMenu>
+                </>
+            )}
+        </SubMenu>
+    );
+    const separatedGroups = (list: readonly (readonly MenuEntry[])[]) =>
         list.map((group, i) => (
             <Fragment key={group[0]}>
                 {i > 0 && (
                     <DropdownMenu.Separator className={MENU_SEPARATOR_CLASS} />
                 )}
-                {group.map((id) => entry(id))}
+                {group.map((id) => (isAction(id) ? entry(id) : selectMenu))}
             </Fragment>
         ));
 
@@ -763,32 +851,6 @@ export default function FieldContextMenu({
                                         className={MENU_SEPARATOR_CLASS}
                                     />
                                     {entry(NOTHING, "", t("cues.value.none"))}
-                                </SubMenu>
-                                <SubMenu
-                                    testId="field-menu-select-holding"
-                                    label={t("field.menu.selectByEquipment")}
-                                >
-                                    {FAMILY_MENUS.map((m) => (
-                                        <SubMenu
-                                            key={m.family}
-                                            testId={`field-menu-select-${m.family}`}
-                                            label={t(`cues.family.${m.family}`)}
-                                        >
-                                            {entry(m.select[0])}
-                                            <DropdownMenu.Separator
-                                                className={MENU_SEPARATOR_CLASS}
-                                            />
-                                            {m.select
-                                                .slice(1)
-                                                .map((id) => entry(id))}
-                                            {m.family === "guard" &&
-                                                showFlagEntries(true)}
-                                        </SubMenu>
-                                    ))}
-                                    <DropdownMenu.Separator
-                                        className={MENU_SEPARATOR_CLASS}
-                                    />
-                                    {entry(SELECT_NOTHING)}
                                 </SubMenu>
                                 <SubMenu
                                     testId="field-menu-facing"

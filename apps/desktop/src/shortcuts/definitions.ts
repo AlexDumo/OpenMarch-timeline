@@ -1742,6 +1742,15 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: ["$mod+A", "Control+A"],
     },
+    // Everyone in the selected performers' sections, from one of them (the field menu's Select
+    // submenu). Unbound
+    selectSameSection: {
+        labelKey: "actions.select.sameSection",
+        keywordsKey: "actions.select.sameSectionKeywords",
+        category: "select",
+        scope: "global",
+        defaultBindings: [],
+    },
     // The field's Select tool (`fieldSelectTool.ts`): a mouse drag from empty field draws a box or
     // a lasso. V, the selection tool's key in Figma and Illustrator (L is Shape › Line)
     toggleLassoSelect: {
