@@ -121,7 +121,7 @@ export default function OverlaysButton() {
                     data-testid="field-display-overlays-panel"
                     className={clsx(
                         POPOVER_CLASS,
-                        "z-50 flex w-360 max-w-[calc(100vw-16px)] flex-col gap-4 px-16",
+                        "z-50 flex w-400 max-w-[calc(100vw-16px)] flex-col gap-4 px-16",
                         // Scrolls rather than running off a short window
                         "max-h-[var(--radix-popover-content-available-height)] overflow-y-auto overscroll-contain",
                     )}
@@ -547,7 +547,7 @@ function EquipmentWhoMenu() {
                     // Cut off when the row is narrow: the full choice in the tooltip
                     title={whoText(who, t)}
                     data-testid="field-display-equipment-who"
-                    className="text-body bg-fg-2 border-stroke hover:border-accent focus-visible:ring-accent data-[state=open]:border-accent touch:min-h-44 flex h-26 max-w-192 min-w-0 items-center gap-4 rounded-full border pr-6 pl-10 outline-hidden transition-colors duration-150 focus-visible:ring-2"
+                    className="text-body bg-fg-2 border-stroke hover:border-accent focus-visible:ring-accent data-[state=open]:border-accent touch:min-h-44 flex h-26 max-w-208 min-w-0 items-center gap-4 rounded-full border pr-6 pl-10 outline-hidden transition-colors duration-150 focus-visible:ring-2"
                 >
                     <span className="truncate">{whoText(who, t)}</span>
                     <CaretDownIcon size={12} aria-hidden className="shrink-0" />

@@ -723,6 +723,15 @@ test("change: the field display bar holds paths and one Show on field panel (a s
     await expect(
         panel.getByRole("group", { name: "Drill numbers" }),
     ).toHaveCount(0);
+    // The row's name stays on one line beside Holding something else: the who button gives way
+    const equipmentName = panel.getByText("Equipment icons", { exact: true });
+    expect(
+        await equipmentName.evaluate(
+            (el) =>
+                el.getBoundingClientRect().height <
+                parseFloat(getComputedStyle(el).lineHeight) * 1.5,
+        ),
+    ).toBe(true);
     // Equipment icons for some sections only: the who menu lists the show's sections
     await panel.getByTestId("field-display-equipment-who").click();
     const menu = page.getByTestId("field-display-equipment-menu");
