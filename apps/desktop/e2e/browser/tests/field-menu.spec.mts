@@ -140,11 +140,15 @@ test("right-clicking a marcher that isn't selected selects it and opens the menu
 
     await expect(menu(page)).toBeVisible();
     expect(await selectedDrillNumbers(page)).toEqual(["T2"]);
-    // Opened at the pointer: its corner is by T2's dot
+    // Opened at the pointer: its corner is by T2's dot, or slid up just enough to stay on
+    // screen when the menu is taller than the room below the dot (POINT_MENU_PLACEMENT)
     const t2 = (await drawnMarchers(page)).find((m) => m.drillNumber === "T2")!;
     const box = (await menu(page).boundingBox())!;
     expect(Math.abs(box.x - t2.screen.x)).toBeLessThan(24);
-    expect(Math.abs(box.y - t2.screen.y)).toBeLessThan(24);
+    const windowHeight = page.viewportSize()!.height;
+    const slidUp = Math.abs(box.y + box.height - (windowHeight - 8)) < 1;
+    expect(box.y).toBeLessThan(t2.screen.y + 24);
+    if (!slidUp) expect(Math.abs(box.y - t2.screen.y)).toBeLessThan(24);
 
     await clearEntry(page).click();
     await expect(menu(page)).toBeHidden();
@@ -209,9 +213,10 @@ test("offers Clear this page, not Remove keyframe, and Clear is unavailable wher
     await expect(cleared).toHaveAttribute("aria-checked", "true");
     await expect(cleared).toHaveAttribute("data-disabled", "");
     // Swap needs two marchers
+    // (unavailable with a reason: the entry stays focusable for its tip, so it's aria-disabled)
     await expect(entry(page, "Swap two marchers")).toHaveAttribute(
-        "data-disabled",
-        "",
+        "aria-disabled",
+        "true",
     );
     await expect(entry(page, "Align horizontally")).not.toHaveAttribute(
         "data-disabled",
@@ -286,13 +291,17 @@ test("a click outside the open menu only closes it: the field doesn't select", a
 }) => {
     const { page } = show;
     await atPage2(show);
-    await rightClickMarcher(page, "T1");
+    // Opened on T3, the rightmost, so the menu opens to the right of T1: a menu opened on T1
+    // reaches down over T2 and T3, and a click there lands on one of its entries
+    await rightClickMarcher(page, "T3");
     await expect(menu(page)).toBeVisible();
-    const t3 = (await drawnMarchers(page)).find((m) => m.drillNumber === "T3")!;
-    await page.mouse.click(t3.screen.x, t3.screen.y);
+    const t1 = (await drawnMarchers(page)).find((m) => m.drillNumber === "T1")!;
+    const box = (await menu(page).boundingBox())!;
+    expect(t1.screen.x, "T1 is outside the menu").toBeLessThan(box.x);
+    await page.mouse.click(t1.screen.x, t1.screen.y);
     await expect(menu(page)).toBeHidden();
-    expect(await selectedDrillNumbers(page)).toEqual(["T1"]);
+    expect(await selectedDrillNumbers(page)).toEqual(["T3"]);
     // The next click selects as usual
-    await clickMarcher(page, "T3");
-    await expect.poll(() => selectedDrillNumbers(page)).toEqual(["T3"]);
+    await clickMarcher(page, "T1");
+    await expect.poll(() => selectedDrillNumbers(page)).toEqual(["T1"]);
 });

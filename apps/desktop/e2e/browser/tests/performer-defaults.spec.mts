@@ -28,7 +28,7 @@ test("Show settings set how marchers move by default", async ({
     ).toHaveText("Round the corner");
     await expect(
         section.getByRole("combobox", { name: "Holding while others move" }),
-    ).toHaveText("Mark time");
+    ).toHaveText("Stand");
 
     await dot.click();
     await page.getByRole("option", { name: "Body center" }).click();
