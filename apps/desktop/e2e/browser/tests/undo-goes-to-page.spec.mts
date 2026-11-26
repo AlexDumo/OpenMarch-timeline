@@ -45,11 +45,15 @@ async function expectPage2Selected(page: Page, mode: "expert" | "basic") {
     await expect.poll(() => playhead(page)).toContain("Page 2, count 8 of 8");
     await expect(pageBox(page, 8)).toHaveAttribute("aria-pressed", "true");
     if (mode === "basic") return;
-    const start = (await page
-        .getByTestId("timeline-start-pennant")
-        .boundingBox())!;
-    const box = (await pageBox(page, 8).boundingBox())!;
-    expect(Math.abs(start.x - box.x)).toBeLessThan(4);
+    await expect
+        .poll(async () => {
+            const start = await page
+                .getByTestId("timeline-start-pennant")
+                .boundingBox();
+            const box = await pageBox(page, 8).boundingBox();
+            return start && box ? Math.abs(start.x - box.x) : Infinity;
+        })
+        .toBeLessThan(4);
 }
 
 for (const mode of ["expert", "basic"] as const)

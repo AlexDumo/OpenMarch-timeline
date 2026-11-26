@@ -90,7 +90,8 @@ export function useTimelinePageBridge(enabled: boolean): void {
         if (!flag) return;
         // Isolated, the playhead goes as far toward the page as the isolated move allows
         if (store.isolation) store.seek(flag.flag);
-        // Otherwise the page is selected, as going to it with page navigation does. A seek to its
+        // Otherwise the page's box is selected, as page navigation selects it (a loop stays where
+        // it is: in Basic, navigation also moves the loop; in Expert it follows the window). A seek to its
         // flag isn't that in Expert, where the start flag stays: the flag of the page just before
         // the start flag's is the start flag's own beat, which makes a one-count window there
         else if (flag.range)
