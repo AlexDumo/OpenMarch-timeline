@@ -30,7 +30,10 @@ import {
 import { useTranslate } from "@tolgee/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import type { TimelineBandGeometry } from "@/components/timeline/TimelineBand";
+import {
+    LANE_LABEL_STICKY_CLASS,
+    type TimelineBandGeometry,
+} from "@/components/timeline/TimelineBand";
 import {
     KEEP_MENU_EVENTS,
     MenuItemWithReason,
@@ -448,7 +451,10 @@ export function FacingLaneView({
         >
             <div
                 data-testid="facing-lane-header"
-                className="text-micro text-text-subtitle sticky left-0 z-10 flex w-fit items-center gap-4 px-4"
+                className={clsx(
+                    "text-micro text-text-subtitle z-10 flex w-fit items-center gap-4 px-4",
+                    LANE_LABEL_STICKY_CLASS,
+                )}
                 style={{ height: HEADER }}
                 onContextMenu={nameMenu.onContextMenu}
             >
@@ -500,7 +506,10 @@ export function FacingLaneView({
             </div>
             {rows.length === 0 ? (
                 <div
-                    className="text-micro text-text-subtitle sticky left-0 flex w-fit items-center px-24"
+                    className={clsx(
+                        "text-micro text-text-subtitle flex w-fit items-center px-24",
+                        LANE_LABEL_STICKY_CLASS,
+                    )}
                     style={{ height: EMPTY }}
                 >
                     {t("cues.lane.facingEmpty")}
@@ -648,7 +657,10 @@ function RowName({ row, name }: { row: FacingRow; name: string }) {
             type="button"
             data-testid="facing-lane-row-name"
             title={t("cues.lane.selectRow")}
-            className="bg-bg-1/80 text-micro text-text hover:text-accent touch:min-h-44 sticky left-0 z-[5] flex h-full max-w-160 items-center gap-4 truncate rounded-full px-6 backdrop-blur-sm"
+            className={clsx(
+                "bg-bg-1/80 text-micro text-text hover:text-accent touch:min-h-44 z-[5] flex h-full max-w-160 items-center gap-4 truncate rounded-full px-6 backdrop-blur-sm",
+                LANE_LABEL_STICKY_CLASS,
+            )}
             onClick={() => activeFieldEditor()?.select(row.marcherIds)}
         >
             <span className="truncate">{name}</span>

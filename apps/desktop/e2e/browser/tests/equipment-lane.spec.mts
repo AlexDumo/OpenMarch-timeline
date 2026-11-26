@@ -157,7 +157,7 @@ test("a finger's tap on empty lane space moves the playhead there; a tap on the 
 
 // The Lanes button (#992): an icon in the timeline's bottom-left corner. It is found by its name,
 // its count badge follows the hidden lanes, and it stays in the corner while the timeline scrolls.
-test("the Lanes button sits in the bottom-left corner, counts hidden lanes, and stays put while the timeline scrolls", async ({
+test("the Lanes button sits in the bottom-left corner, counts hidden lanes, stays put while the timeline scrolls, and never covers a lane label", async ({
     show,
 }) => {
     const { page } = show;
@@ -199,6 +199,22 @@ test("the Lanes button sits in the bottom-left corner, counts hidden lanes, and 
             );
         })
         .toBeLessThanOrEqual(1);
+    // Scrolled, the lane's labels stick clear of the button rather than under it
+    const buttonRight = async () => {
+        const box = (await lanes.boundingBox())!;
+        return box.x + box.width;
+    };
+    for (const id of ["equipment-lane-header", "equipment-lane-row-name"]) {
+        await expect
+            .poll(async () => {
+                const label = (await page
+                    .getByTestId(id)
+                    .first()
+                    .boundingBox())!;
+                return label.x - (await buttonRight());
+            })
+            .toBeGreaterThanOrEqual(0);
+    }
     await viewport.evaluate((v) => {
         v.scrollLeft = 0;
     });

@@ -653,7 +653,7 @@ const shots = [
             await withMove(page, wait);
             await page.keyboard.press("Escape");
             await wait(600);
-            await page.getByTestId("timeline-lanes-row").click();
+            await page.getByTestId("timeline-lanes-button").click();
             await page.getByTestId("timeline-lanes-menu").waitFor();
             await wait(500);
             await tidy(page);

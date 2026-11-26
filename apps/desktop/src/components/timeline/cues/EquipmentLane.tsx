@@ -37,9 +37,10 @@ import { useTranslate } from "@tolgee/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import type { PerformerCarry } from "@openmarch/core";
-import type {
-    TimelineBand,
-    TimelineBandGeometry,
+import {
+    LANE_LABEL_STICKY_CLASS,
+    type TimelineBand,
+    type TimelineBandGeometry,
 } from "@/components/timeline/TimelineBand";
 import {
     KEEP_MENU_EVENTS,
@@ -94,7 +95,7 @@ import {
     useLaneFolded,
     useLaneShown,
 } from "@/timeline/timelineLanes";
-import { LanesRow, useLaneNameMenu } from "./LanesMenu";
+import { LanesButton, useLaneNameMenu } from "./LanesMenu";
 import { useFacingLaneParts } from "./FacingLane";
 import {
     DRAG_SLOP_PX,
@@ -183,11 +184,7 @@ export function useEquipmentLaneBand(): TimelineBand | undefined {
                     })}
                 </>
             ),
-            corner: (
-                <div className="absolute bottom-6 left-6 z-[5]">
-                    <LanesRow />
-                </div>
-            ),
+            corner: <LanesButton />,
         };
     }, [shown, folded, lane, show, beats, facing]);
 }
@@ -491,7 +488,10 @@ export function EquipmentLaneView({
         >
             <div
                 data-testid="equipment-lane-header"
-                className="text-micro text-text-subtitle sticky left-0 z-10 flex w-fit items-center gap-4 px-4"
+                className={clsx(
+                    "text-micro text-text-subtitle z-10 flex w-fit items-center gap-4 px-4",
+                    LANE_LABEL_STICKY_CLASS,
+                )}
                 style={{ height: HEADER }}
                 // Right-click (or a long press) on the lane's name: hide it, fold it, or the lanes
                 onContextMenu={nameMenu.onContextMenu}
@@ -545,7 +545,10 @@ export function EquipmentLaneView({
             </div>
             {rows.length === 0 ? (
                 <div
-                    className="text-micro text-text-subtitle sticky left-0 flex w-fit items-center px-24"
+                    className={clsx(
+                        "text-micro text-text-subtitle flex w-fit items-center px-24",
+                        LANE_LABEL_STICKY_CLASS,
+                    )}
                     style={{ height: EMPTY }}
                 >
                     {t("cues.lane.empty")}
@@ -610,7 +613,10 @@ export function EquipmentLaneView({
                             type="button"
                             data-testid="equipment-lane-row-name"
                             title={t("cues.lane.selectRow")}
-                            className="bg-bg-1/80 text-micro text-text hover:text-accent touch:min-h-44 sticky left-0 z-[5] flex h-full max-w-160 items-center gap-4 truncate rounded-full px-6 backdrop-blur-sm"
+                            className={clsx(
+                                "bg-bg-1/80 text-micro text-text hover:text-accent touch:min-h-44 z-[5] flex h-full max-w-160 items-center gap-4 truncate rounded-full px-6 backdrop-blur-sm",
+                                LANE_LABEL_STICKY_CLASS,
+                            )}
                             onClick={() =>
                                 activeFieldEditor()?.select(row.marcherIds)
                             }

@@ -18,6 +18,7 @@ import { TimelinePaneStretchContext } from "./timelinePaneStretch";
 import { flushSync } from "react-dom";
 import { CaretLeftIcon, CaretRightIcon } from "@phosphor-icons/react";
 import { useTimelineFollow, type FollowZoomAnchor } from "./useTimelineFollow";
+import { LANE_LABEL_STICKY_CLASS } from "./TimelineBand";
 import clsx from "clsx";
 import { TimelineGridCanvas, TimelineWaveformCanvas } from "./TimelineCanvas";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
@@ -1195,9 +1196,9 @@ const TimelineSurface = memo(function TimelineSurface({
                     {touchZoom && (
                         <TimelineTouchZoom className="right-20 bottom-24" />
                     )}
-                    {lanes?.corner}
                 </>
             }
+            corner={lanes?.corner}
             transport={
                 showTransport ? (
                     <TimelineTransport
@@ -1337,13 +1338,18 @@ const TimelineSurface = memo(function TimelineSurface({
                             !band &&
                             rows.length > 0 &&
                             props.movesHeader && (
-                                // The Moves lane's heading, at the visible left edge over the first
-                                // row of move tracks
+                                // The Moves lane's heading, at the visible left edge (clear of the
+                                // Lanes button) over the first row of move tracks
                                 <div
                                     className="pointer-events-none absolute left-0 z-[4] h-0"
                                     style={{ top: trackTop, width }}
                                 >
-                                    <div className="pointer-events-auto sticky left-0 w-fit">
+                                    <div
+                                        className={clsx(
+                                            "pointer-events-auto w-fit",
+                                            LANE_LABEL_STICKY_CLASS,
+                                        )}
+                                    >
                                         {props.movesHeader}
                                     </div>
                                 </div>

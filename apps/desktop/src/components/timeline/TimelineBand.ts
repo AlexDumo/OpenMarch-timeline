@@ -48,8 +48,20 @@ export interface TimelineBand {
     takesPresses?: boolean;
     render(geometry: TimelineBandGeometry): ReactNode;
     /**
-     * Drawn in the timeline's bottom-left corner, over the viewport, where it stays in view while
-     * the timeline scrolls. It takes no room in the band (the Lanes button).
+     * A control the timeline draws in its bottom-left corner, over the viewport, where it stays in
+     * view however the timeline scrolls (the Lanes button). It takes no room in the band; lane
+     * labels stick clear of it (`LANE_LABEL_STICKY_CLASS`).
      */
     corner?: ReactNode;
 }
+
+/**
+ * Where a lane's label (its heading, a row's name) sticks while the timeline scrolls, so the corner
+ * control (`TimelineBand.corner`, at the viewport's left edge) doesn't cover it. Both insets are
+ * within the home page's 40 px column (`TIMELINE_INITIAL_PAGE_WIDTH`), so a label stays where it
+ * is until the timeline scrolls:
+ * - 28 px clears the 24 px control with a 4 px gap;
+ * - on touch the control is 44 px, and 40 px leaves it over the label's 4–6 px padding, not its
+ *   text. Clearing it fully would move every label, and its 44 px touch buttons, before a scroll.
+ */
+export const LANE_LABEL_STICKY_CLASS = "sticky left-28 touch:left-40";

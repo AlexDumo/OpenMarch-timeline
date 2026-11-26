@@ -188,7 +188,7 @@ function LanesList({ autoFocusSearch }: { autoFocusSearch?: boolean }) {
  * the timeline scrolls. Its tooltip reads "Lanes", or "Lanes · 2 hidden" while lanes in this show
  * are hidden (a count badge shows the number too). It opens the lane list.
  */
-export function LanesRow() {
+export function LanesButton() {
     const { t } = useTranslate();
     const hidden = hiddenLaneCount(useLaneStates());
     const [open, setOpen] = useState(false);
@@ -200,10 +200,11 @@ export function LanesRow() {
                     <button
                         type="button"
                         aria-label={label}
-                        data-testid="timeline-lanes-row"
+                        data-testid="timeline-lanes-button"
                         data-timeline-interactive=""
                         // As the transport buttons do: a click doesn't take keyboard focus, so Space
-                        // after clicking is still Play, not a second press of this button
+                        // after a click is still Play. Escape from the menu does bring focus back
+                        // here, as a menu button should
                         onMouseDown={(e) => e.preventDefault()}
                         className={clsx(
                             "focus-visible:ring-accent rounded-4 bg-bg-1 enabled:hover:text-accent enabled:hover:bg-fg-2 touch:size-44 relative flex size-24 items-center justify-center outline-hidden transition-[color,background-color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent enabled:active:translate-y-px",

@@ -501,6 +501,7 @@ export const TimelineShell = ({
     className,
     pinnedHeight = 0,
     overlay,
+    corner,
 }: {
     /** A row over the transport (a band's header: tempo mode's) */
     header?: ReactNode;
@@ -512,6 +513,8 @@ export const TimelineShell = ({
     pinnedHeight?: number;
     /** Drawn over the viewport, where it doesn't scroll (the playhead chip) */
     overlay?: ReactNode;
+    /** Drawn in the bottom-left corner over the viewport, where it doesn't scroll (`TimelineBand.corner`) */
+    corner?: ReactNode;
 }) => {
     const { t } = useTranslate();
     return (
@@ -542,6 +545,12 @@ export const TimelineShell = ({
                     {children}
                 </div>
                 {overlay}
+                {corner && (
+                    // Flush with the viewport's left edge, just over its 5 px scrollbar
+                    <div className="absolute bottom-6 left-6 z-[5]">
+                        {corner}
+                    </div>
+                )}
             </section>
         </div>
     );
