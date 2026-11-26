@@ -115,10 +115,14 @@ const TABLES_AFTER_0018 = [
     "cues",
     "cue_marchers",
 ] as const;
-/** Tables they add outside the undo history, with no triggers: the show asset store (fork #997). */
+/**
+ * Tables they add outside the undo history, with no triggers: the show asset store (fork #997)
+ * and the performer figures (ADR 0019).
+ */
 const TABLES_AFTER_0018_WITHOUT_HISTORY = [
     "show_asset_blobs",
     "show_assets",
+    "performer_figures",
 ] as const;
 const fixedNow = () => new Date(CONVERTED_AT);
 
