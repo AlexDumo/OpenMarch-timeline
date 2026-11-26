@@ -1,0 +1,525 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`preview pack files (format versions 1 to 3) > the format version 1 file draws what it drew when it was written 1`] = `
+{
+  "itemFiles": [],
+  "layers": [
+    {
+      "id": "base",
+      "sha256": "cc49f43336134111cb6a5f8449aeea1be3bad7b883ca3607d0500278db346a70",
+    },
+  ],
+  "manifest": {
+    "attachments": [],
+    "credits": {
+      "author": "A. Designer",
+      "license": "CC-BY-4.0",
+    },
+    "format": "openmarch-asset",
+    "formatVersion": 1,
+    "items": [],
+    "kind": "uniform",
+    "layers": [
+      {
+        "covers": "page",
+        "file": "layers/base.png",
+        "id": "base",
+        "name": "Base",
+      },
+    ],
+    "modes": [],
+    "name": "Preview v1",
+    "options": {
+      "collar": true,
+      "cuffs": true,
+      "gloves": true,
+      "hat": true,
+      "stripe": false,
+    },
+    "page": {
+      "height": 88,
+      "unit": "in",
+      "width": 105,
+    },
+    "palette": {
+      "accent": "#d8b04a",
+      "gloves": "#f2f2ee",
+      "hat": "#170d4a",
+      "pants": "#170d4a",
+      "plume": "#6442ff",
+      "primary": "#170d4a",
+      "secondary": "#f2f2ee",
+      "shoes": "#0b0b0d",
+      "trim": "#d8b04a",
+      "visor": "#d8b04a",
+    },
+    "preview": true,
+    "style": "classic",
+    "variants": [],
+  },
+  "modes": [
+    {
+      "images": [
+        {
+          "file": "layers/base.png",
+          "sha256": "cc49f43336134111cb6a5f8449aeea1be3bad7b883ca3607d0500278db346a70",
+        },
+      ],
+      "items": [],
+      "look": {
+        "colors": {
+          "accent": 14200906,
+          "gloves": 15921902,
+          "hat": 1510730,
+          "pants": 1510730,
+          "plume": 6570751,
+          "primary": 1510730,
+          "secondary": 15921902,
+          "shoes": 723725,
+          "trim": 14200906,
+          "visor": 14200906,
+        },
+        "options": {
+          "collar": true,
+          "cuffs": true,
+          "gloves": true,
+          "hat": true,
+          "stripe": false,
+        },
+        "style": "classic",
+      },
+      "mode": null,
+    },
+  ],
+}
+`;
+
+exports[`preview pack files (format versions 1 to 3) > the format version 2 file draws what it drew when it was written 1`] = `
+{
+  "itemFiles": [
+    {
+      "file": "items/crest.png",
+      "sha256": "9a14edb9d62ff9a384ed2e17283676d2648eee28eb863bfe65ef235977f7bb0c",
+    },
+  ],
+  "layers": [
+    {
+      "id": "base",
+      "sha256": "cc49f43336134111cb6a5f8449aeea1be3bad7b883ca3607d0500278db346a70",
+    },
+  ],
+  "manifest": {
+    "attachments": [],
+    "credits": {
+      "author": "A. Designer",
+      "license": "CC-BY-4.0",
+    },
+    "format": "openmarch-asset",
+    "formatVersion": 2,
+    "items": [
+      {
+        "at": [
+          17,
+          25.32,
+        ],
+        "file": "items/crest.png",
+        "grade": "proportional",
+        "id": "crest",
+        "name": "Crest",
+        "panel": "front",
+        "width": 6,
+      },
+    ],
+    "kind": "uniform",
+    "layers": [
+      {
+        "covers": "page",
+        "file": "layers/base.png",
+        "id": "base",
+        "name": "Base",
+      },
+    ],
+    "modes": [],
+    "name": "Preview v2",
+    "options": {
+      "collar": true,
+      "cuffs": true,
+      "gloves": true,
+      "hat": true,
+      "stripe": false,
+    },
+    "page": {
+      "height": 88,
+      "unit": "in",
+      "width": 105,
+    },
+    "palette": {
+      "accent": "#d8b04a",
+      "gloves": "#f2f2ee",
+      "hat": "#170d4a",
+      "pants": "#170d4a",
+      "plume": "#6442ff",
+      "primary": "#170d4a",
+      "secondary": "#f2f2ee",
+      "shoes": "#0b0b0d",
+      "trim": "#d8b04a",
+      "visor": "#d8b04a",
+    },
+    "preview": true,
+    "style": "classic",
+    "variants": [],
+  },
+  "modes": [
+    {
+      "images": [
+        {
+          "file": "layers/base.png",
+          "sha256": "cc49f43336134111cb6a5f8449aeea1be3bad7b883ca3607d0500278db346a70",
+        },
+      ],
+      "items": [
+        {
+          "at": [
+            17,
+            25.32,
+          ],
+          "file": "items/crest.png",
+          "grade": "proportional",
+          "id": "crest",
+          "name": "Crest",
+          "panel": "front",
+          "width": 6,
+        },
+      ],
+      "look": {
+        "colors": {
+          "accent": 14200906,
+          "gloves": 15921902,
+          "hat": 1510730,
+          "pants": 1510730,
+          "plume": 6570751,
+          "primary": 1510730,
+          "secondary": 15921902,
+          "shoes": 723725,
+          "trim": 14200906,
+          "visor": 14200906,
+        },
+        "options": {
+          "collar": true,
+          "cuffs": true,
+          "gloves": true,
+          "hat": true,
+          "stripe": false,
+        },
+        "style": "classic",
+      },
+      "mode": null,
+    },
+  ],
+}
+`;
+
+exports[`preview pack files (format versions 1 to 3) > the format version 3 file draws what it drew when it was written 1`] = `
+{
+  "itemFiles": [
+    {
+      "file": "items/crest.png",
+      "sha256": "d1b1114f5948282afd807b2ebf9bccbafe4c16cda928dafca2a4ce5766f6a709",
+    },
+    {
+      "file": "items/number.png",
+      "sha256": "61e65fa9100684b34f22c80bfb7bdc37d66d2e3c3d98f472629b11d13086a501",
+    },
+  ],
+  "layers": [
+    {
+      "id": "base",
+      "sha256": "943995324972b5b0a8d99e6cf544634c412e5f411b78c13a93933e948ebbddd3",
+    },
+    {
+      "id": "sash",
+      "sha256": "8db536a81095ae2cae46e120a4d81904085ae43c9174469a217852587c13524f",
+    },
+    {
+      "id": "open-front",
+      "sha256": "369bdba5b138b76b04f5a73a8992d16fd590a19962e44629451f7f7fb83381e0",
+    },
+  ],
+  "manifest": {
+    "attachments": [],
+    "credits": {
+      "author": "A. Designer",
+      "license": "CC-BY-4.0",
+    },
+    "format": "openmarch-asset",
+    "formatVersion": 3,
+    "items": [
+      {
+        "at": [
+          17,
+          25.32,
+        ],
+        "file": "items/crest.png",
+        "id": "crest",
+        "panel": "front",
+        "width": 6,
+      },
+      {
+        "at": [
+          17,
+          28.47,
+        ],
+        "file": "items/number.png",
+        "height": 8,
+        "id": "number",
+        "panel": "back",
+      },
+    ],
+    "kind": "uniform",
+    "layers": [
+      {
+        "covers": "page",
+        "file": "layers/base.png",
+        "id": "base",
+        "name": "Base",
+      },
+      {
+        "covers": "page",
+        "file": "layers/sash.png",
+        "id": "sash",
+        "name": "Sash",
+      },
+      {
+        "covers": "page",
+        "file": "layers/open-front.png",
+        "id": "open-front",
+        "name": "Open front",
+      },
+    ],
+    "modes": [
+      {
+        "id": "plain-a1b2",
+        "items": [
+          "crest",
+          "number",
+        ],
+        "layers": [
+          "base",
+        ],
+        "name": "Plain",
+      },
+      {
+        "id": "sash-out-c3d4",
+        "items": [
+          "number",
+        ],
+        "layers": [
+          "base",
+          "sash",
+        ],
+        "name": "Sash out",
+      },
+      {
+        "id": "sash-out-unzipped-e5f6",
+        "items": [
+          "number",
+        ],
+        "layers": [
+          "base",
+          "sash",
+          "open-front",
+        ],
+        "name": "Sash out, unzipped",
+        "options": {
+          "collar": false,
+          "hat": false,
+        },
+        "palette": {
+          "primary": "#f2f2ee",
+        },
+      },
+    ],
+    "name": "Sample modes",
+    "options": {
+      "collar": true,
+      "cuffs": true,
+      "gloves": true,
+      "hat": true,
+      "stripe": false,
+    },
+    "page": {
+      "height": 88,
+      "unit": "in",
+      "width": 105,
+    },
+    "palette": {
+      "accent": "#d8b04a",
+      "gloves": "#f2f2ee",
+      "hat": "#170d4a",
+      "pants": "#170d4a",
+      "plume": "#6442ff",
+      "primary": "#170d4a",
+      "secondary": "#f2f2ee",
+      "shoes": "#0b0b0d",
+      "trim": "#d8b04a",
+      "visor": "#d8b04a",
+    },
+    "preview": true,
+    "style": "classic",
+    "variants": [],
+  },
+  "modes": [
+    {
+      "images": [
+        {
+          "file": "layers/base.png",
+          "sha256": "943995324972b5b0a8d99e6cf544634c412e5f411b78c13a93933e948ebbddd3",
+        },
+      ],
+      "items": [
+        {
+          "at": [
+            17,
+            25.32,
+          ],
+          "file": "items/crest.png",
+          "id": "crest",
+          "panel": "front",
+          "width": 6,
+        },
+        {
+          "at": [
+            17,
+            28.47,
+          ],
+          "file": "items/number.png",
+          "height": 8,
+          "id": "number",
+          "panel": "back",
+        },
+      ],
+      "look": {
+        "colors": {
+          "accent": 14200906,
+          "gloves": 15921902,
+          "hat": 1510730,
+          "pants": 1510730,
+          "plume": 6570751,
+          "primary": 1510730,
+          "secondary": 15921902,
+          "shoes": 723725,
+          "trim": 14200906,
+          "visor": 14200906,
+        },
+        "options": {
+          "collar": true,
+          "cuffs": true,
+          "gloves": true,
+          "hat": true,
+          "stripe": false,
+        },
+        "style": "classic",
+      },
+      "mode": "plain-a1b2",
+    },
+    {
+      "images": [
+        {
+          "file": "layers/base.png",
+          "sha256": "943995324972b5b0a8d99e6cf544634c412e5f411b78c13a93933e948ebbddd3",
+        },
+        {
+          "file": "layers/sash.png",
+          "sha256": "8db536a81095ae2cae46e120a4d81904085ae43c9174469a217852587c13524f",
+        },
+      ],
+      "items": [
+        {
+          "at": [
+            17,
+            28.47,
+          ],
+          "file": "items/number.png",
+          "height": 8,
+          "id": "number",
+          "panel": "back",
+        },
+      ],
+      "look": {
+        "colors": {
+          "accent": 14200906,
+          "gloves": 15921902,
+          "hat": 1510730,
+          "pants": 1510730,
+          "plume": 6570751,
+          "primary": 1510730,
+          "secondary": 15921902,
+          "shoes": 723725,
+          "trim": 14200906,
+          "visor": 14200906,
+        },
+        "options": {
+          "collar": true,
+          "cuffs": true,
+          "gloves": true,
+          "hat": true,
+          "stripe": false,
+        },
+        "style": "classic",
+      },
+      "mode": "sash-out-c3d4",
+    },
+    {
+      "images": [
+        {
+          "file": "layers/base.png",
+          "sha256": "943995324972b5b0a8d99e6cf544634c412e5f411b78c13a93933e948ebbddd3",
+        },
+        {
+          "file": "layers/sash.png",
+          "sha256": "8db536a81095ae2cae46e120a4d81904085ae43c9174469a217852587c13524f",
+        },
+        {
+          "file": "layers/open-front.png",
+          "sha256": "369bdba5b138b76b04f5a73a8992d16fd590a19962e44629451f7f7fb83381e0",
+        },
+      ],
+      "items": [
+        {
+          "at": [
+            17,
+            28.47,
+          ],
+          "file": "items/number.png",
+          "height": 8,
+          "id": "number",
+          "panel": "back",
+        },
+      ],
+      "look": {
+        "colors": {
+          "accent": 14200906,
+          "gloves": 15921902,
+          "hat": 1510730,
+          "pants": 1510730,
+          "plume": 6570751,
+          "primary": 15921902,
+          "secondary": 15921902,
+          "shoes": 723725,
+          "trim": 14200906,
+          "visor": 14200906,
+        },
+        "options": {
+          "collar": false,
+          "cuffs": true,
+          "gloves": true,
+          "hat": false,
+          "stripe": false,
+        },
+        "style": "classic",
+      },
+      "mode": "sash-out-unzipped-e5f6",
+    },
+  ],
+}
+`;

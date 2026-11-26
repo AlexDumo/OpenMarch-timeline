@@ -12,6 +12,9 @@ covers:
   - action:openCommandPalette
   - action:togglePreview
   - action:openView3d
+  - action:toggleMarcherLabels
+  - action:toggleShapeOutlines
+  - apps/desktop/src/field/fieldShow.ts
 sidebar:
   order: 1
 ---
@@ -34,6 +37,20 @@ When a show is open, the field takes up most of the window. You arrange marchers
 The field shows where every marcher is at the <Term id="playhead">playhead</Term>'s count. Select marchers by clicking them or dragging around them, and drag them to move them. The yard lines, hashes and grid come from the field's settings, which you can change to match where you rehearse ([Edit the field](/guides/field/edit-the-field/)).
 
 The editing line at the field's top left says what your next edit changes, for example "Editing Page 1's move". At the field's top right, a small bar chooses whether a drag draws a box or a lasso, and the field display buttons under it choose what's drawn, such as drill numbers. The zoom controls sit at the bottom right; [Move around the field](/guides/workspace/move-around-the-field/) covers panning and zooming.
+
+### Choose what the field shows
+
+Select <Ui k="fieldDisplay.overlays" /> (the eye) on the display bar for a panel with one switch for each thing the field can draw:
+
+- <Ui k="fieldDisplay.labels" />: each performer's drill number. While it's on, choose <Ui k="fieldDisplay.labelsNamesExample" plain /> for full drill numbers or <Ui k="fieldDisplay.labelsNumbersExample" plain /> for the number only.
+- <Ui k="fieldDisplay.equipmentIcons" />: an icon for what performers hold, and who has one ([Change what performers hold](/guides/marchers/equipment/)).
+- <Ui k="fieldDisplay.facing" />: a caret in front of each dot, the way they face ([Set where marchers face](/guides/marchers/facing/#see-facing-on-the-field)).
+- <Ui k="fieldDisplay.shapes" />: placed shapes' outlines, for the <Ui k="fieldDisplay.selected" plain /> shape only or <Ui k="fieldDisplay.all" plain /> of them ([Place marchers into a shape](/guides/shapes/place-marchers/)).
+- <Ui k="toolbar.view.venue" />: the 3D View's venue under the grid ([See the venue on the field](/guides/3d-view/venue-on-the-field/)).
+
+A switch turned back on shows what it showed before. Some rows appear only when they apply: <Ui k="fieldDisplay.lineOrder" plain /> while Follow-the-leader is on, and <Ui k="toolbar.view.venueCamera" plain /> while the 3D View is open. A dot on the eye says something differs from how OpenMarch starts, and <Ui k="fieldDisplay.reset" plain /> at the top of the panel puts it all back.
+
+How these look (drill numbers' size and place, where equipment icons go, the venue's look) is set once in <Ui k="settings.title" plain /> › <Ui k="settings.field" plain />; <Ui k="fieldDisplay.footerLink" plain /> at the bottom of the panel opens it. The same switches are in the app's View menu, under <Ui k="menu.view.showOnField" plain />, and in the command palette, such as <Ui k="actions.ui.hideMarcherLabels" /> and <Ui k="actions.ui.showShapeOutlines" />.
 
 ## The timeline
 

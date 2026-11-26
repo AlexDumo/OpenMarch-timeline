@@ -204,11 +204,17 @@ export function useCueCommands(): CueCommands {
             performers: (n) => t("cues.label.performers", { count: n }),
         };
         // Everyone holding one catalog item at the playhead, by its plural name ("Rifles")
-        const labelHolders = (): LabelHolders[] =>
-            equipmentCatalog().map((item) => ({
+        const labelHolders = (): LabelHolders[] => [
+            ...equipmentCatalog().map((item) => ({
                 name: t(`cues.plural.${itemKeyOf(item.id)}`),
                 ids: holders([item.id]),
-            }));
+            })),
+            // the show's flags by their own names ("Ballad silk")
+            ...(show?.flags ?? []).map((flag) => ({
+                name: flag.name,
+                ids: holders([flag.value]),
+            })),
+        ];
 
         const onBeat = show && beat ? equipmentCuesOn(show.cues, beat.id) : [];
         const picked = show

@@ -1,6 +1,11 @@
 import type { Locator, Page } from "@playwright/test";
 import { test, expect } from "../fixtures.mjs";
-import { drawnMarchers, expectCanvasMatchesShow, readField } from "../app.mjs";
+import {
+    drawnMarchers,
+    expectCanvasMatchesShow,
+    readField,
+    waitForIdle,
+} from "../app.mjs";
 import { fieldGrid } from "../positions.mjs";
 import { seedShowSql, type SeedPosition } from "../seed.mjs";
 
@@ -144,4 +149,76 @@ test("change: 50 × 2 rows keep both ends in the menu, magnify where pointed, an
     // Up keeps the column
     await page.keyboard.press("ArrowUp");
     await expect(readout).toContainText("Behind 1, spot 1 of");
+});
+
+test("change: on a placed shape, the Rows menu keeps off its rows and Rows apart counts along while it's dragged", async ({
+    show,
+}) => {
+    const { page } = show;
+    await expectCanvasMatchesShow(show);
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+
+    await page.keyboard.press("ControlOrMeta+a");
+    await expect
+        .poll(async () => (await readField(page)).selection.length)
+        .toBe(100);
+    await page.keyboard.press("l");
+    const from = await toScreen(page, { x: cf.x - 40 * S, y: cf.y - 20 * S });
+    const to = await toScreen(page, { x: cf.x + 40 * S, y: cf.y - 20 * S });
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(to.x, to.y, { steps: 12 });
+    await page.mouse.up();
+    await page.getByTestId("shape-rows").click();
+    await page.getByTestId("shape-rows-pick-50").click();
+    await page.getByTestId("shape-rows").click();
+    await expect(page.getByTestId("shape-rows-content")).toBeHidden();
+
+    // Placed, then reopened from a member
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await waitForIdle(page);
+    await page.keyboard.press("Escape");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([]);
+    const t3 = (await drawnMarchers(page)).find((m) => m.id === 3)!.screen;
+    await page.mouse.click(t3.x, t3.y);
+    const placed = page.getByTestId("placed-box-readout");
+    await expect(placed).toBeVisible();
+    await placed.getByTestId("shape-rows").click();
+    const menu = page.getByTestId("shape-rows-content");
+    await expect(menu).toBeVisible();
+
+    // None of the shape's marchers are under the menu
+    const covered = async () => {
+        const box = (await menu.boundingBox())!;
+        return (await drawnMarchers(page)).filter(
+            ({ screen: p }) =>
+                p.x >= box.x &&
+                p.x <= box.x + box.width &&
+                p.y >= box.y &&
+                p.y <= box.y + box.height,
+        ).length;
+    };
+    await expect.poll(covered).toBe(0);
+    if (SHOTS)
+        await page.screenshot({ path: `${SHOTS}/5-placed-off-shape.png` });
+
+    // Dragged, the number counts along before the drag is let go
+    const apart = menu.getByTestId("shape-editor-rowsApart");
+    const before = await apart.innerText();
+    const at = (await apart.boundingBox())!;
+    await page.mouse.move(at.x + at.width / 2, at.y + at.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(at.x + at.width / 2 + 60, at.y + at.height / 2, {
+        steps: 8,
+    });
+    await expect(apart).not.toHaveText(before);
+    const during = await apart.innerText();
+    if (SHOTS) await page.screenshot({ path: `${SHOTS}/6-mid-drag.png` });
+    await page.mouse.up();
+    await expect(apart).toHaveText(during);
 });

@@ -732,7 +732,17 @@ const STATIC_ACTIONS = {
         defaultBindings: [],
         args: { shown: "everyone" },
     },
-    // Where those icons go: the popup's Where choice. Unbound
+    // Show on field's Equipment icons switch (fork #1332), back to who it last showed. Unbound
+    toggleEquipmentIcons: {
+        labelKey: "actions.cues.toggleEquipmentIcons",
+        keywordsKey: "actions.cues.equipmentIconsKeywords",
+        toggleOnKey: "actions.cues.showEquipmentIcons",
+        toggleOffKey: "actions.cues.hideEquipmentIcons",
+        category: "field",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    // Where those icons go: Settings › Field's Icon place. Unbound
     equipmentIconsBeside: {
         labelKey: "actions.cues.equipmentIconsBeside",
         keywordsKey: "actions.cues.equipmentIconsKeywords",
@@ -967,6 +977,47 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["M"],
     },
+    // Show on field's Drill numbers and Shape outlines switches (fork #1332), back to the
+    // choice last shown. Unbound
+    toggleMarcherLabels: {
+        labelKey: "actions.ui.toggleMarcherLabels",
+        keywordsKey: "actions.ui.toggleMarcherLabelsKeywords",
+        toggleOnKey: "actions.ui.showMarcherLabels",
+        toggleOffKey: "actions.ui.hideMarcherLabels",
+        category: "ui",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    toggleShapeOutlines: {
+        labelKey: "actions.ui.toggleShapeOutlines",
+        keywordsKey: "actions.ui.toggleShapeOutlinesKeywords",
+        toggleOnKey: "actions.ui.showShapeOutlines",
+        toggleOffKey: "actions.ui.hideShapeOutlines",
+        category: "ui",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    // Performers drawn as figures seen from above (fork #1319): Show on field's Figures, back to
+    // the choice last shown (with or without dots). Unbound
+    togglePerformerFigures: {
+        labelKey: "actions.ui.togglePerformerFigures",
+        keywordsKey: "actions.ui.togglePerformerFiguresKeywords",
+        toggleOnKey: "actions.ui.showPerformerFigures",
+        toggleOffKey: "actions.ui.hidePerformerFigures",
+        category: "ui",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    // Facing carets on the field (fork #1316): Show on field's Facing. Unbound
+    toggleFacingArrows: {
+        labelKey: "actions.ui.toggleFacingArrows",
+        keywordsKey: "actions.ui.toggleFacingArrowsKeywords",
+        toggleOnKey: "actions.ui.showFacingArrows",
+        toggleOffKey: "actions.ui.hideFacingArrows",
+        category: "ui",
+        scope: "canvas",
+        defaultBindings: [],
+    },
     // The show's 3D venue under the 2D grid (#1207), back in the look last picked. Unbound: a
     // view picked now and then, from the display bar's Venue button or the palette
     toggleFieldVenue: {
@@ -1109,6 +1160,31 @@ const STATIC_ACTIONS = {
         keywordsKey: "actions.ui.openAssetsKeywords",
         category: "ui",
         scope: "global",
+        defaultBindings: [],
+    },
+    // Opens the Props panel's Flags with Add flag open (fork #985): a flag's template and design
+    addFlag: {
+        labelKey: "actions.ui.addFlag",
+        keywordsKey: "actions.ui.addFlagKeywords",
+        category: "ui",
+        scope: "global",
+        defaultBindings: [],
+    },
+    // Hands the show's flag `value` (args) to the selection from the paused playhead: an
+    // Equipment cue, as the catalog's items are (fork #985). Without a flag, Props › Flags.
+    equipmentShowFlag: {
+        labelKey: "actions.cues.equipmentShowFlag",
+        keywordsKey: "actions.cues.equipmentKeywords",
+        category: "batchEdit",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    // Selects whoever holds the show's flag `value` (args) at the playhead
+    selectHoldingShowFlag: {
+        labelKey: "actions.cues.selectHoldingShowFlag",
+        keywordsKey: "actions.cues.selectHoldingKeywords",
+        category: "select",
+        scope: "canvas",
         defaultBindings: [],
     },
     // Lists the assets nothing in the show uses and, once confirmed, removes them
@@ -1382,6 +1458,16 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["$mod+Shift+G", "Control+Shift+G"],
         ignoreRepeat: true,
+    },
+
+    // Split here (#1336): the placed Line, Curve or Arc selected whole cut in two where the field's
+    // menu was opened on it, between two marchers. It needs that point, so it isn't in the palette
+    shapeSplitHere: {
+        labelKey: "actions.shape.splitHere",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        hiddenFromPalette: true,
     },
 
     // Pathways step 1 (ADR 0016): the Path pen draws a cornered path for one selected marcher's

@@ -38,6 +38,10 @@ export const WORKER_POLICIES: readonly WorkerPolicy[] = [
     },
     // Trims and pads decoded music
     { file: "audioOffset.worker", csp: COMPUTE_ONLY },
+    // 3D View: bleeds a composed uniform flats atlas (fork #1255)
+    { file: "flatsBleed.worker", csp: COMPUTE_ONLY },
+    // 3D View: decodes imported uniform flats and a show's uniform pack layers (fork #1257)
+    { file: "uniformPack.worker", csp: COMPUTE_ONLY },
     // Web build: writes a video export into the origin private file system
     { file: "videoFile.worker", csp: COMPUTE_ONLY },
     // Web build: the show's database (SQLite's WebAssembly, fetched from the app's own files)

@@ -39,6 +39,12 @@ import {
 } from "@/view3d/render/composer";
 import type { ChannelPlay, FeetPlay } from "@/view3d/render/channelState";
 import { createUniformMaterial } from "@/view3d/render/uniform-shader.js";
+import { withFlats } from "@/view3d/render/uniform-flats.js";
+import type {
+    FlatsLayout,
+    FlatsArtworkKey,
+} from "@/view3d/core/marchers/uniformArtwork";
+import type { FlatsAtlas } from "./flatsAtlas";
 import {
     bodyKey,
     PART,
@@ -252,6 +258,25 @@ export interface MarcherSlotLook {
 
 export type MarcherQuality = "low" | "high";
 
+/** What a body type's flats art needs: its atlas, its lookup table and the shared layout. */
+export interface FlatsResource {
+    atlas: FlatsAtlas;
+    lut: THREE.Texture;
+    layout: FlatsLayout;
+}
+/** Flats art by {@link flatsResourceKey}. */
+export type FlatsResources = ReadonlyMap<string, FlatsResource>;
+export const flatsResourceKey = (id: FlatsArtworkKey, body: BodyType) =>
+    `${id}|${body}`;
+/**
+ * The body type whose table and atlas a marcher's flats use: its own at
+ * `high`; at `low` every marcher wears the block body, measured as the
+ * median's.
+ */
+export function flatsBody(type: BodyType, quality: MarcherQuality): BodyType {
+    return quality === "low" ? "neutral-average" : type;
+}
+
 interface MeshEntry {
     mesh: THREE.InstancedMesh;
     /** Slot index per instance. */
@@ -387,6 +412,8 @@ export class MarcherBodies {
         bake: ChannelBake,
         looks: readonly MarcherSlotLook[],
         quality: MarcherQuality,
+        /** Flats art for the looks that wear it; without an entry they show their palette. */
+        flats: FlatsResources = new Map(),
     ) {
         this.bake = bake;
         const anyBody = bodies.values().next().value!;
@@ -426,15 +453,31 @@ export class MarcherBodies {
         });
         const materialByLook = new Map<string, THREE.Material>();
         for (const g of groups.values()) {
-            const u = bodyKey(g.look);
+            // flats art is per body type (its table and graded atlas)
+            const artwork = g.look.options.artwork;
+            const art = artwork
+                ? flats.get(
+                      flatsResourceKey(artwork, flatsBody(g.type, quality)),
+                  )
+                : undefined;
+            const u = art ? `${bodyKey(g.look)}|${g.type}` : bodyKey(g.look);
             let material = materialByLook.get(u);
             if (!material) {
+                const base = createUniformMaterial(THREE, {
+                    style: g.look.style,
+                    colors: g.look.colors,
+                    options: g.look.options,
+                });
                 material = composedSkinning(
-                    createUniformMaterial(THREE, {
-                        style: g.look.style,
-                        colors: g.look.colors,
-                        options: g.look.options,
-                    }),
+                    art
+                        ? withFlats(THREE, base, {
+                              layout: art.layout,
+                              body: flatsBody(g.type, quality),
+                              lut: art.lut,
+                              atlas: art.atlas.texture,
+                              atlasRect: art.atlas.rect,
+                          })
+                        : base,
                     this.composer,
                 );
                 if (!g.look.options.gloves) bareHands(material);

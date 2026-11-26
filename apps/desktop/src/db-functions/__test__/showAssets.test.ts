@@ -9,6 +9,7 @@ import {
     getShowAssets,
     getShowAssetBlobSizes,
     getShowAssetReferences,
+    hashShowAsset,
     readShowAssetBlob,
     removeShowAssetsInTransaction,
     setShowAssetCreditsInTransaction,
@@ -230,6 +231,43 @@ describeDbTests("showAssets", (it) => {
             await expect(
                 add(db, marimba({ sidecar: { bad: Number.NaN } })),
             ).rejects.toThrow(/number/);
+            expect(await assetCount(db)).toBe(0);
+            expect(await blobCount(db)).toBe(0);
+        });
+    });
+
+    describe("hashes worked out before the transaction", () => {
+        it("stores with them when they are the asset's", async ({ db }) => {
+            const asset = marimba();
+            const hashes = await hashShowAsset(asset);
+            const { ref } = await db.transaction(async (tx) =>
+                addShowAssetInTransaction({ tx, asset, hashes }),
+            );
+            expect(ref.versionHash).toBe(hashes.versionHash);
+        });
+
+        it("refuses hashes for other parts or another sidecar", async ({
+            db,
+        }) => {
+            const asset = marimba();
+            const withHashes = (
+                hashes: Awaited<ReturnType<typeof hashShowAsset>>,
+            ) =>
+                db.transaction(async (tx) =>
+                    addShowAssetInTransaction({ tx, asset, hashes }),
+                );
+            // one part short
+            const fewer = await hashShowAsset(
+                marimba({ parts: { model: GLB, distant: DISTANT } }),
+            );
+            await expect(withHashes(fewer)).rejects.toThrow(/name parts/);
+            // the same parts, another sidecar
+            const otherSidecar = await hashShowAsset(
+                marimba({ sidecar: { triangles: 1 } }),
+            );
+            await expect(withHashes(otherSidecar)).rejects.toThrow(
+                /aren't its Version's/,
+            );
             expect(await assetCount(db)).toBe(0);
             expect(await blobCount(db)).toBe(0);
         });

@@ -19,7 +19,19 @@ import type {
     EquipmentIconKey,
     EquipmentIconPlace,
 } from "@/cues/equipmentIcons";
-import { IconBatch, useIconAtlas, type FieldIcon } from "../iconBatch";
+import {
+    IconBatch,
+    useIconAtlas,
+    type FieldIcon,
+    type PictureAtlas,
+} from "../iconBatch";
+import type { FieldFacing } from "@/cues/useFieldFacing";
+import {
+    anchorsClearOfCarets,
+    caretSizes,
+    ICON_DOT_REACH,
+    type CaretSizes,
+} from "../facingCaret";
 
 /**
  * A marcher label: 14 field units, its center 2.2 dot radii above the dot,
@@ -150,8 +162,11 @@ export default function LabelsLayer({
     style = DEFAULT_STYLE,
     holdAutoSize = false,
     icons = null,
+    pictures = null,
     iconPlace = "beside",
     hovered = null,
+    facing = null,
+    placed = null,
 }: {
     marchers: FieldMarchers;
     /** Marchers whose labels are drawn dimmed (#201). */
@@ -172,6 +187,8 @@ export default function LabelsLayer({
      * change.
      */
     icons?: LabelIcons | null;
+    /** The show's flags' pictures, for the icons of performers holding one (`useFlagPictures`) */
+    pictures?: PictureAtlas | null;
     /** Where the icons go: after the drill number, in place of the dot, or of the number */
     iconPlace?: EquipmentIconPlace;
     /**
@@ -182,6 +199,16 @@ export default function LabelsLayer({
         get(): number | null;
         subscribe(changed: () => void): () => void;
     } | null;
+    /**
+     * Which way each performer faces at the beat drawn, while facing carets show (fork #1316): a
+     * label moves to the other side of its dot when the caret points through it
+     */
+    facing?: FieldFacing | null;
+    /**
+     * Where each label is anchored as drawn (x, y per marcher, field units): the marcher's spot,
+     * or moved off its facing caret. Read by the field test API; don't write it.
+     */
+    placed?: { current: Float64Array | null } | null;
 }) {
     const invalidate = useThree((s) => s.invalidate);
     const draw = useFieldDraw();
@@ -205,6 +232,11 @@ export default function LabelsLayer({
         invalidate();
         return () => iconBatch?.dispose();
     }, [iconBatch, invalidate]);
+    // The show's flags' pictures (fork #985): who holds which flag, in its own colors. They go on
+    // the icons with the layout (in the frame), so a layout never reads the last set's places.
+    useEffect(() => {
+        invalidate();
+    }, [pictures, invalidate]);
     const drawn = useRef({
         version: -1,
         idsVersion: -1,
@@ -218,9 +250,23 @@ export default function LabelsLayer({
         shown: new Uint8Array(0) as Uint8Array,
         iconKey: "",
         iconBatch: null as IconBatch | null,
+        pictures: null as PictureAtlas | null,
         iconPlace,
         hoveredId: null as number | null,
         selectionVersion: -1,
+        facing: null as FieldFacing | null,
+        /** Labels were moved off facing carets: Show facing is on and labels or icons show */
+        offCarets: false,
+        /** The zoom and selection they were moved off at (carets change with both) */
+        caretZoom: 0,
+        caretSelection: -1,
+    });
+    // The labels' widths, how far each caret starts in dot radii, and the anchors moved off the
+    // carets, reused frame to frame
+    const scratch = useRef({
+        widths: new Float64Array(0),
+        reach: new Float32Array(0),
+        anchors: new Float64Array(0),
     });
 
     useEffect(() => {
@@ -231,7 +277,7 @@ export default function LabelsLayer({
     // New labels, a new theme or style lay the text out again on the next frame
     useEffect(
         () => invalidate(),
-        [labels, theme, style, icons, iconPlace, invalidate],
+        [labels, theme, style, icons, iconPlace, facing, invalidate],
     );
     useEffect(() => hovered?.subscribe(invalidate), [hovered, invalidate]);
     // The icons carry the label's offset themselves: one in place of a dot has none
@@ -284,6 +330,7 @@ export default function LabelsLayer({
         const newLayout =
             iconKey !== last.iconKey ||
             iconBatch !== last.iconBatch ||
+            pictures !== last.pictures ||
             iconPlace !== last.iconPlace ||
             (byNumber &&
                 (hoveredId !== last.hoveredId ||
@@ -297,25 +344,55 @@ export default function LabelsLayer({
             style !== last.style ||
             size !== last.size ||
             // Dimming hides or recolors labels: laid out again
-            dimming.version !== last.dimVersion;
+            dimming.version !== last.dimVersion ||
+            // Facing carets on or off: the labels' widths are measured
+            facing !== last.facing;
         // The keyframe look (and each frame of its ease on Stop) only
         // changes the weights
         const weightsChanged = look.version !== last.lookVersion;
         const weightOf = (id: number) => labelWeight(dimming, look, id);
         if (newLayout) {
             const color = rgba01(theme.defaultMarcher.label);
+            const texts = marchers.ids.map((id, i) =>
+                shown[i] &&
+                dimming.labelShown(id) &&
+                !(
+                    byNumber &&
+                    iconsNow?.icons.has(id) &&
+                    !revealed(id, i, hoveredId)
+                )
+                    ? (labels.get(id) ?? "")
+                    : "",
+            );
+            // How wide each label is, its icon included, for keeping it off its facing caret
+            // (#1316); and how far the caret starts, past an icon in place of the dot
+            if (facing) {
+                const withLabel = onDots ? undefined : iconsNow?.icons;
+                scratch.current.widths = Float64Array.from(
+                    marchers.ids,
+                    (id, i) => {
+                        // Labels Off draws no numbers, only icons
+                        const drawnText = style.form === "off" ? "" : texts[i];
+                        // An icon is drawn after the number, or alone where the label would be
+                        const iconWidth =
+                            withLabel?.has(id) &&
+                            shown[i] &&
+                            dimming.labelShown(id)
+                                ? drawnText
+                                    ? ICON_WIDTH_EM
+                                    : ICON_EM
+                                : 0;
+                        return (atlas.measure(drawnText) + iconWidth) * size;
+                    },
+                );
+                const iconDots = onDots ? iconsNow?.icons : undefined;
+                scratch.current.reach = Float32Array.from(marchers.ids, (id) =>
+                    iconDots?.has(id) ? ICON_DOT_REACH : 1,
+                );
+            }
             text.setLabels(
                 marchers.ids.map((id, i) => ({
-                    text:
-                        shown[i] &&
-                        dimming.labelShown(id) &&
-                        !(
-                            byNumber &&
-                            iconsNow?.icons.has(id) &&
-                            !revealed(id, i, hoveredId)
-                        )
-                            ? (labels.get(id) ?? "")
-                            : "",
+                    text: texts[i],
                     size,
                     align: style.beside ? "left" : "center",
                     baseline: CENTER_BASELINE,
@@ -328,15 +405,35 @@ export default function LabelsLayer({
                     weight: weightOf(id),
                 })),
             );
+            iconBatch?.setPictures(pictures);
             iconBatch?.setIcons(
                 iconsOf(iconsNow?.icons, shown, size, color, hoveredId),
             );
         } else if (weightsChanged) {
             text.setWeights((i) => weightOf(marchers.ids[i]!));
         }
-        if (newLayout || marchers.version !== last.version) {
-            text.setAnchors(marchers.positions);
-            iconBatch?.setAnchors(marchers.positions);
+        // Labels move off facing carets only while something is drawn there: the labels, or icons
+        // with them
+        const offCarets =
+            facing !== null &&
+            opacity > 0 &&
+            (style.form !== "off" || (iconKey !== "" && !onDots));
+        if (
+            newLayout ||
+            marchers.version !== last.version ||
+            offCarets !== last.offCarets ||
+            // The carets' sizes change with zoom, and a selected marcher's starts past its ring
+            (offCarets &&
+                (zoom !== last.caretZoom ||
+                    marchers.selectionVersion !== last.caretSelection))
+        ) {
+            const anchors = offCarets
+                ? anchorsOffCarets(caretSizes(zoom), size)
+                : marchers.positions;
+            text.setAnchors(anchors);
+            // In place of a dot an icon stays on the spot
+            iconBatch?.setAnchors(onDots ? marchers.positions : anchors);
+            if (placed) placed.current = anchors;
         }
         drawn.current = {
             version: marchers.version,
@@ -351,11 +448,39 @@ export default function LabelsLayer({
             shown,
             iconKey,
             iconBatch,
+            pictures,
             iconPlace,
             hoveredId,
             selectionVersion: marchers.selectionVersion,
+            facing,
+            offCarets,
+            caretZoom: zoom,
+            caretSelection: marchers.selectionVersion,
         };
     });
+
+    /** Each label's anchor: its marcher's spot, moved off its facing caret (#1316). */
+    function anchorsOffCarets(caret: CaretSizes, size: number): Float64Array {
+        const beat = marchers.drawnBeat;
+        if (!facing || beat === null) return marchers.positions;
+        const n = marchers.positions.length;
+        const buffers = scratch.current;
+        if (buffers.anchors.length !== n) buffers.anchors = new Float64Array(n);
+        return anchorsClearOfCarets({
+            positions: marchers.positions,
+            directions: facing.directions(marchers.ids, beat),
+            widths: buffers.widths,
+            reach: buffers.reach,
+            selected: marchers.selected,
+            label: {
+                beside: style.beside,
+                offset: style.beside ? LABEL_BESIDE : LABEL_LIFT,
+                height: size,
+            },
+            caret,
+            out: buffers.anchors,
+        });
+    }
 
     /** Whether a marcher's drill number shows in place of its icon: hovered or selected. */
     function revealed(id: number, i: number, hoveredId: number | null) {

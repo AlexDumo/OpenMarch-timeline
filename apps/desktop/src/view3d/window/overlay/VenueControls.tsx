@@ -42,14 +42,25 @@ import {
 } from "@/view3d/core/instruments/catalog";
 import { brassFinishOf, tubaModelOf } from "@/view3d/core/venueSettings";
 import {
-    SILK_SHAPE_IDS,
-    silkShape,
-    silkShapeOf,
-    type SilkShapeId,
-} from "@/view3d/core/sizes/silkShapes";
-import { cutPathBounds, cutPathData } from "@/view3d/core/sizes/silkCuts";
-import { ToggleGroup, ToggleGroupItem } from "@openmarch/ui";
+    flatsArtworkOf,
+    isUniformPackValue,
+    type UniformPackValue,
+} from "@/view3d/core/marchers/uniformArtwork";
+import {
+    uniformPackIsNewer,
+    uniformPackQueryOptions,
+    uniformEntryOf,
+    uniformPacksQueryOptions,
+} from "@/hooks/queries/useUniformPack";
+import { wornPackProblem } from "@/view3d/core/uniformPack/wornPack";
+import {
+    useCustomUniforms,
+    useCustomUniformsAvailable,
+    useCustomUniformsStore,
+} from "@/view3d/window/uniformArtworkPreview";
+import { Button } from "@openmarch/ui";
 import { Segmented } from "./Panel";
+import { venuePickBase } from "@/view3d/sync/venuePick";
 import {
     applyVenueChange,
     venueChanged,
@@ -72,7 +83,11 @@ export function useVenueRequest(): {
             try {
                 const next = applyVenueChange(settings, change);
                 if (venueChanged(settings, next)) {
-                    window.view3d.requestVenueChange(next);
+                    // the uniform it was made against: the editor keeps a newer one
+                    window.view3d.requestVenueChange(
+                        next,
+                        venuePickBase(settings),
+                    );
                 }
             } catch (error) {
                 console.error("3D View: invalid venue change", error);
@@ -250,24 +265,214 @@ export function FieldLinesControl() {
     );
 }
 
-/** The band's uniform: every built-in preset, two to a row. */
+/** The picker's value for the sample flats uniform (part of the custom-uniform preview). */
+const FLATS_SAMPLE = "flats:sample" as const;
+
+/**
+ * The band's uniform: every built-in preset, two to a row, then (with Custom uniforms (preview)
+ * on) the sample uniform drawn as flats and each uniform imported into the show (fork #1257), by
+ * its name.
+ *
+ * With the setting off, a show whose band already wears a custom uniform (one from a colleague,
+ * say) keeps wearing it: show data never changes on its own. The picker lists that one uniform,
+ * picked, says the show uses a preview uniform and offers to turn the preview on. Picking a
+ * preset still works, and nothing is removed from the show. A build without custom uniforms (a
+ * release, until the format is final) does the same without offering to turn it on, and its
+ * notes don't say to.
+ *
+ * When the band's uniform is gone from the show, doesn't read, or was made by a newer OpenMarch,
+ * the band wears its preset and a note here says why, with the setting on or off. When it
+ * couldn't be loaded just now (reading it, or listing the show's uniforms, failed after its
+ * retries), the note says so, apart from a damaged file, with Try again.
+ */
 export function UniformPicker() {
     const { t } = useTranslate();
     const { settings, request } = useVenueRequest();
+    const flats = useCustomUniforms();
+    const available = useCustomUniformsAvailable();
+    const turnOn = useCustomUniformsStore((s) => s.setEnabled);
+    const named = settings ? flatsArtworkOf(settings.uniformArtwork) : null;
+    const namedPack = named && isUniformPackValue(named) ? named : null;
+    const packsQuery = useQuery({
+        ...uniformPacksQueryOptions(),
+        enabled: flats || namedPack !== null,
+    });
+    const packs = packsQuery.data;
+    const packQuery = useQuery(uniformPackQueryOptions(namedPack));
+    const { data: pack, isSuccess: packRead } = packQuery;
+    // a read that failed after its retries with nothing read: not a damaged file (Try again)
+    const packsFailed = packsQuery.isError && packs === undefined;
+    const packFailed = packQuery.isError && pack === undefined;
+    // the note Try again was pressed on, kept while it runs: a query with nothing read goes
+    // back to pending when it fetches again, which would otherwise hide the note and its button
+    const [retrying, setRetrying] = useState<"load" | "list" | null>(null);
+    // the uniform whose version the band wears (editing items adds versions, fork #1258)
+    const wornEntry = namedPack ? uniformEntryOf(packs, namedPack) : undefined;
+    // a uniform the show no longer has (an undo after Remove unused…), or one whose file
+    // doesn't read (or was made by a newer OpenMarch): the band wears its preset, so the preset
+    // is the one picked, and a note under the picker says why, with the setting on or off
+    const problem = wornPackProblem(
+        namedPack,
+        packs ? wornEntry !== undefined : undefined,
+        packRead ? pack : undefined,
+        uniformPackIsNewer(namedPack),
+        packFailed,
+    );
+    const worn = problem ? null : named;
+    // the list of the show's uniforms failed, though the band's uniform (if any) reads: a
+    // note of its own, with the setting on (the list is the picker's choices) or while the band
+    // wears a custom uniform
+    const listFailed = packsFailed && !problem && (flats || namedPack !== null);
+    const failedNote =
+        retrying ??
+        (problem === "loadFailed" ? "load" : listFailed ? "list" : null);
+    const tryAgain = () => {
+        if (retrying || !failedNote) return;
+        setRetrying(failedNote);
+        void Promise.allSettled([
+            packsFailed ? packsQuery.refetch() : null,
+            packFailed ? packQuery.refetch() : null,
+        ]).finally(() => setRetrying(null));
+    };
+    type Value = UniformPresetId | typeof FLATS_SAMPLE | UniformPackValue;
+    const sampleOption = {
+        value: FLATS_SAMPLE as Value,
+        label: t("view3d.uniformPreset.flatsSample"),
+    };
+    // each uniform once: the version the band wears, else its newest. Without the list (it
+    // failed), the uniform the band wears, as read, so it still shows picked
+    const packOptions = packs
+        ? packs.map((entry) => ({
+              value: (entry === wornEntry && namedPack
+                  ? namedPack
+                  : entry.value) as Value,
+              label: entry.name,
+          }))
+        : worn && isUniformPackValue(worn) && pack
+          ? [{ value: worn as Value, label: pack.name }]
+          : [];
+    // with the preview off, only the custom uniform the band wears
+    const wornOptions = !worn
+        ? []
+        : isUniformPackValue(worn)
+          ? packOptions.filter((option) => option.value === worn)
+          : [sampleOption];
+    const previewWorn = !flats && wornOptions.length > 0;
     return (
-        <Segmented
-            value={settings ? uniformPresetOf(settings.uniforms) : null}
-            options={UNIFORM_PRESET_IDS.map((preset) => ({
-                value: preset,
-                label: t(`view3d.uniformPreset.${preset}`),
-            }))}
-            onChange={(uniforms: UniformPresetId) =>
-                request({ kind: "uniforms", uniforms })
-            }
-            label={t("view3d.settings.uniforms")}
-            testId="view3d-uniform-picker"
-            className="grid! grid-cols-2 [&>*]:justify-start"
-        />
+        <>
+            <Segmented<Value>
+                value={
+                    settings
+                        ? worn
+                            ? isUniformPackValue(worn)
+                                ? worn
+                                : FLATS_SAMPLE
+                            : uniformPresetOf(settings.uniforms)
+                        : null
+                }
+                options={[
+                    ...UNIFORM_PRESET_IDS.map((preset) => ({
+                        value: preset as Value,
+                        label: t(`view3d.uniformPreset.${preset}`),
+                    })),
+                    ...(flats ? [sampleOption, ...packOptions] : wornOptions),
+                ]}
+                onChange={(next) =>
+                    next === FLATS_SAMPLE
+                        ? request({
+                              kind: "uniformArtwork",
+                              uniformArtwork: "sample",
+                          })
+                        : next.startsWith("library:")
+                          ? request({
+                                kind: "uniformArtwork",
+                                uniformArtwork: next as UniformPackValue,
+                            })
+                          : request({
+                                kind: "uniforms",
+                                uniforms: next as UniformPresetId,
+                            })
+                }
+                label={t("view3d.settings.uniforms")}
+                testId="view3d-uniform-picker"
+                className="grid! grid-cols-2 [&>*]:justify-start"
+            />
+            {failedNote && (
+                <div
+                    className="flex flex-col items-start gap-6"
+                    role="status"
+                    data-testid={
+                        failedNote === "list"
+                            ? "view3d-uniform-list-failed"
+                            : "view3d-uniform-loadFailed"
+                    }
+                >
+                    <p className="text-sub text-yellow">
+                        {failedNote === "list"
+                            ? t("view3d.uniformImport.listFailed")
+                            : t("view3d.uniformImport.loadFailed")}
+                    </p>
+                    <Button
+                        variant="secondary"
+                        size="compact"
+                        onClick={tryAgain}
+                        disabled={retrying !== null}
+                        data-testid="view3d-uniform-try-again"
+                    >
+                        {retrying
+                            ? t("view3d.uniformImport.loading")
+                            : t("view3d.uniformImport.tryAgain")}
+                    </Button>
+                </div>
+            )}
+            {problem && problem !== "loadFailed" && (
+                <p
+                    className="text-sub text-yellow"
+                    role="status"
+                    data-testid={`view3d-uniform-${problem}`}
+                >
+                    {problem === "newer"
+                        ? t("view3d.uniformImport.newer")
+                        : flats
+                          ? t(`view3d.uniformImport.${problem}`)
+                          : available
+                            ? t(`view3d.uniformPreview.${problem}Off`)
+                            : t(`view3d.uniformPreview.${problem}Unavailable`)}
+                </p>
+            )}
+            {(previewWorn ||
+                (available &&
+                    !flats &&
+                    problem &&
+                    problem !== "newer" &&
+                    problem !== "loadFailed")) && (
+                <div
+                    className="flex flex-wrap items-center gap-6"
+                    role="status"
+                    data-testid="view3d-uniform-preview-worn"
+                >
+                    {previewWorn && (
+                        <span className="text-sub text-text/60">
+                            {available
+                                ? t("view3d.uniformPreview.showUses")
+                                : t(
+                                      "view3d.uniformPreview.showUsesUnavailable",
+                                  )}
+                        </span>
+                    )}
+                    {available && (
+                        <Button
+                            variant="secondary"
+                            size="compact"
+                            onClick={() => turnOn(true)}
+                            data-testid="view3d-uniform-preview-turn-on"
+                        >
+                            {t("view3d.uniformPreview.turnOn")}
+                        </Button>
+                    )}
+                </div>
+            )}
+        </>
     );
 }
 
@@ -329,80 +534,5 @@ export function TubaPicker() {
             label={t("view3d.settings.tuba")}
             testId="view3d-tuba-picker"
         />
-    );
-}
-
-/**
- * A silk shape's outline as a small picture: the pole edge on the left,
- * drawn at the shape's own proportions inside a fixed box.
- */
-export function SilkShapeIcon({
-    shape,
-    className,
-}: {
-    shape: SilkShapeId;
-    className?: string;
-}) {
-    const { path } = silkShape(shape);
-    const b = cutPathBounds(path);
-    // a stroke that stays about 1.5 px wide at the icon's size
-    const stroke = Math.max(b.maxX, b.maxY) / 28;
-    const pad = stroke;
-    return (
-        <svg
-            viewBox={`${-pad} ${-pad} ${b.maxX + 2 * pad} ${b.maxY + 2 * pad}`}
-            preserveAspectRatio="xMidYMid meet"
-            aria-hidden="true"
-            className={className}
-        >
-            <path
-                d={cutPathData(path)}
-                fill="currentColor"
-                fillOpacity={0.25}
-                stroke="currentColor"
-                strokeWidth={stroke}
-                strokeLinejoin="round"
-                fillRule="evenodd"
-            />
-        </svg>
-    );
-}
-
-/**
- * The guard's flag silk shape (fork #973): every shape on the owner's
- * chart, as its outline and its name, three to a row.
- */
-export function SilkShapePicker() {
-    const { t } = useTranslate();
-    const { settings, request } = useVenueRequest();
-    const value = settings ? silkShapeOf(settings.silkShape) : "";
-    return (
-        <ToggleGroup
-            type="single"
-            value={value}
-            // Radix sends "" when the active item is clicked again; keep it.
-            onValueChange={(next: string) => {
-                if (next)
-                    request({
-                        kind: "silkShape",
-                        silkShape: next as SilkShapeId,
-                    });
-            }}
-            aria-label={t("view3d.settings.silkShape")}
-            data-testid="view3d-silk-shape-picker"
-            className="grid! h-auto! shrink-0 grid-cols-3 gap-2 border-0! bg-transparent! bg-none!"
-        >
-            {SILK_SHAPE_IDS.map((shape) => (
-                <ToggleGroupItem
-                    key={shape}
-                    value={shape}
-                    data-value={shape}
-                    className="text-sub rounded-4! hover:bg-text/10! data-[state=on]:bg-accent! data-[state=on]:hover:bg-accent! data-[state=on]:text-text-invert! flex h-auto! flex-col items-center gap-4 border-0! px-4! py-6! text-center leading-tight whitespace-normal"
-                >
-                    <SilkShapeIcon shape={shape} className="h-32 w-56" />
-                    <span>{t(`view3d.silkShape.${shape}`)}</span>
-                </ToggleGroupItem>
-            ))}
-        </ToggleGroup>
     );
 }

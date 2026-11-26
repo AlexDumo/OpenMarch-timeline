@@ -51,7 +51,10 @@
         "check:gate": "tsc --noEmit && pnpm run test && pnpm run build:browser && pnpm run e2e:browser",
         "migrate": "export DATABASE_URL=file:electron/database/migrations/_blank.dots && drizzle-kit generate && tsx scripts/create-blank-db.ts",
         "docs:reference": "vite-node --config scripts/docs-reference/vite.config.mts scripts/docs-reference/generate.mts",
-        "docs:media": "node scripts/docs-media/capture.mjs"
+        "docs:media": "node scripts/docs-media/capture.mjs",
+        "uniform:build": "tsx scripts/uniform-pack/build.ts",
+        "uniform:render": "tsx scripts/uniform-pack/render.ts",
+        "uniform:image": "tsx scripts/uniform-pack/image.ts"
     },
     "dependencies": {
         "@dnd-kit/core": "^6.3.1",

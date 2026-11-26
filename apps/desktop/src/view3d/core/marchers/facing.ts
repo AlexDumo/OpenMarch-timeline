@@ -1,8 +1,8 @@
 /**
  * Which way a 3D View marcher faces, and which way its legs travel.
  *
- * The upper body faces the performer's Facing (#993): front, the audience,
- * until their first Facing cue, then the cues' angles, turning as the
+ * The upper body faces the performer's Facing (#993): front, the audience
+ * (side 2 for bass drums), until their first Facing cue, then the cues' angles, turning as the
  * compile says (`cueInputs.ts`). The legs follow the path whatever the
  * facing: they turn toward the travel direction (om-pose's `pickDirection`),
  * so a performer traveling across their facing slides and one traveling

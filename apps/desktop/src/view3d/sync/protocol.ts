@@ -82,6 +82,30 @@ export const VIEW3D_TIMELINE_QUERY_KEY = ["view3d_timeline"] as const;
  */
 export const VIEW3D_HOLD_STYLES_QUERY_KEY = ["view3d_hold_styles"] as const;
 
+/**
+ * Editor → window: how storing a uniform pack the window sent went (fork #1257), so the window
+ * says the band wears it only once it's stored, and says so when it couldn't be.
+ */
+export const VIEW3D_UNIFORM_PACK_RESULT_CHANNEL = "view3d:uniform-pack-result";
+
+export interface View3dUniformPackResult {
+    /** The `id` the window's request carried */
+    id: string;
+    ok: boolean;
+    /** When stored: the value now in `uniformArtwork` */
+    value?: string;
+    /**
+     * An item edit (fork #1258): the undo entry its burst extends (getLatestUndoEntryToken), for
+     * the next save of the same burst to send back as `amend`
+     */
+    token?: string | null;
+    /**
+     * Not stored, on purpose: the venue no longer names the pack the edit started from (Undo, or
+     * another uniform picked while it saved), so the edit was dropped
+     */
+    superseded?: boolean;
+}
+
 /** The channels the editor publishes and the window may listen to. */
 export const VIEW3D_PUBLISH_CHANNELS = [
     VIEW3D_CLOCK_CHANNEL,
@@ -90,6 +114,7 @@ export const VIEW3D_PUBLISH_CHANNELS = [
     VIEW3D_HIDDEN_PROPS_CHANNEL,
     VIEW3D_CAMERA_WANTED_CHANNEL,
     VIEW3D_CAMERA_MOVE_CHANNEL,
+    VIEW3D_UNIFORM_PACK_RESULT_CHANNEL,
 ] as const;
 export type View3dPublishChannel = (typeof VIEW3D_PUBLISH_CHANNELS)[number];
 
@@ -149,6 +174,13 @@ export interface View3dInvalidate {
 export interface View3dVenueChangeRequest {
     /** Unchecked: the editor validates it against the venue schema. */
     settings?: unknown;
+    /**
+     * With `settings`: the band's uniform fields the window's venue had when the pick was made
+     * (`VenuePickBase`, unchecked). The editor rebases the pick on the venue it holds
+     * (`pickOnStoredUniform`), so a window behind an item edit's save can't write back a
+     * version of the uniform the save replaced.
+     */
+    base?: unknown;
     /** Unchecked: the editor validates it against `showCamerasSchema`. */
     cameras?: unknown;
     /**
@@ -157,6 +189,15 @@ export interface View3dVenueChangeRequest {
      * (fork #973). The editor stores it with history.
      */
     silkArtwork?: unknown;
+    /**
+     * A uniform pack file to store and dress the band in (fork #1257), as
+     * `{ id: string, bytes: Uint8Array }`, plus for an item edit (fork #1258) `versionOf` (the
+     * uniform asset it is a version of), `expect` (the value the venue must still name, or
+     * nothing is stored) and `amend` (the token of the undo entry its editing burst extends). Unchecked: the editor reads the bytes in the uniform
+     * pack worker. Stored as a show asset; pointing the band at it is undoable. The editor answers
+     * on `VIEW3D_UNIFORM_PACK_RESULT_CHANNEL` with the same `id`.
+     */
+    uniformPack?: unknown;
 }
 
 /**
@@ -221,6 +262,7 @@ export interface View3dPayloads {
     [VIEW3D_HIDDEN_PROPS_CHANNEL]: View3dHiddenProps;
     [VIEW3D_CAMERA_WANTED_CHANNEL]: View3dCameraWanted;
     [VIEW3D_CAMERA_MOVE_CHANNEL]: View3dCameraMove;
+    [VIEW3D_UNIFORM_PACK_RESULT_CHANNEL]: View3dUniformPackResult;
 }
 
 /**

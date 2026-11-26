@@ -2,7 +2,7 @@
  * The looks a show's performer figures need (ADR 0019): each performer's uniform as the 3D View
  * dresses them, in the figures' one body and slate uniform (`figureDress.ts`), and each look's
  * fingerprint. Everything that changes a figure's shape goes into the fingerprint: what the
- * performer carries and its options (a bass drum's size, the flag's silk shape), the brass
+ * performer carries and its options (a bass drum's size, the tuba or sousaphone), the brass
  * finish, the hold, the bake's body and uniform, the picture's scale and the figures' version.
  * Nothing else does: colors, names and drill leave it alone.
  *
@@ -25,7 +25,6 @@ import {
     uniformPresetOf,
 } from "@/view3d/core/marchers/uniformPresets";
 import { brassFinishOf, tubaModelOf } from "@/view3d/core/venueSettings";
-import { silkShapeOf } from "@/view3d/core/sizes/silkShapes";
 import { DEFAULT_HOLD } from "@/view3d/window/performers/windowHorn";
 
 /**
@@ -46,7 +45,6 @@ export interface FigureSettings {
     guardUniforms?: unknown;
     brassFinish?: unknown;
     tuba?: unknown;
-    silkShape?: unknown;
 }
 
 export interface FigurePerformer {
@@ -101,8 +99,6 @@ export function showFigureLooks(
     const winds = {
         finish: brassFinishOf(settings?.brassFinish),
         tuba: tubaModelOf(settings?.tuba),
-        silkShape: silkShapeOf(settings?.silkShape),
-        silkArtwork: false,
     };
     const preset = uniformPresetOf(settings?.uniforms);
     const guardPreset = guardUniformPresetOf(settings?.guardUniforms);

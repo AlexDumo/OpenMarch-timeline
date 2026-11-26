@@ -35,6 +35,10 @@ export type ThreeFieldState = {
     labels(): ReadonlyMap<number, string>;
     /** Each marcher's equipment icon at the beat shown, for those that have one */
     equipmentIcons(): ReadonlyMap<number, string>;
+    /** Which way a marcher's facing caret points at the beat shown, or null for none (fork #1316) */
+    facing(id: number): number | null;
+    /** Where each label is anchored as drawn (x, y per marcher, as `marchers.positions`), or null */
+    labelAnchors(): Float64Array | null;
     view(): FieldViewState;
     /** The element the field draws into, or null before it mounts. */
     element(): HTMLElement | null;
@@ -96,6 +100,9 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
             const icons = field.equipmentIcons();
             const { ids, positions, stacks } = field.marchers;
             const theme = field.theme();
+            const anchors = field.labelAnchors();
+            const placed =
+                anchors?.length === positions.length ? anchors : null;
             return ids.map((id, i): FieldTestMarcher => {
                 const x = positions[i * 2];
                 const y = positions[i * 2 + 1];
@@ -105,6 +112,10 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
                     id,
                     label: labels.get(id) ?? "",
                     equipmentIcon: icons.get(id) ?? "",
+                    facing: field.facing(id),
+                    labelMoved: placed
+                        ? { x: placed[i * 2] - x, y: placed[i * 2 + 1] - y }
+                        : { x: 0, y: 0 },
                     x,
                     y,
                     screen,

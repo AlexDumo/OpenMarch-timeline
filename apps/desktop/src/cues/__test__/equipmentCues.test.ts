@@ -128,6 +128,34 @@ describe("equipment cues (#992)", () => {
         expect(everyone.get(13)).toBe("Trumpet");
     });
 
+    it("the field's equipment icons for some sections only: everyone in them, nobody else (#1332)", () => {
+        const show = compileShowCues(MARCHERS, BEATS, [
+            cue(8, "tuba", [1]),
+            cue(8, "trumpet", [7]),
+        ]);
+        const only = (shown: EquipmentIcons, ...sections: string[]) =>
+            equipmentIconsAt({
+                compiled: show.compiled,
+                usualValue: show.usualValue,
+                sectionOf: (id) => MARCHERS.find((m) => m.id === id)?.section,
+                count: 8,
+                shown,
+                sections: new Set(sections),
+            });
+        // Guard only: the Color Guard's flags, and the one holding a trumpet; not the rifles' tuba
+        const guard = only("changed", "Color Guard");
+        expect([...guard.keys()]).toEqual(range(7, 12));
+        expect(guard.get(7)).toBe("Trumpet");
+        expect(guard.get(8)).toBe("Flag");
+        expect(only("everyone", "Rifle", "Trumpet").size).toBe(9);
+        // Off is off, and no sections means everyone the choice says
+        expect(only("off", "Color Guard").size).toBe(0);
+        expect([...only("changed")]).toEqual([
+            [1, "MarchingTuba"],
+            [7, "Trumpet"],
+        ]);
+    });
+
     it("a momentary sabre goes back to what they held after its counts", () => {
         const cues = [cue(56, "sabre", [10, 11, 12], { length: 8 })];
         const show = compileShowCues(MARCHERS, BEATS, cues);

@@ -1,8 +1,13 @@
 import { useEffect } from "react";
-import { isMenuAction } from "@/global/menuActions";
+import { isMenuAction, SHOW_ON_FIELD_MENU_ACTIONS } from "@/global/menuActions";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { ACTIONS, type ActionId } from "../definitions";
-import { runAction, subscribeToActionRuns } from "../registry";
+import {
+    isActionChecked,
+    runAction,
+    subscribeToActionHandlers,
+    subscribeToActionRuns,
+} from "../registry";
 
 /** Playback controls, and peeks that only change what's drawn, leave a held preview frame alone (UI-11) */
 const TRANSPORT_ACTIONS: ReadonlySet<ActionId> = new Set<ActionId>([
@@ -31,6 +36,27 @@ export function useTimelineActionEffects() {
             }),
         [],
     );
+
+    // The app menu's Show on field ticks follow their actions' checked state (fork #1332)
+    useEffect(() => {
+        const send = window.electron?.setMenuChecked;
+        if (!send) return;
+        let last = "";
+        const update = () => {
+            const checked = Object.fromEntries(
+                SHOW_ON_FIELD_MENU_ACTIONS.map(({ action }) => [
+                    action,
+                    action in ACTIONS && isActionChecked(action as ActionId),
+                ]),
+            );
+            const key = JSON.stringify(checked);
+            if (key === last) return;
+            last = key;
+            send(checked);
+        };
+        update();
+        return subscribeToActionHandlers(update);
+    }, []);
 
     // The app menu's playback and help items run their action here, and only those
     // (docs/adr/0003-menu-actions-ipc.md)

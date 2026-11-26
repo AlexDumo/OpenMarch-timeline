@@ -1,5 +1,9 @@
 /* eslint-disable no-console */
-import { MENU_ACTION_CHANNEL } from "../../src/global/menuActions";
+import {
+    MENU_ACTION_CHANNEL,
+    MENU_CHECKED_CHANNEL,
+    parseMenuChecked,
+} from "../../src/global/menuActions";
 import {
     app,
     autoUpdater as nativeAutoUpdater,
@@ -1246,14 +1250,25 @@ function broadcastSettingsChanged(
 
 /** The application menu, in the current app language. */
 let applicationMenu: Menu | null = null;
+/** Which of the menu's ticked items are on, as the editor last said (`MENU_CHECKED_CHANNEL`) */
+let menuChecked: Record<string, boolean> = {};
 
 function showApplicationMenu() {
     applicationMenu = buildApplicationMenu({
         basic: store.get("editorMode") === "basic",
         saveNow: workingCopySavesEnabled(store.get(WORKING_COPY_SETTING)),
+        checked: menuChecked,
     });
     Menu.setApplicationMenu(applicationMenu);
 }
+
+// The editor says which View ▸ Show on field items are on; the menu is built again when one changes
+ipcMain.on(MENU_CHECKED_CHANNEL, (_event, payload: unknown) => {
+    const next = parseMenuChecked(payload);
+    if (JSON.stringify(next) === JSON.stringify(menuChecked)) return;
+    menuChecked = next;
+    showApplicationMenu();
+});
 
 ipcMain.on(`menu:open`, () => {
     if (!isMacOS) {

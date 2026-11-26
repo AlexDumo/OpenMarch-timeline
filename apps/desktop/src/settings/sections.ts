@@ -25,6 +25,7 @@ import PrivacySettings from "@/components/launchpage/settings/PrivacySettings";
 import DeveloperSettings from "@/components/launchpage/settings/DeveloperSettings";
 import DatabaseRepairSettings from "@/components/launchpage/settings/DatabaseRepairSettings";
 import { isWebBuild } from "@/utilities/webBuild";
+import { SETTINGS_SECTION_STORAGE_KEY } from "./openSettingsAt";
 import { isActionOffByFollowTheLeader } from "@/pathways/followTheLeader";
 
 export type SettingsSectionId =
@@ -52,7 +53,7 @@ export interface SettingsSection {
     searchLabels?: (t: Translate) => readonly string[];
 }
 
-export const SETTINGS_SECTION_STORAGE_KEY = "openmarch:settingsSection";
+export { SETTINGS_SECTION_STORAGE_KEY };
 
 /*
  * Grouping, once there are enough sections to need it: give each section an optional
@@ -152,6 +153,9 @@ export const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
             "settings.field.halfLines",
             "settings.field.labelSize",
             "settings.field.labelPosition",
+            "settings.field.iconPlace",
+            "fieldDisplay.venueLook",
+            "toolbar.view.venueAround",
             "settings.field.stepSizeWarnings",
             "settings.field.followTheLeader",
         ],

@@ -8,6 +8,10 @@ covers:
   - apps/desktop/src/components/timeline/cues/TurnPopover.tsx
   - packages/core/src/cues/facing.ts
   - apps/desktop/src/view3d/core/marchers/cueInputs.ts
+  - apps/desktop/src/cues/fieldFacing.ts
+  - apps/desktop/src/cues/useFieldFacing.ts
+  - apps/desktop/src/field/three/facingCaret.ts
+  - apps/desktop/src/field/three/layers/FacingCaretsLayer.tsx
   - action:facingFront
   - action:facingBack
   - action:facingSide1
@@ -17,9 +21,11 @@ covers:
   - action:facingAngle
   - action:cueEditTurn
   - action:toggleFacingLane
+  - action:toggleFacingArrows
   - i18n:cues.facing
   - i18n:cues.turn
   - i18n:field.menu.facing
+  - i18n:fieldDisplay.facing
 sidebar:
   order: 7
 ---
@@ -32,7 +38,7 @@ import { Steps } from "@astrojs/starlight/components";
 
 <InShort>Select the marchers, right-click one and choose <Ui k="field.menu.facing" /> › a direction, or press <Kbd action="facingSide2" /> for side 2. To turn over the counts before, pull the tab on the left of its diamond in the Facing lane to the left.</InShort>
 
-Every marcher faces the front until you turn them. A facing change says where the selected marchers face by a count: they face that way on it, and until their next facing change. They can turn into it instantly or over the counts before it. The 3D View turns them; the 2D field doesn't show facing yet.
+Every marcher faces the front until you turn them, except bass drums and flub drums, which start on side 2 with their right side toward the front. A facing change says where the selected marchers face by a count: they face that way on it, and until their next facing change. They can turn into it instantly or over the counts before it. The field can draw a small caret in front of each marcher's dot, its point aimed the way they face ([See facing on the field](#see-facing-on-the-field)), and the 3D View turns them.
 
 ## Turn marchers
 
@@ -123,6 +129,32 @@ Double-click a turn's bar in the <Ui k="cues.lane.facing" plain /> lane, or righ
 - Click a bar to pick its facing change. As when you click a move's bar, that also selects its counts: the start flag goes to where the turn starts and the playhead to those marchers' next facing change.
 - Right-click a bar, or press and hold it on a tablet, for its menu: <Ui k="actions.cues.editTurn" plain />, <Ui k="actions.cues.addSelected" plain />, <Ui k="actions.cues.removeSelected" plain />, <Ui k="cues.lane.selectPerformers" plain />, <Ui k="actions.cues.moveToPlayhead" plain /> and <Ui k="actions.cues.delete" plain />.
 - Click a row's name to select its marchers.
+
+## See facing on the field
+
+To see which way everyone faces, select <Ui k="fieldDisplay.overlays" /> (the eye) in the bar at the field's top right and turn on <Ui k="fieldDisplay.facing" />. It's off when you start; turn it off again to hide the carets. The View menu has it too, and the command palette has <Ui k="actions.ui.showFacingArrows" /> and <Ui k="actions.ui.hideFacingArrows" />.
+
+<Media
+  id="marchers-facing-setting"
+  alt="The Show on field panel open beside the bar at the top right of the field, with Facing turned on."
+  maxWidth={480}
+/>
+
+While it's on, every marcher has a small caret (^) in front of their dot, its point aimed the way they face: down the field toward the audience for the front, up for the back, and toward side 1 or side 2 for the sides. Marchers without a facing change face the front, so their carets point down; bass drums and flub drums start on side 2, so theirs point toward side 2.
+
+<Media
+  id="marchers-facing-field"
+  alt="The field at the end of Page 1 with Facing on in Show on field. G6 to G10, along the front of the field, have carets on their right, pointing toward side 2. G14, G19 and G22 have carets above their dots, pointing up the field to the back, with their drill numbers moved below their dots. Every other marcher's caret is below their dot, pointing down to the front."
+  maxWidth={720}
+/>
+
+The carets follow the playhead: as you scrub or play through a turn, they rotate at the same even speed as the turn, the way the turn goes, and land on the facing change's count. It's the same facing the <Ui k="cues.lane.facing" plain /> lane and the 3D View show.
+
+- The carets are drawn in the field's label color with an edge in the field's background color, so they read over the grid in every field color scheme. Zoomed out to the whole field, they keep a size you can read.
+- A drill number moves to the other side of its dot when the caret points through it: below the dot for a marcher facing the back.
+- Props and equipment don't get a caret.
+
+With <Ui k="settings.field.iconPlace.dot" plain /> chosen for <Ui k="settings.field.iconPlace" plain /> in <Ui k="settings.title" plain /> › <Ui k="settings.field" plain />, the caret sits outside the equipment icon instead of the dot ([Change what performers hold](/guides/marchers/equipment/)).
 
 ## In the 3D View
 

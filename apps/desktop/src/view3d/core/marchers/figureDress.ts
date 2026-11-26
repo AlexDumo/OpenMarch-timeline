@@ -53,7 +53,6 @@ export function bakeDressed(
             ...look.options,
             carryColor: look.options.carry ? bake.carryColor : null,
             silk: null,
-            silkArtwork: false,
         },
     };
 }

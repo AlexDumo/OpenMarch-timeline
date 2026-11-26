@@ -73,6 +73,38 @@ export const VIEW_MENU_ACTIONS: readonly MenuAction[] = [
     { action: "toggleEquipmentLane", labelKey: "menu.view.equipmentLane" },
 ];
 
+/**
+ * The View menu's Show on field group (fork #1332): ticked items, each the same switch as the
+ * Show on field panel's row and the palette's Show/Hide action, under the same name. Unbound. The
+ * renderer says which are on over `MENU_CHECKED_CHANNEL`, since the menu can't read its settings.
+ */
+export const SHOW_ON_FIELD_MENU_ACTIONS: readonly MenuAction[] = [
+    { action: "toggleMarcherLabels", labelKey: "fieldDisplay.labels" },
+    { action: "toggleEquipmentIcons", labelKey: "fieldDisplay.equipmentIcons" },
+    { action: "toggleFacingArrows", labelKey: "fieldDisplay.facing" },
+    { action: "togglePerformerFigures", labelKey: "fieldDisplay.figures" },
+    { action: "toggleShapeOutlines", labelKey: "fieldDisplay.shapes" },
+    { action: "toggleFieldVenue", labelKey: "toolbar.view.venue" },
+];
+
+/**
+ * Renderer to main: which of the menu's ticked items are on, as `{ [action]: boolean }`
+ * (docs/adr/0003-menu-actions-ipc.md). Main keeps only actions in `SHOW_ON_FIELD_MENU_ACTIONS`.
+ */
+export const MENU_CHECKED_CHANNEL = "menu:checked";
+
+/** The checked state main keeps from a `MENU_CHECKED_CHANNEL` message: known actions, booleans */
+export function parseMenuChecked(payload: unknown): Record<string, boolean> {
+    if (payload === null || typeof payload !== "object") return {};
+    const value = payload as Record<string, unknown>;
+    return Object.fromEntries(
+        SHOW_ON_FIELD_MENU_ACTIONS.map(({ action }) => [
+            action,
+            value[action] === true,
+        ]),
+    );
+}
+
 export const HELP_MENU_ACTIONS: readonly MenuAction[] = [
     { action: "openHelp", labelKey: "menu.help.openHelp", accelerator: "F1" },
     {
@@ -87,6 +119,9 @@ export const HELP_MENU_ACTIONS: readonly MenuAction[] = [
 /** Whether `action` is one the menu may send */
 export const isMenuAction = (action: unknown): action is string =>
     typeof action === "string" &&
-    [...PLAYBACK_MENU_ACTIONS, ...VIEW_MENU_ACTIONS, ...HELP_MENU_ACTIONS].some(
-        (item) => item.action === action,
-    );
+    [
+        ...PLAYBACK_MENU_ACTIONS,
+        ...VIEW_MENU_ACTIONS,
+        ...SHOW_ON_FIELD_MENU_ACTIONS,
+        ...HELP_MENU_ACTIONS,
+    ].some((item) => item.action === action);

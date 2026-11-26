@@ -27,6 +27,7 @@ import {
     type JsonObject,
 } from "@/showAssets/hash";
 import { isShowAssetId, type ShowAssetRef } from "@/showAssets/ref";
+import { getStoredVenueSettings } from "./view3dVenue";
 
 const { show_assets, show_asset_blobs, items, cues } = schema;
 
@@ -96,20 +97,25 @@ function checkNewAsset(asset: NewShowAsset) {
  * refused. Not undoable on its own: inside `transactionWithHistory`, only the edit's other
  * changes are undone.
  *
- * The parts are hashed inside `tx`. For large files, an import should run this in a short
- * transaction of its own rather than inside a long edit.
+ * The parts are hashed here unless `hashes` comes in: for large files, work them out with
+ * {@link hashShowAsset} before taking a lock, so the transaction stays short. Hashes passed in
+ * must be this asset's: they must name exactly its part roles, and their Version hash must follow
+ * from them and its sidecar, or it throws (the bytes themselves aren't hashed again).
  */
 export async function addShowAssetInTransaction({
     tx,
     asset,
+    hashes,
 }: {
     tx: DbTransaction;
     asset: NewShowAsset;
+    /** From {@link hashShowAsset}, worked out before a lock is taken, so the transaction is short */
+    hashes?: ShowAssetHashes;
 }): Promise<{ ref: ShowAssetRef; added: boolean }> {
     checkNewAsset(asset);
-    const partHashes = await hashParts(asset.parts);
+    const { partHashes, versionHash } = hashes ?? (await hashShowAsset(asset));
     const sidecar = canonicalJson(asset.sidecar ?? {});
-    const versionHash = await versionHashOf(partHashes, sidecar);
+    if (hashes) await checkHashesFit(asset, hashes, sidecar);
 
     // Each part's bytes, stored once. On a re-import this also puts back bytes a damaged file
     // lost, or replaces stored bytes that no longer match their hash
@@ -175,6 +181,45 @@ export async function addShowAssetInTransaction({
         })
         .run();
     return { ref: { id, versionHash }, added: true };
+}
+
+/** An asset's part hashes and Version hash */
+export interface ShowAssetHashes {
+    partHashes: Record<string, string>;
+    versionHash: string;
+}
+
+/**
+ * Throws unless `hashes` could be `asset`'s: one hash for each of its part roles and no other,
+ * and the Version hash those and its sidecar give. Cheap: the parts aren't hashed again.
+ */
+async function checkHashesFit(
+    asset: NewShowAsset,
+    hashes: ShowAssetHashes,
+    sidecar: string,
+): Promise<void> {
+    const roles = Object.keys(asset.parts).sort();
+    const hashed = Object.keys(hashes.partHashes).sort();
+    if (roles.join("\n") !== hashed.join("\n"))
+        throw new Error(
+            `The hashes for ${asset.name} name parts ${hashed.join(", ")}, not ${roles.join(", ")}`,
+        );
+    if (
+        (await versionHashOf(hashes.partHashes, sidecar)) !== hashes.versionHash
+    )
+        throw new Error(`The hashes for ${asset.name} aren't its Version's`);
+}
+
+/** The hashes {@link addShowAssetInTransaction} works out, for a caller to work out early */
+export async function hashShowAsset(
+    asset: Pick<NewShowAsset, "parts" | "sidecar">,
+): Promise<ShowAssetHashes> {
+    const partHashes = await hashParts(asset.parts);
+    const versionHash = await versionHashOf(
+        partHashes,
+        canonicalJson(asset.sidecar ?? {}),
+    );
+    return { partHashes, versionHash };
 }
 
 /**
@@ -316,8 +361,8 @@ export async function getShowAssetBlobSizes({
 }
 
 /**
- * Every value in the show that may name an asset (`library:<id>@<hash>`): props' models and cue
- * values, as they are now. Undo history isn't read, so "unused" means nothing names it now
+ * Every value in the show that may name an asset (`library:<id>@<hash>`): props' models, cue
+ * values and the band's imported uniform, as they are now. Undo history isn't read, so "unused" means nothing names it now
  * (ADR 0010 amendment 2026-11-15).
  */
 export async function getShowAssetReferences({
@@ -335,9 +380,62 @@ export async function getShowAssetReferences({
         .from(cues)
         .where(sql`${cues.value} LIKE 'library:%'`)
         .all();
-    return [...models, ...values].flatMap((row) =>
-        row.value ? [row.value] : [],
+    // the band's imported uniform (fork #1257)
+    const venue = await getStoredVenueSettings({ db });
+    const uniform =
+        typeof venue?.uniformArtwork === "string" ? [venue.uniformArtwork] : [];
+    return [
+        ...[...models, ...values].flatMap((row) =>
+            row.value ? [row.value] : [],
+        ),
+        ...uniform,
+    ];
+}
+
+/**
+ * How `value` reads inside a stored history statement: the venue's JSON escapes `"` and `\`, and
+ * SQLite's `quote()` doubles `'` (`historyTriggers.ts`).
+ */
+export function historyEncoding(value: string): string {
+    return JSON.stringify(value).slice(1, -1).replaceAll("'", "''");
+}
+
+/**
+ * Which of `values` an undo or redo step could write back: those the history's stored SQL names.
+ * Remove unused… is outside undo, so an asset a step would bring back must stay; the show keeps
+ * an imported uniform the venue named before (fork #1257). The values are asset references
+ * (`library:<id>@<hash>`), which history stores inside the venue's JSON, escaped
+ * ({@link historyEncoding}). Matched inside SQLite (`instr` against each encoded value) over the
+ * steps that write the venue's row, so no history statement crosses the renderer's bridge; the
+ * rest of history never names a uniform.
+ */
+export async function valuesNamedInHistory({
+    db,
+    values,
+}: {
+    db: DbConnection | DbTransaction;
+    values: readonly string[];
+}): Promise<Set<string>> {
+    const named = new Set<string>();
+    if (values.length === 0) return named;
+    const wanted = sql.join(
+        values.map((value) => sql`(${value}, ${historyEncoding(value)})`),
+        sql`, `,
     );
+    // the triggers write `UPDATE "view3d_venue" …` and `INSERT INTO "view3d_venue" …` with the
+    // row's data; `DELETE FROM` steps carry none
+    const venueSteps = (table: "history_undo" | "history_redo") => sql`
+        SELECT 1 FROM ${sql.identifier(table)} AS h
+        WHERE (h.sql LIKE 'UPDATE "view3d_venue" %' OR h.sql LIKE 'INSERT INTO "view3d_venue" %')
+            AND instr(h.sql, w.encoded) > 0`;
+    const rows = await db.all<{ value: string } | [string]>(sql`
+        WITH w(value, encoded) AS (VALUES ${wanted})
+        SELECT w.value AS value FROM w
+        WHERE EXISTS (${venueSteps("history_undo")})
+            OR EXISTS (${venueSteps("history_redo")})`);
+    // the renderer's proxy may hand rows back as arrays
+    for (const row of rows) named.add(Array.isArray(row) ? row[0] : row.value);
+    return named;
 }
 
 /**

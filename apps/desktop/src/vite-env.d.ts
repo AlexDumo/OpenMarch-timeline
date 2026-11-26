@@ -15,6 +15,8 @@ interface ImportMetaEnv {
     readonly VITE_PUBLIC_WEB_BUILD?: string;
     /** The web build's channel: "stable", "nightly", "preview", "dev", "examples" or "lab". */
     readonly VITE_PUBLIC_WEB_CHANNEL?: string;
+    /** "true" when the web build's `WEB_CHANNEL` was set, "false" when it fell back to "dev". */
+    readonly VITE_PUBLIC_WEB_CHANNEL_NAMED?: string;
     /** Names the web build's browser storage: the channel, or "lab-<test id>". */
     readonly VITE_PUBLIC_WEB_STORAGE_NAMESPACE?: string;
     /** The web build's Clerk publishable key; empty where sign-in is off (vite.web.config.mts). */

@@ -1,4 +1,7 @@
 import { equipmentCatalog, EQUIPMENT_NONE } from "@openmarch/core";
+import { showPropsPanel } from "@/components/items/openProps";
+import { parseShowAssetRef } from "@/showAssets/ref";
+import { publishCueCommands } from "@/cues/latestCueCommands";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import tolgee from "@/global/singletons/Tolgee";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
@@ -30,6 +33,7 @@ import {
     useTurnPopoverStore,
 } from "@/cues/turnPopoverStore";
 import { useEffect } from "react";
+import { setEquipmentIcons } from "@/field/fieldShow";
 
 /** The Facing quick picks' actions (fork #993), by pick */
 export const FACING_ACTIONS: Readonly<Record<FacingPick, ActionId>> = {
@@ -117,6 +121,9 @@ const END_REASONS = {
     lastingOnly: "cues.reason.facingLasting",
 } as const;
 
+/** Whether a value names a show asset (`library:<id>@<hash>`), as a show flag's does */
+const isShowAssetValue = (value: string) => parseShowAssetRef(value) !== null;
+
 /** Why a cue command can't run now, or undefined when it can. */
 function cueReason(
     commands: CueCommands,
@@ -166,13 +173,6 @@ export const EQUIPMENT_ICONS_ACTIONS: Readonly<
     everyone: "equipmentIconsEveryone",
 };
 
-/** Sets who shows an equipment icon on the field (saved with the UI settings). */
-export function setEquipmentIcons(shown: EquipmentIcons) {
-    const { uiSettings, setUiSettings } = useUiSettingsStore.getState();
-    if (uiSettings.equipmentIcons !== shown)
-        setUiSettings({ ...uiSettings, equipmentIcons: shown });
-}
-
 /** The Equipment icons Where choices' actions, by place. */
 export const EQUIPMENT_PLACE_ACTIONS: Readonly<
     Record<EquipmentIconPlace, ActionId>
@@ -198,16 +198,22 @@ function useEquipmentPlaceChoice(place: EquipmentIconPlace) {
             enabled: !off && current !== place,
             checked: !off && current === place,
             disabledReason: off
-                ? tolgee.t("toolbar.view.equipmentPlaceOffReason")
+                ? tolgee.t("fieldDisplay.equipmentOffReason")
                 : undefined,
         },
     );
 }
 
-/** One Equipment icons choice: checked while it's the one in effect. */
+/**
+ * One Equipment icons choice: checked while it's the one in effect (neither is while some
+ * sections are picked in Show on field)
+ */
 function useEquipmentIconsChoice(shown: EquipmentIcons) {
-    const current = useUiSettingsStore(
-        (s) => s.uiSettings.equipmentIcons ?? "changed",
+    const current = useUiSettingsStore((s) =>
+        (s.uiSettings.equipmentIcons ?? "changed") !== "off" &&
+        (s.uiSettings.equipmentIconSections ?? []).length > 0
+            ? "sections"
+            : (s.uiSettings.equipmentIcons ?? "changed"),
     );
     useActionHandler(
         EQUIPMENT_ICONS_ACTIONS[shown],
@@ -233,13 +239,57 @@ export function useCueActionHandlers() {
         useSetEquipment(choice, commands, isPlaying);
     useActionHandlerGroup(
         SELECT_ACTIONS,
-        (id) => commands.selectHolding(SELECT_VALUES.get(id) ?? []),
+        (id) =>
+            commands.selectHolding([
+                ...(SELECT_VALUES.get(id) ?? []),
+                // the show's own flags are guard equipment too (fork #985)
+                ...(id === selectFamilyActionOf("guard")
+                    ? (commands.show?.flags ?? []).map((f) => f.value)
+                    : []),
+            ]),
         {
             enabled: !isPlaying && commands.count !== null,
             disabledReason: setReason(commands, isPlaying, true),
         },
     );
     const cueWhy = cueReason(commands, isPlaying);
+
+    // The show's own flags (fork #985): set or select by the flag the menu names (`args.value`)
+    useActionHandler(
+        "equipmentShowFlag",
+        (args) => {
+            const value = typeof args?.value === "string" ? args.value : null;
+            // From the palette, with no flag named: where the show's flags are (Props › Flags)
+            if (!value || !isShowAssetValue(value)) {
+                showPropsPanel();
+                return;
+            }
+            commands.setEquipment(value);
+        },
+        {
+            enabled: !isPlaying && commands.canSet("usual"),
+            disabledReason: setReason(commands, isPlaying),
+        },
+    );
+    useActionHandler(
+        "selectHoldingShowFlag",
+        (args) => {
+            const value = typeof args?.value === "string" ? args.value : null;
+            if (!value || !isShowAssetValue(value)) {
+                showPropsPanel();
+                return;
+            }
+            commands.selectHolding([value]);
+        },
+        {
+            enabled: !isPlaying && commands.count !== null,
+            disabledReason: setReason(commands, isPlaying, true),
+        },
+    );
+    useEffect(() => {
+        publishCueCommands(commands);
+        return () => publishCueCommands(null);
+    }, [commands]);
 
     // Facing (fork #993): the quick picks, Angle… (asks the degrees), and the picked turn's popover
     const sides = useFieldProperties()?.sideDescriptions;

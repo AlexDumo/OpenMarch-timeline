@@ -18,7 +18,7 @@ covers:
   - action:equipmentIconsOnDot
   - action:equipmentIconsOnNumber
   - action:cueEndAtPlayhead
-  - i18n:toolbar.view.equipment
+  - i18n:fieldDisplay.equipmentIcons
   - apps/desktop/src/view3d/window/performers/cueSections.ts
   - packages/core/src/cues/library.ts
   - action:equipmentUsual
@@ -79,6 +79,16 @@ The selected performers hold it from that count until their next change. It repl
 
 The change is a **cue**: it remembers the performers who were selected when you made it. Moving a performer to another section later doesn't change their cues, and a performer added to a section later doesn't get that section's earlier cues.
 
+### Your show's own flags
+
+Flags you add in the Props panel ([Add your guard's flags](/guides/3d-view/props/#add-your-guards-flags)) are at the end of <Ui k="cues.family.guard" plain />, each with its picture and name, then <Ui k="assets.flags.menuAdd" /> to add another. Give each performer whichever flag they carry, and change it on any count, as with any other item. On the field, a performer holding one of the show's flags shows its picture as their icon, so you can see who has which flag. In the 3D View their silk shows its design, and the Equipment lane names it.
+
+<Media
+  id="marchers-equipment-show-flags"
+  alt="The field at the end of Page 1: G6 to G10 each have a small purple flag with a star after their drill number, and G14, G19 and G22 a teal and cream flag with a coral circle."
+  maxWidth={720}
+/>
+
 ## See who holds what
 
 - **On the field**, an icon of the item follows the drill number of each performer holding something other than their own instrument: a rifle, a sabre, a trumpet, a tuba. <Ui k="cues.value.none" plain />, empty hands, shows a plain figure, and swing flags show the flag. The icon is the color of the drill numbers and fades with them as you zoom out.
@@ -89,23 +99,23 @@ The change is a **cue**: it remembers the performers who were selected when you 
     maxWidth={720}
   />
 
-  To choose who shows an icon, click <Ui k="toolbar.view.equipment" /> in the bar at the field's top right:
+  To choose who shows an icon, select <Ui k="fieldDisplay.overlays" /> (the eye) in the bar at the field's top right. While <Ui k="fieldDisplay.equipmentIcons" /> is on, the button beside its switch says who has one; select it to choose:
 
-  - <Ui k="toolbar.view.equipmentChanged" />, the starting choice: only performers holding something other than their own instrument, as above.
-  - <Ui k="toolbar.view.equipmentEveryone" />: every performer. Those holding their own instrument show its icon too: a trumpet for the Trumpets, a flag for the Color Guard. A section with no instrument of its own in the list, such as Marimba, shows its section's icon, and one without an icon, such as Timpani, the plain figure.
-  - <Ui k="toolbar.view.equipmentOff" />: no icons.
+  - <Ui k="fieldDisplay.equipmentNotOwn" />, the starting choice: only performers holding something other than their own instrument, as above.
+  - <Ui k="fieldDisplay.equipmentEveryone" />: every performer. Those holding their own instrument show its icon too: a trumpet for the Trumpets, a flag for the Color Guard. A section with no instrument of its own in the list, such as Marimba, shows its section's icon, and one without an icon, such as Timpani, the plain figure.
+  - Under <Ui k="fieldDisplay.equipmentOnly" plain />, one or more of the show's sections, such as Color Guard for the guard only: everyone in those sections shows an icon, their own instrument included, and nobody else does. The menu stays open so you can tick a few; the button then names them, or says how many. The ticks are kept for the next show you open. A ticked section that show has nobody in stays in the menu, marked <Ui k="fieldDisplay.equipmentSectionNotInShow" plain />, so you can clear its tick.
 
-  Under <Ui k="toolbar.view.equipmentPlace" /> in the same popup, choose where the icons go:
+  Turn <Ui k="fieldDisplay.equipmentIcons" plain /> off for no icons. Turned back on, it shows them for whoever it showed them for before. The View menu and the command palette (<Ui k="actions.cues.showEquipmentIcons" /> and <Ui k="actions.cues.hideEquipmentIcons" />) turn it on and off too.
 
-  - <Ui k="toolbar.view.equipmentBeside" />, the starting choice: after the drill number, as above.
-  - <Ui k="toolbar.view.equipmentOnDot" />: the icon stands in for the dot, centered on the performer's spot in the dot's color. You select and drag them as you would the dot, and a selected performer's ring goes around it.
-  - <Ui k="toolbar.view.equipmentOnNumber" />: the icon stands in for the drill number. Point at the performer, or select them, to see the number.
+  Where the icons go is in <Ui k="settings.title" plain /> › <Ui k="settings.field" plain />, under <Ui k="settings.field.iconPlace" />:
 
-  With <Ui k="toolbar.view.equipmentOff" plain /> chosen there's nothing to place, so these choices are greyed out; the ? beside <Ui k="toolbar.view.equipmentPlace" plain /> says why.
+  - <Ui k="settings.field.iconPlace.beside" />, the starting choice: after the drill number, as above.
+  - <Ui k="settings.field.iconPlace.dot" />: the icon stands in for the dot, centered on the performer's spot in the dot's color. You select and drag them as you would the dot, and a selected performer's ring goes around it. A facing caret sits outside the icon ([Set where marchers face](/guides/marchers/facing/#see-facing-on-the-field)).
+  - <Ui k="settings.field.iconPlace.label" />: the icon stands in for the drill number. Point at the performer, or select them, to see the number.
 
   <Media
     id="marchers-equipment-icons-setting"
-    alt="The bar at the top right of the field with its Equipment icons popup open beside it: Changed only, which is chosen, Everyone and Off, then under Where: Next to the number, which is chosen, In place of the dot and In place of the number."
+    alt="The Show on field panel open beside the bar at the top right of the field, with Equipment icons on and its menu open: Holding something else, which is ticked, with a line under it saying it means performers not holding their own instrument, Everyone, and under Only these sections, a tick box for each of the show's sections."
     maxWidth={480}
   />
 

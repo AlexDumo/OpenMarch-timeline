@@ -28,6 +28,12 @@ import type { PropToolShape } from "@/field/editor/propTool";
 import type { FieldMarchers } from "./fieldMarchers";
 import type { FieldItems } from "./fieldItems";
 import { fieldToElement, useFieldViewStore } from "./fieldView";
+import { ScissorsIcon } from "@phosphor-icons/react";
+import {
+    SCISSORS_RADIUS_PX,
+    SCISSORS_RING_PX,
+    useSplitPreviewStore,
+} from "@/shapes/placed/splitPreview";
 import {
     drawnSelectionBox,
     selectionHandles,
@@ -325,6 +331,7 @@ export default function FieldOverlay({
                     />
                 )}
                 {propTool && <PropToolPreview tool={propTool} theme={theme} />}
+                <SplitMark />
             </svg>
             {modeDrawing?.tip && (
                 <ModeTip tip={modeDrawing.tip} touch={touch} />
@@ -815,6 +822,91 @@ function GuideLabels({
 const TOP_LAYERS: readonly FieldLayerKind[] = ["task", "cover", "pill"];
 
 type MirrorShown = NonNullable<FieldModeDrawing["mirror"]>;
+
+/**
+ * Where a split would cut a placed line (#1336): a dashed stroke across the gap, at its middle,
+ * square to it, while Split here is pointed at in a menu; over a gap of the selected line, up to
+ * the scissors a click splits on
+ */
+function SplitMark() {
+    const gap = useSplitPreviewStore((s) => s.gap);
+    const scissors = useSplitPreviewStore((s) => s.scissors);
+    const hot = useSplitPreviewStore((s) => s.hot);
+    const view = useFieldViewStore();
+    if (!gap) return null;
+    const a = fieldToElement(view, gap.from.x, gap.from.y);
+    const b = fieldToElement(view, gap.to.x, gap.to.y);
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    // Across the gap, half a gap long each way but never under a finger's width; with scissors,
+    // from just past the line up to them
+    const half = Math.max(14, len / 2);
+    const n = { x: -(b.y - a.y) / len, y: (b.x - a.x) / len };
+    const tip = scissors ? fieldToElement(view, scissors.x, scissors.y) : null;
+    const p1 = tip ?? { x: mid.x + n.x * half, y: mid.y + n.y * half };
+    const away = tip
+        ? (() => {
+              const d = Math.hypot(tip.x - mid.x, tip.y - mid.y) || 1;
+              return {
+                  x: mid.x - ((tip.x - mid.x) / d) * 14,
+                  y: mid.y - ((tip.y - mid.y) / d) * 14,
+              };
+          })()
+        : { x: mid.x - n.x * half, y: mid.y - n.y * half };
+    return (
+        <g data-testid="fieldSplitMark" pointerEvents="none">
+            <line
+                x1={p1.x}
+                y1={p1.y}
+                x2={away.x}
+                y2={away.y}
+                stroke={GUIDE_CASING}
+                strokeWidth={GUIDE_CASING_WIDTH}
+            />
+            <line
+                x1={p1.x}
+                y1={p1.y}
+                x2={away.x}
+                y2={away.y}
+                stroke={MIRROR_COLOR}
+                strokeWidth={MIRROR_LINE_WIDTH}
+                strokeDasharray="6 4"
+            />
+            {tip && <SplitScissors at={tip} hot={hot} />}
+        </g>
+    );
+}
+
+/** The scissors a click splits a placed line on (#1336): a round button with scissors in it */
+function SplitScissors({
+    at,
+    hot,
+}: {
+    at: { x: number; y: number };
+    hot: boolean;
+}) {
+    return (
+        <g
+            transform={`translate(${at.x},${at.y})`}
+            data-testid="fieldSplitScissors"
+            data-hot={hot || undefined}
+        >
+            <circle
+                r={SCISSORS_RADIUS_PX}
+                fill={hot ? MIRROR_COLOR : "white"}
+                stroke={MIRROR_COLOR}
+                strokeWidth={SCISSORS_RING_PX}
+            />
+            <ScissorsIcon
+                x={-7}
+                y={-7}
+                size={14}
+                weight="bold"
+                color={hot ? "white" : MIRROR_COLOR}
+            />
+        </g>
+    );
+}
 
 /**
  * A mirrored paste's mirror point (Paste mirrored): a line through it each way across the whole

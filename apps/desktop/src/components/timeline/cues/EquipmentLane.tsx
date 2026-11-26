@@ -24,6 +24,7 @@ import {
     useRef,
     useState,
     useSyncExternalStore,
+    type ReactNode,
     type MouseEvent as ReactMouseEvent,
     type PointerEvent as ReactPointerEvent,
 } from "react";
@@ -89,6 +90,8 @@ import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { beatWhere } from "@/timeline/timelineRangeWords";
 import { translateTimelineText } from "@/timeline/translateTimelineText";
 import { itemKeyOf } from "@/cues/equipmentItems";
+import { FlagPicture } from "@/components/assets/FlagPicture";
+import type { ShowFlag } from "@/showAssets/flags";
 import {
     setLaneFolded,
     useLaneFolded,
@@ -102,8 +105,10 @@ import {
     HEADER,
     PAD,
     ROW,
+    ROW_NAME_GAP,
     SUMMARY,
     useLongPressMenu,
+    useRowNameWidth,
 } from "./cueLaneParts";
 import {
     countToSpecBeat,
@@ -124,6 +129,8 @@ const FILL: Readonly<Record<PerformerCarry, string>> = {
 };
 
 const MOMENTARY_LENGTHS = [1, 2, 4, 8, 16] as const;
+/** A bar's padding inside each end, in px (`px-4`) */
+const BAR_PADDING = 4;
 
 /** The lane's height: its header, then its rows, the summary, or the empty hint. */
 export function equipmentLaneHeight(
@@ -265,7 +272,12 @@ export function EquipmentLaneView({
     const previewLane = useMemo(() => {
         if (!drag?.edit || !show) return null;
         const cues = withEquipmentSet(show.cues, drag.edit);
-        const compiled = compileShowCues(show.marchers, beats, cues);
+        const compiled = compileShowCues(
+            show.marchers,
+            beats,
+            cues,
+            show.values,
+        );
         return equipmentLane({
             compiled: compiled.compiled,
             cues,
@@ -273,7 +285,14 @@ export function EquipmentLaneView({
         });
     }, [drag, show, beats]);
     const rows = (previewLane ?? lane)?.rows ?? [];
+    const flagOf = (value: string | null): ShowFlag | undefined => {
+        const flags = show?.flags ?? [];
+        return value ? flags.find((f) => f.value === value) : undefined;
+    };
     const valueName = (value: string | null) => {
+        // one of the show's flags (fork #985): its own name
+        const flag = flagOf(value);
+        if (flag) return flag.name;
         const key = value === null ? "none" : itemKeyOf(value);
         if (key === "none" || key === "winds" || key === "battery")
             return t(`cues.value.${key}`);
@@ -569,68 +588,56 @@ export function EquipmentLaneView({
                 />
             ) : (
                 rows.map((row) => (
-                    <div
+                    <EquipmentRow
                         key={row.key}
-                        data-testid="equipment-lane-row"
-                        data-marchers={row.marcherIds.join(",")}
-                        className="relative"
-                        style={{ height: ROW }}
+                        row={row}
+                        name={rowName(row.marcherIds, row.label)}
                     >
-                        {row.pieces.map((piece) => {
-                            const dragged =
-                                drag !== null && drag.cueId === piece.cueId;
-                            return (
-                                <Piece
-                                    key={`${piece.from}-${piece.cueId ?? "d"}`}
-                                    piece={piece}
-                                    left={xOf(piece.from)}
-                                    width={xOf(piece.to) - xOf(piece.from)}
-                                    dragging={dragged}
-                                    name={valueName(piece.value)}
-                                    // A start edge only where the cue starts (not a later row's
-                                    // continuation of it)
-                                    startsHere={
-                                        piece.cueId !== null &&
-                                        startCountOf(piece.cueId) === piece.from
-                                    }
-                                    lockedReason={
-                                        isPlaying
-                                            ? t("cues.reason.paused")
-                                            : undefined
-                                    }
-                                    picked={
-                                        piece.cueId !== null &&
-                                        piece.cueId === picked
-                                    }
-                                    onPress={(e, mode) => {
-                                        if (piece.cueId === null) return;
-                                        if (e.button === 0) pick(piece.cueId);
-                                        startDrag(e, piece, row, mode);
-                                    }}
-                                    onMenu={(x, y) =>
-                                        piece.cueId !== null &&
-                                        openMenu(piece.cueId, x, y)
-                                    }
-                                />
-                            );
-                        })}
-                        <button
-                            type="button"
-                            data-testid="equipment-lane-row-name"
-                            title={t("cues.lane.selectRow")}
-                            className="bg-bg-1/80 text-micro text-text hover:text-accent touch:min-h-44 sticky left-0 z-[5] flex h-full max-w-160 items-center gap-4 truncate rounded-full px-6 backdrop-blur-sm"
-                            onClick={() =>
-                                activeFieldEditor()?.select(row.marcherIds)
-                            }
-                        >
-                            <span className="truncate">
-                                {rowName(row.marcherIds, row.label)}
-                            </span>
-                            <span className="text-text-subtitle">
-                                {row.marcherIds.length}
-                            </span>
-                        </button>
-                    </div>
+                        {(nameInset) =>
+                            row.pieces.map((piece) => {
+                                const dragged =
+                                    drag !== null && drag.cueId === piece.cueId;
+                                return (
+                                    <Piece
+                                        key={`${piece.from}-${piece.cueId ?? "d"}`}
+                                        piece={piece}
+                                        left={xOf(piece.from)}
+                                        width={xOf(piece.to) - xOf(piece.from)}
+                                        dragging={dragged}
+                                        name={valueName(piece.value)}
+                                        picture={flagOf(piece.value)}
+                                        nameInset={nameInset}
+                                        // A start edge only where the cue starts (not a later row's
+                                        // continuation of it)
+                                        startsHere={
+                                            piece.cueId !== null &&
+                                            startCountOf(piece.cueId) ===
+                                                piece.from
+                                        }
+                                        lockedReason={
+                                            isPlaying
+                                                ? t("cues.reason.paused")
+                                                : undefined
+                                        }
+                                        picked={
+                                            piece.cueId !== null &&
+                                            piece.cueId === picked
+                                        }
+                                        onPress={(e, mode) => {
+                                            if (piece.cueId === null) return;
+                                            if (e.button === 0)
+                                                pick(piece.cueId);
+                                            startDrag(e, piece, row, mode);
+                                        }}
+                                        onMenu={(x, y) =>
+                                            piece.cueId !== null &&
+                                            openMenu(piece.cueId, x, y)
+                                        }
+                                    />
+                                );
+                            })
+                        }
+                    </EquipmentRow>
                 ))
             )}
             {menu && show && (
@@ -645,6 +652,46 @@ export function EquipmentLaneView({
     );
 }
 
+/**
+ * One row: its bars, and its name pinned at the lane's left, which selects its performers. The
+ * bars get the name's width, to pin their own names just past it.
+ */
+function EquipmentRow({
+    row,
+    name,
+    children,
+}: {
+    row: LaneRow;
+    name: string;
+    children: (nameInset: number) => ReactNode;
+}) {
+    const { t } = useTranslate();
+    const rowName = useRowNameWidth<HTMLButtonElement>();
+    return (
+        <div
+            data-testid="equipment-lane-row"
+            data-marchers={row.marcherIds.join(",")}
+            className="relative"
+            style={{ height: ROW }}
+        >
+            {children(rowName.width)}
+            <button
+                ref={rowName.ref}
+                type="button"
+                data-testid="equipment-lane-row-name"
+                title={t("cues.lane.selectRow")}
+                className="bg-bg-1/80 text-micro text-text hover:text-accent touch:min-h-44 sticky left-0 z-[5] flex h-full max-w-160 items-center gap-4 truncate rounded-full px-6 backdrop-blur-sm"
+                onClick={() => activeFieldEditor()?.select(row.marcherIds)}
+            >
+                <span className="truncate">{name}</span>
+                <span className="text-text-subtitle">
+                    {row.marcherIds.length}
+                </span>
+            </button>
+        </div>
+    );
+}
+
 /** One piece of a row: a cue's bar or pill, or the dashed default. */
 function Piece({
     piece,
@@ -652,6 +699,8 @@ function Piece({
     width,
     dragging,
     name,
+    picture,
+    nameInset,
     startsHere,
     lockedReason,
     picked,
@@ -663,6 +712,10 @@ function Piece({
     width: number;
     dragging: boolean;
     name: string;
+    /** The show's flag it hands out, whose picture goes before its name */
+    picture: ShowFlag | undefined;
+    /** How wide the row's pinned name is: the bar's own name pins just past it */
+    nameInset: number;
     /** Whether the cue starts at this bar's start, so its start edge can be dragged here */
     startsHere: boolean;
     /** Why it can't be dragged now (while playing), or undefined when it can */
@@ -778,7 +831,24 @@ function Piece({
                 longPress.start(e);
             }}
         >
-            <span className="min-w-0 truncate">{name}</span>
+            {/* Clear of the row's name: pushed past it where the bar starts under it, and
+                pinned past it once the bar's start scrolls away; it never leaves the bar */}
+            <span
+                data-testid="equipment-lane-cue-name"
+                className="sticky flex min-w-0 items-center gap-4"
+                style={{
+                    left: nameInset + ROW_NAME_GAP,
+                    marginLeft: Math.max(
+                        0,
+                        nameInset + ROW_NAME_GAP - left - BAR_PADDING,
+                    ),
+                }}
+            >
+                {picture && (
+                    <FlagPicture hash={picture.thumbnail} className="size-14" />
+                )}
+                <span className="min-w-0 truncate">{name}</span>
+            </span>
             {edges && startsHere && edge("start")}
             {edges && edge("end")}
         </div>

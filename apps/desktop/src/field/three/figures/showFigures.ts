@@ -266,8 +266,7 @@ export function useShowFigures(
 ): ShowFigures | null {
     const queryClient = useQueryClient();
     const { data: venue } = useVenueSettings();
-    const { uniforms, guardUniforms, brassFinish, tuba, silkShape } =
-        venue ?? {};
+    const { uniforms, guardUniforms, brassFinish, tuba } = venue ?? {};
     const hasVenue = !!venue;
     const performersKey = useMemo(
         () =>
@@ -283,18 +282,10 @@ export function useShowFigures(
                       (JSON.parse(performersKey) as [number, string][]).map(
                           ([id, section]) => ({ id, section }),
                       ),
-                      { uniforms, guardUniforms, brassFinish, tuba, silkShape },
+                      { uniforms, guardUniforms, brassFinish, tuba },
                   )
                 : null,
-        [
-            performersKey,
-            hasVenue,
-            uniforms,
-            guardUniforms,
-            brassFinish,
-            tuba,
-            silkShape,
-        ],
+        [performersKey, hasVenue, uniforms, guardUniforms, brassFinish, tuba],
     );
     const { data: stored } = useQuery({
         queryKey: FIGURES_KEY,
