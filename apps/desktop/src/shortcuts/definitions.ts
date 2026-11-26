@@ -1419,6 +1419,16 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
+    // Split here (#1336): the placed Line, Curve or Arc selected whole cut in two where the field's
+    // menu was opened on it, between two marchers. It needs that point, so it isn't in the palette
+    shapeSplitHere: {
+        labelKey: "actions.shape.splitHere",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: [],
+        hiddenFromPalette: true,
+    },
+
     // Pathways step 1 (ADR 0016): the Path pen draws a cornered path for one selected marcher's
     // move at the playhead. P as in design tools' pen. While it draws, Enter (applyShape) finishes,
     // Backspace (shapeRemoveLastPoint) takes the last corner back and Escape

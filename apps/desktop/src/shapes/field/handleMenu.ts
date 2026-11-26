@@ -41,7 +41,8 @@ export function handleMenuSections(
  * one (`ToolKind.menu`); says whether it did. `pick` applies an entry picked to handle `key` and
  * returns the shape after it, so a menu that stays open (a segmented either/or, #568) shows the
  * change; it closes when the handle has no menu any more. A path's corners and legs open theirs
- * through here too (pathways), so only `menu` is read.
+ * through here too (pathways), so only `menu` is read. `more` adds the host's own entries after
+ * the kind's (a placed line's Split here, #1336), given the shape as it is; `pick` gets theirs too.
  */
 export function openHandleMenu(
     kind: Pick<AnyToolKind, "menu">,
@@ -53,11 +54,18 @@ export function openHandleMenu(
         key: string,
         value: string,
     ) => { readonly params: unknown; readonly n: number } | null,
+    more?: (params: unknown, n: number) => readonly ToolMenuSection[],
 ): boolean {
     if (target?.type !== "handle" || params === null) return false;
     const { key } = target;
-    const sectionsOf = (p: unknown, count: number) =>
-        p === null ? null : handleMenuSections(kind, p, count, key);
+    const sectionsOf = (p: unknown, count: number) => {
+        if (p === null) return null;
+        const all = [
+            ...(handleMenuSections(kind, p, count, key) ?? []),
+            ...(more?.(p, count) ?? []),
+        ];
+        return all.some((s) => s.items.length > 0) ? all : null;
+    };
     const sections = sectionsOf(params, n);
     if (!sections) return false;
     const menu: OpenHandleMenu = {
