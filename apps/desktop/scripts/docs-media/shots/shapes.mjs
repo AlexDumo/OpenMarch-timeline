@@ -991,6 +991,86 @@ const shots = [
         },
     },
     {
+        id: "shapes-split-box",
+        kind: "clip",
+        covers: ["apps/desktop/src/shapes/placed/boxSplit.ts"],
+        // A placed box, selected: the pointer between two marchers of a middle rank shows the
+        // scissors past the box's back edge, the cut marked across the whole box, and a click on
+        // them splits it into two boxes, nobody moving; a click on a marcher of the first then
+        // selects that box alone (#1337)
+        async setup({ page }) {
+            const { area } = await startInArea(page, ...BOX, 200);
+            await openBoxIn(page, area);
+            await page.keyboard.press("Enter");
+            await page.waitForTimeout(1500);
+            const rest = { x: area.x - 60, y: area.y + area.height / 2 };
+            await page.mouse.move(rest.x, rest.y);
+            await page.waitForTimeout(600);
+            await tidy(page);
+            const inBox = (await marchers(page)).filter(
+                (m) =>
+                    m.x >= area.x - 10 &&
+                    m.x <= area.x + area.width + 10 &&
+                    m.y >= area.y - 10 &&
+                    m.y <= area.y + area.height + 10,
+            );
+            const ranks = [...new Set(inBox.map((m) => Math.round(m.y)))].sort(
+                (p, q) => p - q,
+            );
+            if (ranks.length < 3)
+                throw new Error(`the box has ${ranks.length} ranks`);
+            const y = ranks[Math.floor(ranks.length / 2)];
+            const rank = inBox
+                .filter((m) => Math.abs(m.y - y) <= 1)
+                .sort((m, n) => m.x - n.x);
+            if (rank.length < 3)
+                throw new Error(`the middle rank has ${rank.length} marchers`);
+            // Between the first and second of a middle rank: a cut between two files
+            this.gap = {
+                x: (rank[0].x + rank[1].x) / 2,
+                y: (rank[0].y + rank[1].y) / 2,
+            };
+            this.rest = rest;
+            this.first = rank[0];
+            return { box: await cropArea(page, area, 40) };
+        },
+        async perform({ page, film, overlay }) {
+            await film.release();
+            await overlay.enable();
+            const { gap, rest } = this;
+            await page.mouse.move(rest.x, rest.y);
+            await film.hold(0.4);
+            await film.moveTo(page, rest, gap, 0.9);
+            await page.waitForTimeout(300);
+            await film.hold(0.6);
+            const scissors = await page
+                .getByTestId("fieldSplitScissors")
+                .boundingBox();
+            if (!scissors) throw new Error("no scissors over the gap");
+            const at = {
+                x: scissors.x + scissors.width / 2,
+                y: scissors.y + scissors.height / 2,
+            };
+            await film.moveTo(page, gap, at, 0.6);
+            await film.hold(0.4);
+            await page.mouse.click(at.x, at.y);
+            await page.waitForTimeout(800);
+            await film.hold(0.6);
+            // Away and back: a click on a marcher of the first box selects it alone
+            await film.moveTo(page, at, rest, 0.5);
+            await page.mouse.click(rest.x, rest.y);
+            await page.waitForTimeout(400);
+            await film.hold(0.4);
+            const first = this.first;
+            await film.moveTo(page, rest, first, 0.6);
+            await page.mouse.click(first.x, first.y);
+            await page.waitForTimeout(600);
+            await film.hold(0.6);
+            await film.moveTo(page, first, rest, 0.4);
+            await film.hold(1.2);
+        },
+    },
+    {
         id: "shapes-take-out",
         kind: "clip",
         // A placed box with one marcher dragged out of it: the box is selected and Close up

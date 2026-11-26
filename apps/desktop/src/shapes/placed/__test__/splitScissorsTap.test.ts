@@ -108,7 +108,12 @@ beforeEach(() => {
                     .map((m) => [m.marcherId, { x: m.x, y: m.y }] as const),
             ),
     });
-    useSplitPreviewStore.setState({ gap: null, scissors: null, hot: false });
+    useSplitPreviewStore.setState({
+        gap: null,
+        scissors: null,
+        cut: null,
+        hot: false,
+    });
     vi.mocked(splitShape).mockClear();
 });
 
@@ -131,7 +136,10 @@ describe("scissors on a tablet", () => {
             expect(tap(mode, pointer(scissors!, kind))).toBe(true);
             expect(splitShape).toHaveBeenCalledTimes(1);
             // Between the second and third marchers: two in the first piece
-            expect(vi.mocked(splitShape).mock.calls[0]![1]).toBe(2);
+            expect(vi.mocked(splitShape).mock.calls[0]![1]).toEqual({
+                kind: "line",
+                k: 2,
+            });
             expect(shown()).toBeNull();
         },
     );
@@ -205,8 +213,8 @@ describe("Split here from a long press", () => {
 
     it("judges on a marcher with a finger's reach", () => {
         const touch = splitCheckAt(line, nearThird, "touch");
-        expect(touch).toMatchObject({ ok: true, k: 3 });
+        expect(touch).toMatchObject({ ok: true, cut: { k: 3 } });
         const mouse = splitCheckAt(line, nearThird, "mouse");
-        expect(mouse).toMatchObject({ ok: true, k: 2 });
+        expect(mouse).toMatchObject({ ok: true, cut: { k: 2 } });
     });
 });

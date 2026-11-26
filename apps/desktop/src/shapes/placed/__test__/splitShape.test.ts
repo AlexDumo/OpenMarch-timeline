@@ -99,7 +99,7 @@ describe("splitCheck", () => {
     const [line] = placed(LINE);
     unitIt("splits in the gap the right-click is in", () => {
         const check = splitCheck(line!, { x: 30, y: 1 });
-        expect(check).toMatchObject({ ok: true, k: 2 });
+        expect(check).toMatchObject({ ok: true, cut: { kind: "line", k: 2 } });
     });
     unitIt("is greyed past the last marcher, with why", () => {
         const check = splitCheck(line!, { x: 130, y: 0 });
@@ -142,7 +142,7 @@ describe("scissorsAt", () => {
     unitIt("shows over a gap, two reaches off the line toward the back", () => {
         // Spots 25 apart: the gap from 25 to 50
         const s = scissorsAt(line!, { x: 33, y: 0.5 }, env);
-        expect(s?.check.k).toBe(2);
+        expect(s?.check.cut).toEqual({ kind: "line", k: 2 });
         expect(s?.at.x).toBeCloseTo(37.5);
         expect(s?.at.y).toBeCloseTo(-6);
     });
@@ -156,7 +156,7 @@ describe("scissorsAt", () => {
             // A finger's reach, 9 here, against a gap of 25
             const finger = { stepPx: 12, hitRadius: 9 };
             const s = scissorsAt(line!, { x: 37.5, y: 0 }, finger);
-            expect(s?.check.k).toBe(2);
+            expect(s?.check.cut).toEqual({ kind: "line", k: 2 });
             // Two reaches off the line, clear of the dots either side
             expect(s?.at.y).toBeCloseTo(-18);
             expect(scissorsAt(line!, { x: 32, y: 0 }, finger)).toBeNull();
@@ -172,8 +172,8 @@ describe("splitPlacement", () => {
             const [line] = placed(LINE);
             const { first, alongside } = splitPlacement(
                 line as PlacedBox<LineParams>,
-                2,
-            );
+                { kind: "line", k: 2 },
+            )!;
             expect(first.recipe.kind).toBe("line");
             expect(first.members.map((m) => m.marcherId)).toEqual([11, 12]);
             expect(alongside).toHaveLength(1);
@@ -204,8 +204,8 @@ describe("splitPlacement", () => {
         const [line] = placed(LINE);
         const { first, alongside } = splitPlacement(
             line as PlacedBox<LineParams>,
-            4,
-        );
+            { kind: "line", k: 4 },
+        )!;
         expect(first.members).toHaveLength(4);
         expect(alongside).toHaveLength(1);
         expect(alongside[0]!.recipe.kind).toBe("ungrouped");
@@ -223,8 +223,8 @@ describe("splitPlacement", () => {
         );
         const { first, alongside } = splitPlacement(
             a as PlacedBox<LineParams>,
-            3,
-        );
+            { kind: "line", k: 3 },
+        )!;
         expect(first.recipe.kind).toBe("arc");
         const bare = ({ spots: _s, ...p }: LineParams & { spots?: number }) =>
             p;
@@ -305,7 +305,10 @@ describeDbTests("splitting a placed line", (it) => {
                 ),
             ).size;
         const steps = await undoSteps();
-        const { first, alongside } = splitPlacement(box, 2);
+        const { first, alongside } = splitPlacement(box, {
+            kind: "line",
+            k: 2,
+        })!;
         expect(
             await writePlacement(
                 {

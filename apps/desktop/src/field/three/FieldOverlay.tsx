@@ -826,33 +826,42 @@ type MirrorShown = NonNullable<FieldModeDrawing["mirror"]>;
 /**
  * Where a split would cut a placed line (#1336): a dashed stroke across the gap, at its middle,
  * square to it, while Split here is pointed at in a menu; over a gap of the selected line, up to
- * the scissors a click splits on
+ * the scissors a click splits on. A box's cut (#1337) runs across the whole box.
  */
 function SplitMark() {
     const gap = useSplitPreviewStore((s) => s.gap);
     const scissors = useSplitPreviewStore((s) => s.scissors);
+    const cut = useSplitPreviewStore((s) => s.cut);
     const hot = useSplitPreviewStore((s) => s.hot);
     const view = useFieldViewStore();
     if (!gap) return null;
-    const a = fieldToElement(view, gap.from.x, gap.from.y);
-    const b = fieldToElement(view, gap.to.x, gap.to.y);
-    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-    // Across the gap, half a gap long each way but never under a finger's width; with scissors,
-    // from just past the line up to them
-    const half = Math.max(14, len / 2);
-    const n = { x: -(b.y - a.y) / len, y: (b.x - a.x) / len };
     const tip = scissors ? fieldToElement(view, scissors.x, scissors.y) : null;
-    const p1 = tip ?? { x: mid.x + n.x * half, y: mid.y + n.y * half };
-    const away = tip
-        ? (() => {
-              const d = Math.hypot(tip.x - mid.x, tip.y - mid.y) || 1;
-              return {
-                  x: mid.x - ((tip.x - mid.x) / d) * 14,
-                  y: mid.y - ((tip.y - mid.y) / d) * 14,
-              };
-          })()
-        : { x: mid.x - n.x * half, y: mid.y - n.y * half };
+    let p1: { x: number; y: number };
+    let away: { x: number; y: number };
+    if (cut) {
+        // A box's cut (#1337): across the whole box, from past its far edge to the scissors
+        away = fieldToElement(view, cut.from.x, cut.from.y);
+        p1 = tip ?? fieldToElement(view, cut.to.x, cut.to.y);
+    } else {
+        const a = fieldToElement(view, gap.from.x, gap.from.y);
+        const b = fieldToElement(view, gap.to.x, gap.to.y);
+        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+        // Across the gap, half a gap long each way but never under a finger's width; with
+        // scissors, from just past the line up to them
+        const half = Math.max(14, len / 2);
+        const n = { x: -(b.y - a.y) / len, y: (b.x - a.x) / len };
+        p1 = tip ?? { x: mid.x + n.x * half, y: mid.y + n.y * half };
+        away = tip
+            ? (() => {
+                  const d = Math.hypot(tip.x - mid.x, tip.y - mid.y) || 1;
+                  return {
+                      x: mid.x - ((tip.x - mid.x) / d) * 14,
+                      y: mid.y - ((tip.y - mid.y) / d) * 14,
+                  };
+              })()
+            : { x: mid.x - n.x * half, y: mid.y - n.y * half };
+    }
     return (
         <g data-testid="fieldSplitMark" pointerEvents="none">
             <line

@@ -370,7 +370,11 @@ export class LiveBoxMode implements FieldMode {
     private showScissors(scissors: Scissors | null): void {
         this.scissorsTapped = false;
         this.scissors = scissors;
-        showSplit(scissors?.check.gap ?? null, scissors?.at ?? null);
+        showSplit(
+            scissors?.check.gap ?? null,
+            scissors?.at ?? null,
+            scissors?.check.mark ?? null,
+        );
     }
 
     /**
@@ -486,7 +490,7 @@ export class LiveBoxMode implements FieldMode {
             if (click && this.scissorsNear(pointer, scissors))
                 splitThroughAction(
                     scissors.check.box,
-                    scissors.check.k,
+                    scissors.check.cut,
                     this.queryClient,
                 );
             this.emit();
@@ -572,7 +576,8 @@ export class LiveBoxMode implements FieldMode {
     /** Split here picked: the shape split in two where the menu was opened, the menu closed */
     private split(check: ReturnType<typeof splitCheck>): null {
         closeHandleMenu();
-        if (check?.ok) splitThroughAction(check.box, check.k, this.queryClient);
+        if (check?.ok)
+            splitThroughAction(check.box, check.cut, this.queryClient);
         return null;
     }
 

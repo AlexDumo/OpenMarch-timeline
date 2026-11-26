@@ -10,9 +10,11 @@ import type { XY } from "../types";
 export const useSplitPreviewStore = create<{
     readonly gap: { readonly from: XY; readonly to: XY } | null;
     readonly scissors: XY | null;
+    /** A box's cut (#1337), drawn across the whole box to the scissors' end; a line's is the gap's */
+    readonly cut: { readonly from: XY; readonly to: XY } | null;
     /** The pointer is on the scissors: they light up, as a button does under the pointer */
     readonly hot: boolean;
-}>(() => ({ gap: null, scissors: null, hot: false }));
+}>(() => ({ gap: null, scissors: null, cut: null, hot: false }));
 
 /** The scissors' round button as drawn, in screen pixels: its radius, and its ring's width */
 export const SCISSORS_RADIUS_PX = 11;
@@ -22,6 +24,7 @@ export const SCISSORS_RING_PX = 2;
 export function showSplit(
     gap: { readonly from: XY; readonly to: XY } | null,
     scissors: XY | null = null,
+    cut: { readonly from: XY; readonly to: XY } | null = null,
 ): void {
     const now = useSplitPreviewStore.getState();
     const same = (a: XY | null, b: XY | null) =>
@@ -29,10 +32,12 @@ export function showSplit(
     if (
         same(now.gap?.from ?? null, gap?.from ?? null) &&
         same(now.gap?.to ?? null, gap?.to ?? null) &&
-        same(now.scissors, scissors)
+        same(now.scissors, scissors) &&
+        same(now.cut?.from ?? null, cut?.from ?? null) &&
+        same(now.cut?.to ?? null, cut?.to ?? null)
     )
         return;
-    useSplitPreviewStore.setState({ gap, scissors, hot: false });
+    useSplitPreviewStore.setState({ gap, scissors, cut, hot: false });
 }
 
 /** Whether the pointer is on the scissors shown */

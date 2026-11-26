@@ -1,8 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { runAction } from "@/shortcuts/registry";
-import type { LineParams } from "../line/lineGeometry";
 import type { PlacedBox } from "./placedBox";
-import { splitShape } from "./splitShape";
+import { splitShape, type SplitCut } from "./splitShape";
 
 /**
  * Splits from the scissors or a line's own menu (#1336) through the `shapeSplitHere` action, so
@@ -12,25 +11,25 @@ import { splitShape } from "./splitShape";
  */
 
 /** The split one of these is running, while it runs */
-let running: { box: PlacedBox<LineParams>; k: number } | null = null;
+let running: { box: PlacedBox; cut: SplitCut } | null = null;
 
 /** The split the scissors or a line's menu asked for, while `shapeSplitHere` runs for it */
 export const scissorsSplit = () => running;
 
 /**
- * Splits `box` after its first `k` spots along it by running `shapeSplitHere`; straight through
- * `splitShape` where nothing handles the action (the field's modes not mounted)
+ * Splits `box` along `cut` by running `shapeSplitHere`; straight through `splitShape` where
+ * nothing handles the action (the field's modes not mounted)
  */
 export function splitThroughAction(
-    box: PlacedBox<LineParams>,
-    k: number,
+    box: PlacedBox,
+    cut: SplitCut,
     queryClient: QueryClient,
 ): void {
-    running = { box, k };
+    running = { box, cut };
     try {
         if (runAction("shapeSplitHere")) return;
     } finally {
         running = null;
     }
-    void splitShape(box, k, queryClient);
+    void splitShape(box, cut, queryClient);
 }
