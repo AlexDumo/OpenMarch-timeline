@@ -422,13 +422,28 @@ const withCounts = (rows: LineRows, counts: readonly number[]): LineRows => ({
     list: rows.list.map((row, i) => ({ ...row, count: counts[i]! })),
 });
 
+/**
+ * Which way the first rows of a line go (owner, #1193): in rings round an arc and along a
+ * curve's bends, as a designer draws them; a straight or bent line's slide. Rows already made
+ * keep theirs, a missing way being a slide.
+ */
+function firstGo(p: P): RowsGo | undefined {
+    const sort = lineSort(p);
+    return sort === "arc" || sort === "curve" ? "follow" : undefined;
+}
+
 /** The rows of `p`, or the drawn line alone as one */
-const rowsOrOne = (p: P, env: ToolEnv): LineRows =>
-    rowsOf(p) ?? {
+const rowsOrOne = (p: P, env: ToolEnv): LineRows => {
+    const rows = rowsOf(p);
+    if (rows) return rows;
+    const go = firstGo(p);
+    return {
         list: [{}],
         drawn: 0,
         apart: FIRST_STEPS * env.stepPx,
+        ...(go ? { go } : {}),
     };
+};
 
 /**
  * One marcher moved into row `to` from the longest other row, or out of row `from` to the
@@ -1016,7 +1031,8 @@ const GO_CHOICE: ToolChoice<P> = {
             picture: goPicture(p, value),
         })),
     current: (p) => {
-        const go = rowsOf(p)?.go ?? "slide";
+        const rows = rowsOf(p);
+        const go = (rows ? rows.go : firstGo(p)) ?? "slide";
         return goValues(p).includes(go) ? go : "slide";
     },
     pick: (p, n, value) => {
