@@ -246,6 +246,15 @@ describe("picking by hand and Swap", () => {
         expect(alongShape(undo(next))).toEqual([1, 2, 3, 4, 5]);
     });
 
+    it("keeps a pick that matches the answer's spot when another answer is picked", () => {
+        let t = open();
+        expect(alongShape(t)[0]).toBe(1);
+        t = pinPairs(t, [[0, 0]], ctx);
+        expect(t.pins).toEqual([[0, 0]]);
+        t = setOrder(t, "reverse", ctx);
+        expect(alongShape(t)[0]).toBe(1);
+    });
+
     it("lets later picks win over earlier ones", () => {
         const after = withPins(
             [0, 1, 2],

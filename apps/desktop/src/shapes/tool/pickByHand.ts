@@ -386,15 +386,18 @@ export function pickDrawing(
                   s.hover.side === "marchers"
                       ? points.marchers[s.hover.index]!
                       : points.spots[s.hover.index]!,
-              text:
-                  s.kind === "swap" || s.hover.side === "marchers"
-                      ? nameOf(s.hover.index)
-                      : "",
+              // Picking, the names already show where the marchers start
+              text: s.kind === "swap" ? nameOf(s.hover.index) : "",
           }
         : null;
     const assignment = tool.assignment ?? [];
     return {
         front: s.kind === "swap" ? "spots" : s.front,
+        // Picking, who's who is read where they start: the spots stay bare (09-who-goes-where.md)
+        names:
+            s.kind === "pick"
+                ? points.marchers.map((at, i) => ({ at, text: nameOf(i) }))
+                : [],
         marks,
         hover,
         picked: [...new Set(s.placed)].flatMap((m) => {

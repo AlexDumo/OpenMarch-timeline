@@ -516,6 +516,8 @@ export type FieldModeDrawing = {
      */
     pick?: {
         readonly front: "marchers" | "spots";
+        /** Picking by hand, each marcher's name where it starts, in place of the spots' names */
+        readonly names: readonly { at: FieldPoint; text: string }[];
         readonly marks: readonly { at: FieldPoint; text: string }[];
         readonly hover: { at: FieldPoint; text: string } | null;
         readonly picked: readonly { from: FieldPoint; to: FieldPoint }[];

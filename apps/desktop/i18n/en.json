@@ -2335,13 +2335,14 @@
                 "zipperHint": "Two lines merge into one, taking turns",
                 "sectionsHint": "Each section stays together, least travel inside it",
                 "why": {
-                    "noOrder": "These marchers have no order yet. Set order on them first, or pick by hand.",
+                    "noOrder": "These marchers have no order yet (drill numbers aren't one). Use Set order on them first, or pick by hand.",
                     "notTwoLines": "Needs marchers from two lines, each with an order.",
                     "oneSection": "Everyone here is in one section.",
                     "placed": "Choose this while drawing the shape, before you place it.",
                     "twoLines": "These marchers come from two lines. Use Zipper, or set one order on them first."
                 },
                 "readout": "Biggest step {biggest} · {crossings, plural, =0 {no paths cross} one {# pair of paths crosses} other {# pairs of paths cross}}",
+                "withHandPicks": "{order} · {count} by hand",
                 "readoutNoSteps": "{crossings, plural, =0 {No paths cross} one {# pair of paths crosses} other {# pairs of paths cross}}"
             },
             "drawHintFor": "Drag on the field to draw {shape, select, block {a box} circle {a circle} line {a line} curve {a curve} arc {an arc} other {a shape}} · <keys></keys> to cancel",
@@ -2360,6 +2361,8 @@
                 "from": "Pick from",
                 "source": "Source",
                 "destination": "Destination",
+                "sourceTip": "Clicks pick marchers where they start the move",
+                "destinationTip": "Clicks pick spots in the new shape",
                 "waitingMarchers": "{count, plural, one {# marcher waits for a spot} other {# marchers wait for spots}}",
                 "waitingSpots": "{count, plural, one {# spot waits for a marcher} other {# spots wait for marchers}}",
                 "ready": "Pick a marcher or a spot",

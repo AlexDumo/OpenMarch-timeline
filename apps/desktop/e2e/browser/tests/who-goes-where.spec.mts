@@ -145,6 +145,16 @@ test("change: the menu greys out what doesn't fit, W picks by hand back and fort
         "aria-pressed",
         "true",
     );
+    // Names show where the marchers start; the spots are bare
+    await expect(page.getByTestId("fieldShapePickName")).toHaveText([
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5",
+        "T6",
+    ]);
+    await expect(page.getByTestId("fieldShapeSpotLabel")).toHaveCount(0);
     // T1, T2 and T3, then the three rightmost spots, right to left
     await clickAt(page, home(1));
     await clickAt(page, home(2));
@@ -193,6 +203,10 @@ test("change: the menu greys out what doesn't fit, W picks by hand back and fort
     await page.keyboard.press("Enter");
     await expect(page.getByTestId("shape-pick-bar")).toBeHidden();
     await expect(page.getByTestId("shape-pick-clear")).toBeVisible();
+    // The button says some marchers are placed by hand on top of the option
+    await expect(page.getByTestId("shape-order")).toContainText(
+        "Least travel · 3 by hand",
+    );
     await page.keyboard.press("Enter");
     await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
     const saved = await savedPositions(show, 0);

@@ -34,6 +34,7 @@ import { usePlacedBoxPreviewStore } from "../placed/boxSelectionStore";
 import { keepInView } from "./keepInView";
 import { glideTo, isGliding } from "@/field/three/fieldNavigation";
 import { activeFieldEditor } from "@/field/editor/activeFieldEditor";
+import { usePickStore } from "../tool/pickByHand";
 import {
     engageRowsGap,
     engageStep,
@@ -2337,6 +2338,20 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
                   },
               ]
             : [];
+        // Picking by hand (09-who-goes-where.md), the marchers where they start are clicked too:
+        // kept clear like the shape
+        const clearOfStarts =
+            tool && usePickStore.getState().session
+                ? tool.marchers.map(({ at }) => {
+                      const p = fieldToElement(view, at.x, at.y);
+                      return {
+                          left: p.x - PICK_START_CLEAR_PX,
+                          top: p.y - PICK_START_CLEAR_PX,
+                          width: 2 * PICK_START_CLEAR_PX,
+                          height: 2 * PICK_START_CLEAR_PX,
+                      };
+                  })
+                : [];
         return clearPlacement(
             {
                 outline: outline.map((p) => fieldToElement(view, p.x, p.y)),
@@ -2356,7 +2371,7 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
                 fieldWidth: room.fieldWidth,
                 fieldHeight: room.fieldHeight,
             },
-            [...obstacles.current.all, ...clearOfPoint],
+            [...obstacles.current.all, ...clearOfPoint, ...clearOfStarts],
             obstacles.current.covers,
             // #936, touch layout: never off the field or under the toolbar panel, so Place and
             // Discard can always be tapped
@@ -2537,12 +2552,14 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
             }, NOTE_SETTLED_MS);
         });
     };
+    // Picking by hand or not: the marchers where they start are kept clear only while picking
+    const picking = usePickStore((s) => s.session !== null);
     useLayoutEffect(() => {
         measureObstacles();
         follow(useFieldViewStore.getState());
         // `follow` reads only these
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [api, held, room, outline, measureObstacles]);
+    }, [api, held, room, outline, measureObstacles, picking]);
     // A control or cover appearing, going or moving (the toolbar panel opening): placed again
     useLayoutEffect(
         () =>
@@ -2674,6 +2691,10 @@ function notedTarget(
  * px: the bar's `px-6`, `border` and `gap-6`, and `Divider`'s `w-px`. Change them together.
  */
 const ONE_ROW_EXTRA_PX = 2 * 6 + 2 + 2 * 6 + 1;
+/** Picking by hand, the editor keeps this far off each marcher where it starts, its name and pick
+ * number included */
+const PICK_START_CLEAR_PX = 16;
+
 /** The editor stays this far inside the field side to side (`editorPlacement`) */
 const FIELD_MARGIN_PX = 4;
 

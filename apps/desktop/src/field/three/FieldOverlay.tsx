@@ -711,7 +711,7 @@ const GHOST_OPACITY = 0.35;
 /** Picking by hand: the start ghosts while they're the shape picked from */
 const PICK_FRONT_GHOST_OPACITY = 0.85;
 /** Picking by hand: the shape not picked from, drawn behind the other */
-const PICK_BEHIND_OPACITY = 0.2;
+const PICK_BEHIND_OPACITY = 0.4;
 /** Picking by hand: a marcher's walk placed by hand, heavier than the others */
 const PICKED_WALK_WIDTH = 2;
 
@@ -1971,6 +1971,31 @@ function ModeDrawing({
                                 : undefined
                         }
                         data-testid="fieldShapeSpotLabel"
+                    >
+                        {text}
+                    </text>
+                );
+            })}
+            {/* Picking by hand (09-who-goes-where.md): each marcher's name where it starts, the
+                spots left bare; they step back with the marchers */}
+            {drawing.pick?.names.map(({ at: point, text }, i) => {
+                const p = at(point);
+                return (
+                    <text
+                        key={`name${i}`}
+                        x={p.x}
+                        y={p.y - (DOT_RADIUS + 3) * z}
+                        fontSize={SPOT_LABEL_PX}
+                        className="font-sans"
+                        textAnchor="middle"
+                        fill={shape}
+                        stroke="white"
+                        strokeWidth={3}
+                        paintOrder="stroke"
+                        opacity={
+                            drawing.pick?.front === "spots" ? 0.35 : undefined
+                        }
+                        data-testid="fieldShapePickName"
                     >
                         {text}
                     </text>

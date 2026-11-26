@@ -119,20 +119,24 @@ export function PickControls() {
 export function PickBar() {
     const session = usePickStore((s) => s.session);
     if (!session) return null;
-    const side = (value: PickSide, label: string) => (
-        <button
-            type="button"
-            aria-pressed={session.front === value}
-            onClick={() => switchPickSide(value)}
-            className={clsx(
-                "border-stroke min-h-24 border px-6 py-2",
-                value === "marchers" ? "rounded-l-4" : "rounded-r-4 border-l-0",
-                session.front === value ? ON : "hover:bg-text/10",
-            )}
-            data-testid={`shape-pick-${value}`}
-        >
-            {label}
-        </button>
+    const side = (value: PickSide, label: string, tip: string) => (
+        <Tip key={value} label={label} hint={tip} action="shapePickSwitchSide">
+            <button
+                type="button"
+                aria-pressed={session.front === value}
+                onClick={() => switchPickSide(value)}
+                className={clsx(
+                    "border-stroke min-h-24 border px-6 py-2",
+                    value === "marchers"
+                        ? "rounded-l-4"
+                        : "rounded-r-4 border-l-0",
+                    session.front === value ? ON : "hover:bg-text/10",
+                )}
+                data-testid={`shape-pick-${value}`}
+            >
+                {label}
+            </button>
+        </Tip>
     );
     const waitingMarchers = session.marchers.length;
     const waitingSpots = session.spots.length;
@@ -154,12 +158,20 @@ export function PickBar() {
                         {side(
                             "marchers",
                             tolgee.t("shapes.edit.pick.source", "Source"),
+                            tolgee.t(
+                                "shapes.edit.pick.sourceTip",
+                                "Clicks pick marchers where they start the move",
+                            ),
                         )}
                         {side(
                             "spots",
                             tolgee.t(
                                 "shapes.edit.pick.destination",
                                 "Destination",
+                            ),
+                            tolgee.t(
+                                "shapes.edit.pick.destinationTip",
+                                "Clicks pick spots in the new shape",
                             ),
                         )}
                     </span>

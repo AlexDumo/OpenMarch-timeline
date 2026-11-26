@@ -1064,13 +1064,13 @@ export function pinPairs(
 ): ToolState {
     if (state.gesture || state.params === null || !state.assignment)
         return state;
+    // A pick that matches the spot the answer gives is kept too: another answer mustn't move it
     const fresh = pairs.filter(
         ([m, slot]) =>
             m >= 0 &&
             m < state.marchers.length &&
             slot >= 0 &&
-            slot < state.spots &&
-            state.assignment![m] !== slot,
+            slot < state.spots,
     );
     if (fresh.length === 0) return state;
     const { assignment } = withPins(

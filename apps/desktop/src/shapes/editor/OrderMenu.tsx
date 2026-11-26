@@ -11,6 +11,7 @@ import { arrowFocus, useEditorMenu, useMenuFocus } from "./menuFocus";
 import { OrderPicture } from "./OrderPicture";
 import { isPictured, ORDER_PICTURE_SIZE } from "./orderPictures";
 import { Tip, TIP_DATA } from "@/components/ui/Tip";
+import { useShapeToolStore } from "../tool/shapeToolStore";
 
 /** A choice's name */
 export function orderLabel(choice: OrderChoice): string {
@@ -72,7 +73,7 @@ export function orderWhyText(why: OrderWhy): string {
         case "noOrder":
             return tolgee.t(
                 "shapes.edit.order.why.noOrder",
-                "These marchers have no order yet. Set order on them first, or pick by hand.",
+                "These marchers have no order yet (drill numbers aren't one). Use Set order on them first, or pick by hand.",
             );
         case "twoLines":
             return tolgee.t(
@@ -255,7 +256,8 @@ function OrderRow({
  * three answers' pictures read the new line as numbers (#559); every answer says what it does in its
  * tip. On an
  * open shape a line under the answers says what the current one gives: its biggest step and how
- * many walks cross. None for a kind without an order.
+ * many walks cross. With marchers placed by hand on top, the button says how many. None for a kind
+ * without an order.
  */
 export function OrderMenu({
     target,
@@ -268,11 +270,22 @@ export function OrderMenu({
             '[role="menuitemradio"][aria-checked="true"]',
         ),
     );
+    // Marchers placed by hand on the open shape (Pick by hand, Swap two), on top of the answer
+    const byHand = useShapeToolStore(
+        (s) => new Set(s.tool?.pins?.map(([marcher]) => marcher)).size,
+    );
     const order = target.order;
     if (!order) return null;
     const label = tolgee.t("shapes.edit.order.label", "Who goes where");
     const options = orderOptions(order.why);
-    const currentLabel = orderLabel(order.current);
+    const currentLabel =
+        byHand > 0
+            ? tolgee.t(
+                  "shapes.edit.order.withHandPicks",
+                  "{order} · {count} by hand",
+                  { order: orderLabel(order.current), count: byHand },
+              )
+            : orderLabel(order.current);
     const pick = (value: OrderChoice) => {
         if (order.why(value)) return;
         setOpen(false);

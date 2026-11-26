@@ -524,7 +524,10 @@ function withPick<D extends FieldModeDrawing | null>(drawing: D): D {
         lastPick.session === session
     )
         return lastPick.value as D;
-    const pick = pickDrawing(tool);
+    const named = pickDrawing(tool);
+    // Too many to name: no names where they start either, as none on the spots
+    const pick =
+        named && !drawing.labels?.length ? { ...named, names: [] } : named;
     const value = pick
         ? {
               ...drawing,
