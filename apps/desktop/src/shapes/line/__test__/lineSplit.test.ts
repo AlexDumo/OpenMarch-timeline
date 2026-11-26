@@ -95,7 +95,7 @@ describe("splitLine", () => {
             pt(50, 30, { tension: 1 }),
             pt(100, 0, { tension: 1 }),
         ]);
-        // A gentle curve keeps its spots within a hair
+        // A gentle curve keeps its spots within a hair (0.08 at most here)
         for (const k of [1, 2, 5, 8, 10]) splitKeeps(curve, 11, k, 0.1);
         // A tight S-curve can't be matched exactly by its pieces' own points: its marchers
         // settle onto them, a little way at most
