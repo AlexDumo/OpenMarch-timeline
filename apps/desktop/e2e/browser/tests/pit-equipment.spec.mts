@@ -39,8 +39,6 @@ const PIT = [
 ];
 
 test.use({
-    // The time-stretch worklet (#216) can't load here; nothing here plays
-    allowedPageErrors: [/Audio worklet error/],
     seedSql: [
         ...seedShowSql({
             beats: 24,

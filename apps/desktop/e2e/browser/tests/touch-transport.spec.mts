@@ -22,7 +22,6 @@ test.use({
         lastPageCounts: 8,
     }),
     appSettings: { optOutAnalytics: true, editorMode: "expert" },
-    allowedPageErrors: [/Audio worklet error/],
     // A touch screen, in the touch layout
     touchScreen: true,
     initScript: "localStorage.setItem('openmarch:inputMode', 'touch');",

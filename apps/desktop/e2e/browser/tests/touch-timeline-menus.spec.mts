@@ -260,7 +260,6 @@ test.describe("touch layout", () => {
     test.use({
         showFile: SHOW,
         appSettings: { optOutAnalytics: true, editorMode: "expert" },
-        allowedPageErrors: [/Audio worklet error/],
         touchScreen: true,
         initScript: "localStorage.setItem('openmarch:inputMode', 'touch');",
     });
@@ -551,7 +550,6 @@ test.describe("mouse layout", () => {
     test.use({
         showFile: SHOW,
         appSettings: { optOutAnalytics: true, editorMode: "expert" },
-        allowedPageErrors: [/Audio worklet error/],
     });
 
     test("no chip shows, and a right-click on a page box opens its menu as before, without Edit move", async ({

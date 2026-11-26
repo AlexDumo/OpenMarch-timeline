@@ -51,8 +51,6 @@ test.use({
         })),
         positions: [HOME, HOME, PAGE2],
     }),
-    // The time-stretch worklet (#216) can't load in the harness (see props.spec.mts)
-    allowedPageErrors: [/Audio worklet error/],
 });
 
 type Point = { x: number; y: number };

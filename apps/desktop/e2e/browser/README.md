@@ -38,6 +38,12 @@ replaces the wire between them:
 SQL runs through the app's own `sql:proxy` handler on `node:sqlite`, against a
 copy of `_blank.dots` in the test's output folder.
 
+Each show's renderer comes from its own small HTTP server on `127.0.0.1`, on a
+port the system picks (`serveRenderer.mts`), and a route blocks every other
+origin. A Playwright route alone can't serve it: Chromium fetches the module an
+audio context loads (the time-stretch player that plays the music) without
+passing it through routes.
+
 ## Checking the harness against Electron
 
 The same scenarios also run in the built Electron app, to catch the stand-ins

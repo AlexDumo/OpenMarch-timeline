@@ -34,7 +34,6 @@ test.use({
         })),
         positions: [HOME, HOME],
     }),
-    allowedPageErrors: [/Audio worklet error/],
 });
 
 const SHOTS = process.env.ROWS_LENS_SHOTS;
