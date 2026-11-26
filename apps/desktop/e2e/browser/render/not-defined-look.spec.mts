@@ -92,6 +92,13 @@ const DARK_SQL = `UPDATE field_properties SET json_data = json_set(json_data,
     '$.theme.secondaryStroke', ${color(120, 130, 150)},
     '$.theme.tertiaryStroke', ${color(60, 66, 80)},
     '$.theme.defaultMarcher.label', ${color(240, 240, 240)})`;
+/**
+ * The grid's lines in the field's own white: a Not defined fill is 60% opaque, so a line under it
+ * darkens the gap it shows through. The measured tests are about the marchers, not the field.
+ */
+const NO_GRID_SQL = `UPDATE field_properties SET json_data = json_set(json_data,
+    '$.theme.secondaryStroke', ${color(255, 255, 255)},
+    '$.theme.tertiaryStroke', ${color(255, 255, 255)})`;
 const turfSql = (file: string) => [
     `UPDATE field_properties SET image = X'${fs.readFileSync(file).toString("hex")}',
         json_data = json_set(json_data, '$.showFieldImage', json('true'),
@@ -227,6 +234,7 @@ test.describe("Not defined look, measured", () => {
         seedSql: [
             ...SHOW_SQL,
             "UPDATE section_appearances SET label_visible = 0",
+            NO_GRID_SQL,
         ],
     });
 
@@ -243,10 +251,11 @@ test.describe("Not defined look, measured", () => {
             await expectDashed(page);
         });
 
-    // #302: Stop eases the dashes in, ending at the same look
+    // #302: Stop eases the dashes in, ending at the same look. At 3×, where every gap is counted
     test("Stop after Play ends at the full dashed look", async ({ show }) => {
         const { page } = show;
         await onPage1(page);
+        await zoomBy(page, 3);
         const notDefined = () =>
             page.evaluate(
                 () =>
@@ -528,23 +537,44 @@ async function expectDashed(page: Page) {
             y: (screen.y - box.y) * scale,
         };
     };
+    // Device pixels per shape unit, as the marchers layer sizes a dot: a field unit, but never
+    // under a 1.5 CSS px radius (`dotSizes`, selectionRing.ts)
+    const zoom = await zoomOf(page);
+    const unit = Math.max(zoom, 1.5 / 5) * scale;
     const profiles = await edgeProfiles(
         page,
         png,
+        unit,
         sections.map((s) => ({
             shape: s.shape,
             style: s.style,
-            defined: at(s.defined),
             notDefined: at(s.notDefined),
         })),
     );
     for (const [i, s] of sections.entries()) {
         const profile = profiles[i]!;
-        // Dashes at any size: fewer, longer ones on a small shape
-        const least = profile.small
-            ? { circle: 4, square: 4, triangle: 3, x: 4 }[s.shape]
-            : { circle: 8, square: 8, triangle: 6, x: 8 }[s.shape];
-        expect(profile.gaps, `${s.name} gaps`).toBeGreaterThanOrEqual(least);
+        // Dashes at any size: fewer, longer ones on a small shape (gaps of 2 px or more)
+        if (profile.small) {
+            // A small shape is 7 px across, its dashes a pixel or two on the pixel grid: where
+            // each one lands changes how its edges blend, so a count there reads gaps that aren't
+            // and misses some that are. Its edge must still be broken; 3× counts every gap.
+            // A square's or triangle's corner over a 60% fill dips like a gap even drawn solid,
+            // so those two only count at 3×
+            const cornersDip =
+                s.style.name === "both" &&
+                (s.shape === "square" || s.shape === "triangle");
+            if (!cornersDip)
+                expect(profile.gaps, `${s.name} gaps`).toBeGreaterThanOrEqual(
+                    1,
+                );
+        } else {
+            // Exactly the shader's: NOT_DEFINED_LOOK's dashes round a circle, a gap between
+            // each of a side's (or an X arm's) dashes, corners solid
+            const designed = { circle: 8, square: 8, triangle: 6, x: 8 }[
+                s.shape
+            ];
+            expect(profile.gaps, `${s.name} gaps`).toBe(designed);
+        }
         expect(profile.dash, `${s.name} dash`).toBeGreaterThan(0.8);
         // The fill, where it's big enough to read: 60% inside an
         // outline, nothing without one (an X's lines are its dashes)
@@ -619,27 +649,36 @@ function around(corners: readonly [number, number][], steps: number) {
     return path;
 }
 
+/** Points along a shape's edge, in shape units: round a closed outline, or along an open line. */
+type EdgeRun = { points: [number, number][]; closed: boolean };
+
 /**
- * Points, in shape units from the marcher, along the middle of a Not defined
- * shape's dashed edge (inset by half its width), or along an X's four arms.
+ * Runs of points, in shape units from the marcher, along the middle of a Not
+ * defined shape's dashed edge (inset by half its width), or along each of an
+ * X's four arms, from near its middle to near its tip.
  */
-function edgePath(shape: ShapeName, inset: number): [number, number][] {
+function edgeRuns(shape: ShapeName, inset: number): EdgeRun[] {
     const steps = 400;
+    const closed = (points: [number, number][]) => [{ points, closed: true }];
     if (shape === "circle")
-        return Array.from({ length: steps }, (_, k) => {
-            const a = (k / steps) * Math.PI * 2;
-            return [Math.cos(a) * (5 - inset), Math.sin(a) * (5 - inset)];
-        });
+        return closed(
+            Array.from({ length: steps }, (_, k) => {
+                const a = (k / steps) * Math.PI * 2;
+                return [Math.cos(a) * (5 - inset), Math.sin(a) * (5 - inset)];
+            }),
+        );
     if (shape === "square") {
         const h = SQUARE_HALF - inset;
-        return around(
-            [
-                [-h, -h],
-                [h, -h],
-                [h, h],
-                [-h, h],
-            ],
-            steps,
+        return closed(
+            around(
+                [
+                    [-h, -h],
+                    [h, -h],
+                    [h, h],
+                    [-h, h],
+                ],
+                steps,
+            ),
         );
     }
     if (shape === "triangle") {
@@ -652,40 +691,53 @@ function edgePath(shape: ShapeName, inset: number): [number, number][] {
             [0, -TRIANGLE_HH],
             [TRIANGLE_HW, TRIANGLE_HH],
         ];
-        return around(
-            corners.map(([x, y]) => [x * k, centroid + (y - centroid) * k]),
-            steps,
+        return closed(
+            around(
+                corners.map(([x, y]) => [x * k, centroid + (y - centroid) * k]),
+                steps,
+            ),
         );
     }
+    // An arm's ends are dashes (corners solid); its tip's antialiased end is no gap, so each arm
+    // is its own open run rather than one loop that would count each tip as a gap
     return [
         [1, 1],
         [-1, 1],
         [-1, -1],
         [1, -1],
-    ].flatMap(([sx, sy]) =>
-        Array.from({ length: steps / 4 }, (_, j): [number, number] => {
-            const t = 0.08 + 0.88 * (j / (steps / 4));
+    ].map(([sx, sy]) => ({
+        closed: false,
+        points: Array.from({ length: steps / 4 }, (_, j): [number, number] => {
+            const t = 0.08 + 0.88 * (j / (steps / 4 - 1));
             return [sx! * 6 * t, sy! * 6 * t];
         }),
-    );
+    }));
 }
 
 /**
- * How many gaps a closed run of edge strengths has: falls under `gapBelow`
- * after a dash over `dashAbove`.
+ * How many gaps a run of edge strengths has: a gap falls under `gapBelow`
+ * between two dashes over `dashAbove`, so a run's open ends never count. A
+ * closed run is read once round from its strongest point, a dash, back to it.
  */
 function countGaps(
-    values: readonly number[],
+    { values, closed }: { values: readonly number[]; closed: boolean },
     dashAbove: number,
     gapBelow: number,
 ) {
+    let run = values;
+    if (closed) {
+        const start = values.indexOf(Math.max(...values));
+        run = [...values.slice(start), ...values.slice(0, start + 1)];
+    }
     let gaps = 0;
-    let onDash = values[values.length - 1]! > dashAbove;
-    // Round twice, so the first pass settles where the path starts
-    for (const [k, v] of [...values, ...values].entries()) {
-        if (onDash && v < gapBelow && k >= values.length) gaps++;
-        if (v > dashAbove) onDash = true;
-        else if (v < gapBelow) onDash = false;
+    let afterDash = false;
+    let inGap = false;
+    for (const v of run) {
+        if (v > dashAbove) {
+            if (inGap) gaps++;
+            afterDash = true;
+            inGap = false;
+        } else if (v < gapBelow && afterDash) inGap = true;
     }
     return gaps;
 }
@@ -698,14 +750,16 @@ function countGaps(
 async function strongestAcross(
     page: Page,
     png: Buffer,
-    path: readonly [number, number][],
+    { points: path, closed }: EdgeRun,
     center: Point,
     unit: number,
 ) {
     const across = [-1, -0.5, 0, 0.5, 1].map((px) => px / unit);
+    const n = path.length;
     const points = path.flatMap(([x, y], k) => {
-        const [nx, ny] = path[(k + 1) % path.length]!;
-        const [px, py] = path[(k + path.length - 1) % path.length]!;
+        // An open run's ends take their one neighbor's direction
+        const [nx, ny] = path[closed ? (k + 1) % n : Math.min(k + 1, n - 1)]!;
+        const [px, py] = path[closed ? (k + n - 1) % n : Math.max(k - 1, 0)]!;
         const length = Math.hypot(nx - px, ny - py) || 1;
         const normal = [(ny - py) / length, -(nx - px) / length];
         return across.map((t) => ({
@@ -730,62 +784,47 @@ const rgbOf = (css: string) => css.match(/\d+/g)!.slice(0, 3).map(Number);
  * For each Not defined shape, in a field capture at device-pixel centers: how
  * many gaps its dashed edge (or an X's lines) has, its dashes' contrast as a
  * share of its own color's, whether it's small on screen (the shader's fewer
- * dashes), and its middle's contrast as a share of its fill's. Shapes are
- * measured in the Defined filled circle's scale.
+ * dashes), and its middle's contrast as a share of its fill's. `unit` is
+ * device pixels per shape unit.
  */
 async function edgeProfiles(
     page: Page,
     png: Buffer,
-    pairs: readonly {
+    unit: number,
+    shapes: readonly {
         shape: ShapeName;
         style: (typeof STYLES)[number];
-        defined: Point;
         notDefined: Point;
     }[],
 ) {
-    // Pixels per shape unit: the Defined filled circle's radius along its middle row
-    const circle = pairs.find(
-        (p) => p.shape === "circle" && p.style.name === "filled",
-    )!.defined;
-    const row = await pixelsAt(
-        page,
-        png,
-        Array.from({ length: 200 }, (_, dx) => ({
-            x: circle.x + dx,
-            y: circle.y,
-        })),
-    );
-    // The default theme's field (sampling it could land on a grid line)
     const field = WHITE;
-    const radius =
-        row.findIndex(
-            (c) => contrast(c, field) < contrast(row[0]!, field) / 2,
-        ) - 0.5;
-    const unit = radius / 5;
     // The shader's switch to fewer dashes, at a 4 CSS px radius (the harness draws at 1 device px each)
-    const small = radius < 4;
+    const small = unit * 5 < 4;
     // The dashed edge's width, and the middle of its band from the shape's edge
     const width = Math.max(1.75, 2 / unit);
     const profiles = [];
-    for (const { shape, style, notDefined } of pairs) {
+    for (const { shape, style, notDefined } of shapes) {
         const outlined = style.outline !== "NULL" && shape !== "x";
         const color = rgbOf(outlined ? style.outline : style.fill);
         const full = contrast(color, field);
         const inset = outlined ? width / 2 - 0.5 : width / 2;
-        const values = (
-            await strongestAcross(
-                page,
-                png,
-                edgePath(shape, inset),
-                notDefined,
-                unit,
-            )
-        ).map((c) => c / full);
+        const runs = await Promise.all(
+            edgeRuns(shape, inset).map(async (run) => ({
+                closed: run.closed,
+                values: (
+                    await strongestAcross(page, png, run, notDefined, unit)
+                ).map((c) => c / full),
+            })),
+        );
         // Inside an outline a gap shows the 60% fill; elsewhere, the field
         const [dashAbove, gapBelow] =
             style.name === "both" && shape !== "x" ? [0.85, 0.75] : [0.6, 0.45];
-        const gaps = countGaps(values, dashAbove, gapBelow);
-        const dashes = values
+        const gaps = runs.reduce(
+            (sum, run) => sum + countGaps(run, dashAbove, gapBelow),
+            0,
+        );
+        const dashes = runs
+            .flatMap((run) => run.values)
             .filter((v) => v > dashAbove)
             .sort((a, b) => a - b);
         const [middle] = await pixelsAt(page, png, [
