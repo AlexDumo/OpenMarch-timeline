@@ -42,6 +42,12 @@ export interface TouchHitCandidate<K> {
      * as drawn). Without it, only a press on `drawn` counts
      */
     readonly on?: boolean;
+    /**
+     * Right on it, it takes a press over the other targets there, the start flag's and the
+     * playhead's lines among them: the selected clip's edges, which selecting the clip puts the
+     * lines on (#593)
+     */
+    readonly overLines?: boolean;
 }
 
 const contains = (rect: TouchRect, x: number, y: number) =>
@@ -58,9 +64,11 @@ export const distanceToRect = (rect: TouchRect, x: number, y: number) =>
  * Which target a finger's press at (`x`, `y`) belongs to, where hit areas overlap (tablet plan
  * 3.3). Of the targets whose hit area holds the press:
  *
- * 1. A target the press is right on (`on`) wins, as it would for a mouse: of those, the nearest
- *    mark, then the one on top. So where the start flag's line or the playhead sits on the selected
- *    clip's end, a finger right on the line takes the line (UI-21), as a mouse does.
+ * 1. A target the press is right on (`on`) wins, as it would for a mouse: of those, one that takes
+ *    presses over the lines (`overLines`, the selected clip's edges), then the nearest mark, then
+ *    the one on top. So where the start flag's line or the playhead sits on the selected clip's
+ *    end, a finger right on the edge resizes the clip (#593), as a mouse does; on a page flag's
+ *    grip or another clip's end, the line still wins (UI-21).
  * 2. A press on an object that keeps its presses (`keep`: a clip's body or another control under
  *    the hit areas, named by its group) stays that object's, unless it's on one of that object's
  *    own targets. So a finger on a clip selects or moves that clip, even inside the playhead's or
@@ -77,12 +85,19 @@ export function pickTouchTarget<K>(
     candidates: readonly TouchHitCandidate<K>[],
     keep?: string,
 ): K | null {
-    type Ranked = { key: K; on: boolean; selected: boolean; distance: number };
+    type Ranked = {
+        key: K;
+        on: boolean;
+        overLines: boolean;
+        selected: boolean;
+        distance: number;
+    };
     let best: Ranked | null = null;
-    // Better than `than`: right on it first, then (off every target) selected, then nearest; a
-    // tie goes to the later one, on top
+    // Better than `than`: right on it first (of those, one over the lines), then (off every
+    // target) selected, then nearest; a tie goes to the later one, on top
     const beats = (a: Ranked, than: Ranked) => {
         if (a.on !== than.on) return a.on;
+        if (a.on && a.overLines !== than.overLines) return a.overLines;
         if (!a.on && a.selected !== than.selected) return a.selected;
         return a.distance <= than.distance;
     };
@@ -94,6 +109,7 @@ export function pickTouchTarget<K>(
         const ranked = {
             key: candidate.key,
             on,
+            overLines: candidate.overLines ?? false,
             selected: candidate.selected,
             distance,
         };

@@ -2791,6 +2791,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                 <button
                     type="button"
                     data-timeline-interactive="true"
+                    data-timeline-line=""
                     aria-label={t("timeline.startFlag.label", {
                         beat: beatIndex,
                     })}
@@ -3221,6 +3222,7 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
                 type="button"
                 data-testid="timeline-playhead"
                 data-timeline-scrub="true"
+                data-timeline-line=""
                 // A finger's long press opens its menu (tablet 3.4), not the button's hint
                 data-own-long-press={onAddPage || basicPoint ? "" : undefined}
                 aria-label={t("timeline.playhead.label", {

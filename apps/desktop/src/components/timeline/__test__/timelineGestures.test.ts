@@ -737,6 +737,88 @@ describe("touch hit areas (tablet 3.3)", () => {
         expect(findTouchHit(viewport, 110, 50)?.target).toBe(grip.hit);
     });
 
+    /**
+     * A clip from 60 to 100 whose end handle (94..100) sits under the playhead's line (94..106),
+     * which is painted on top, as selecting the clip leaves them
+     */
+    function selectedClipEndUnderPlayhead({ selected = true } = {}) {
+        const { viewport, bare } = mount();
+        const clip = document.createElement("button");
+        clip.setAttribute("data-timeline-interactive", "true");
+        clip.setAttribute("data-touch-keep", "clip:1");
+        clip.getBoundingClientRect = () => rectOf(60, 100, 40, 60);
+        const end = document.createElement("span");
+        if (selected) end.setAttribute("data-over-lines", "true");
+        end.getBoundingClientRect = () => rectOf(94, 100, 40, 60);
+        const endHit = document.createElement("span");
+        endHit.setAttribute("data-touch-hit", "");
+        endHit.setAttribute("data-touch-selected", "true");
+        endHit.dataset.touchGroup = "clip:1";
+        if (selected) endHit.setAttribute("data-touch-over-lines", "true");
+        endHit.getBoundingClientRect = () => rectOf(78, 122, 40, 60);
+        end.append(endHit);
+        clip.append(end);
+        viewport.append(clip);
+        const playhead = target(viewport, 94, 106);
+        playhead.button.setAttribute("data-timeline-line", "");
+        const presses: string[] = [];
+        end.addEventListener("pointerdown", (event) =>
+            presses.push(`end ${(event as PointerEvent).pointerType}`),
+        );
+        playhead.button.addEventListener("pointerdown", (event) =>
+            presses.push(`playhead ${(event as PointerEvent).pointerType}`),
+        );
+        const detach = attachTimelineGestures(viewport, {
+            region: () => "control",
+            view: () => ({ scrollLeft: 0, scrollTop: 0, pixelsPerBeat: 10 }),
+            navigate: () => {},
+            leadingInset: () => 0,
+        });
+        return { viewport, bare, end, endHit, playhead, presses, detach };
+    }
+
+    it("gives a press on the playhead's line to the selected clip's end handle under it (#593)", () => {
+        const { playhead, presses, detach } = selectedClipEndUnderPlayhead();
+        // A mouse on the line, right on the handle: the handle resizes
+        playhead.button.dispatchEvent(
+            fingerEvent("pointerdown", 1, 97, 50, "mouse"),
+        );
+        expect(presses).toEqual(["end mouse"]);
+        presses.length = 0;
+        // On the line past the clip's end, no handle there: the playhead
+        playhead.button.dispatchEvent(
+            fingerEvent("pointerdown", 2, 103, 50, "mouse"),
+        );
+        expect(presses).toEqual(["playhead mouse"]);
+        presses.length = 0;
+        // At the handle's count but above the clip row: the playhead
+        playhead.button.dispatchEvent(
+            fingerEvent("pointerdown", 3, 97, 20, "mouse"),
+        );
+        expect(presses).toEqual(["playhead mouse"]);
+        detach();
+    });
+
+    it("gives a finger right on the selected clip's end, under the playhead, to the end (#593)", () => {
+        const { viewport, endHit, playhead, detach } =
+            selectedClipEndUnderPlayhead();
+        expect(findTouchHit(viewport, 97, 50)?.target).toBe(endHit);
+        // Right on the line past the clip, the line
+        expect(findTouchHit(viewport, 103, 50)?.target).toBe(playhead.hit);
+        detach();
+    });
+
+    it("leaves a press on the playhead's line over a clip that isn't selected to the line (UI-21)", () => {
+        const { viewport, playhead, presses, detach } =
+            selectedClipEndUnderPlayhead({ selected: false });
+        playhead.button.dispatchEvent(
+            fingerEvent("pointerdown", 1, 97, 50, "mouse"),
+        );
+        expect(presses).toEqual(["playhead mouse"]);
+        expect(findTouchHit(viewport, 97, 50)?.target).toBe(playhead.hit);
+        detach();
+    });
+
     it("sends a finger's press near a target on to it, with its click; a mouse's stays where it landed", () => {
         const { viewport, bare } = mount();
         const { button } = target(viewport, 98, 102);
