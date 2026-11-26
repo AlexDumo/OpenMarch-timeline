@@ -441,6 +441,34 @@ const shots = [
         },
     },
     {
+        id: "marchers-select-menu",
+        kind: "still",
+        // The field menu open on a trumpet at the end of Page 1, with its Select submenu (Select
+        // same section, Section, Family, Tag, Holding) and Select same section highlighted
+        async setup({ page, wait, union, around }) {
+            await toPage1(page, wait);
+            const trumpet = [...(await marchers(page)).values()].find((m) =>
+                /^T\d+$/.test(m.label),
+            );
+            await page.mouse.click(trumpet.x, trumpet.y, { button: "right" });
+            await page.getByTestId("field-menu").waitFor();
+            await page.getByTestId("field-menu-select").hover();
+            await page.getByTestId("field-menu-select-content").waitFor();
+            await page.getByTestId("field-menu-selectSameSection").hover();
+            await wait(500);
+            await hideToasts(page);
+            return {
+                box: union(
+                    await around(page.getByTestId("field-menu"), 12),
+                    await around(
+                        page.getByTestId("field-menu-select-content"),
+                        12,
+                    ),
+                ),
+            };
+        },
+    },
+    {
         id: "marchers-coordinate-rounding",
         kind: "still",
         // The Coordinate Rounding menu open, X rounding to half steps, the offset off

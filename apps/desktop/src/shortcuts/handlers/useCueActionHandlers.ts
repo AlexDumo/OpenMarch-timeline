@@ -239,14 +239,17 @@ export function useCueActionHandlers() {
         useSetEquipment(choice, commands, isPlaying);
     useActionHandlerGroup(
         SELECT_ACTIONS,
-        (id) =>
-            commands.selectHolding([
-                ...(SELECT_VALUES.get(id) ?? []),
-                // the show's own flags are guard equipment too (fork #985)
-                ...(id === selectFamilyActionOf("guard")
-                    ? (commands.show?.flags ?? []).map((f) => f.value)
-                    : []),
-            ]),
+        (id, args) =>
+            commands.selectHolding(
+                [
+                    ...(SELECT_VALUES.get(id) ?? []),
+                    // the show's own flags are guard equipment too (fork #985)
+                    ...(id === selectFamilyActionOf("guard")
+                        ? (commands.show?.flags ?? []).map((f) => f.value)
+                        : []),
+                ],
+                args?.add === true,
+            ),
         {
             enabled: !isPlaying && commands.count !== null,
             disabledReason: setReason(commands, isPlaying, true),
@@ -279,7 +282,7 @@ export function useCueActionHandlers() {
                 showPropsPanel();
                 return;
             }
-            commands.selectHolding([value]);
+            commands.selectHolding([value], args?.add === true);
         },
         {
             enabled: !isPlaying && commands.count !== null,

@@ -83,7 +83,8 @@ export interface CueCommands {
     /** Who holds any of the Equipment `values` at the playhead. */
     readonly holders: (values: readonly string[]) => readonly number[];
     /** Selects who holds any of the Equipment `values` at the playhead, whatever their section. */
-    readonly selectHolding: (values: readonly string[]) => void;
+    /** Selects whoever holds one of `values`; with `add`, keeps the selection and adds them */
+    readonly selectHolding: (values: readonly string[], add?: boolean) => void;
     /** The cue the cue commands act on (`useCueSelectionStore`), or null. */
     readonly cue: DatabaseCue | null;
     /** The cue's performers after adding or removing the selection; null when nothing changes. */
@@ -280,8 +281,13 @@ export function useCueCommands(): CueCommands {
                 edit(plan);
             },
             holders,
-            selectHolding: (values) => {
-                activeFieldEditor()?.select(holders(values));
+            selectHolding: (values, add) => {
+                const editor = activeFieldEditor();
+                editor?.select(
+                    add
+                        ? [...editor.selected(), ...holders(values)]
+                        : holders(values),
+                );
             },
             cue,
             edited,

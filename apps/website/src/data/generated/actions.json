@@ -2129,6 +2129,11 @@
             }
         ]
     },
+    "selectSameSection": {
+        "label": "Select same section",
+        "category": "select",
+        "bindings": []
+    },
     "toggleLassoSelect": {
         "label": "Switch between box and lasso select",
         "category": "select",
