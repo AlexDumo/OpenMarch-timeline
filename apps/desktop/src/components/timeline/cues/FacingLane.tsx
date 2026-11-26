@@ -674,7 +674,8 @@ const LABEL_CHAR_PX = 6;
  * - **A result** (the hold from the cue's count) is solid. Dragging it moves the cue, its turn
  *   coming along at the same length. A diamond marks the cue on its count, and drags the same
  *   way; an instant cue's diamond has a tab on its left that pulls a turn out.
- * - **The front before any cue** is dashed, and is empty lane space.
+ * - **Their default before any cue** (front, or side 2 for bass drums) is dashed, and is empty
+ *   lane space.
  */
 function FacingBar({
     piece,
@@ -766,7 +767,7 @@ function FacingBar({
                   })}
             onDoubleClick={isCue ? onOpen : undefined}
             onPointerDown={(e) => {
-                // The front before any cue is empty lane space: its press is the timeline's
+                // The default before any cue is empty lane space: its press is the timeline's
                 if (!isCue) return;
                 press(e, turn ? "turnStart" : "move");
             }}

@@ -152,7 +152,7 @@ export interface FacingPiece {
     readonly kind: "turn" | "hold";
     readonly fromDegrees: number;
     readonly degrees: number;
-    /** The cue that turned them; null for front before any cue */
+    /** The cue that turned them; null for the section's default angle before any cue */
     readonly cueId: number | null;
 }
 
