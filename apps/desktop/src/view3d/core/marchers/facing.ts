@@ -68,11 +68,11 @@ export function travelDirection(
 }
 
 /**
- * As far as a head turns from the chest to look at the front (radians): 70°. A neck turns
+ * As far as a head turns from the chest to look at the front (radians): 60°. A neck turns
  * about 70–80° at most, and bass drummers on a side, in photos, turn theirs about 60–70° and
- * look the rest of the way.
+ * look the rest of the way; 60° keeps it comfortable.
  */
-export const EYES_FRONT_REACH = (70 * Math.PI) / 180;
+export const EYES_FRONT_REACH = (60 * Math.PI) / 180;
 
 const EYES_FRONT = new Set(
     Object.values(SECTIONS)
@@ -89,7 +89,7 @@ export function isEyesFrontSection(section: string): boolean {
  * How far an eyes-front performer facing `heading` turns their head from their chest, radians
  * in the heading's sense (positive to their left), to look at the front. Within
  * {@link EYES_FRONT_REACH} of the front, all the way; out to a side, as far as it reaches:
- * side 2 (heading +90°) turns the head 70° to their right. Past a side, the head comes back
+ * side 2 (heading +90°) turns the head 60° to their right. Past a side, the head comes back
  * toward the chest as they face the back, straight ahead at the back itself, so a turn through
  * the back never snaps the head across.
  */

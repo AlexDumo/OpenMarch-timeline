@@ -139,25 +139,25 @@ describe("eyes front", () => {
     it("turns the head to the front, as far as a neck turns", () => {
         expect(yaw(0)).toBeCloseTo(0, 9);
         expect(yaw(45)).toBeCloseTo(-45, 9);
-        expect(yaw(70)).toBeCloseTo(-70, 9);
-        // side 2: turned 90° to their left, so the head turns 70° to their right
-        expect(yaw(90)).toBeCloseTo(-70, 9);
-        expect(yaw(80)).toBeCloseTo(-70, 9);
-        expect(yaw(-90)).toBeCloseTo(70, 9);
-        expect(yaw(270)).toBeCloseTo(70, 9);
+        expect(yaw(60)).toBeCloseTo(-60, 9);
+        // side 2: turned 90° to their left, so the head turns 60° to their right
+        expect(yaw(90)).toBeCloseTo(-60, 9);
+        expect(yaw(80)).toBeCloseTo(-60, 9);
+        expect(yaw(-90)).toBeCloseTo(60, 9);
+        expect(yaw(270)).toBeCloseTo(60, 9);
         // a spin later, the same
-        expect(yaw(450)).toBeCloseTo(-70, 9);
+        expect(yaw(450)).toBeCloseTo(-60, 9);
     });
 
     it("brings the head back to the chest toward the back, with no snap across it", () => {
-        expect(yaw(135)).toBeCloseTo(-35, 9);
-        expect(yaw(-135)).toBeCloseTo(35, 9);
+        expect(yaw(135)).toBeCloseTo(-30, 9);
+        expect(yaw(-135)).toBeCloseTo(30, 9);
         expect(yaw(180)).toBeCloseTo(0, 9);
         expect(Math.abs(yaw(179.9) - yaw(180.1))).toBeLessThan(0.5);
         expect(Math.abs(yaw(89.9) - yaw(90.1))).toBeLessThan(0.5);
         // never past the neck's reach
         for (let h = -360; h <= 360; h += 5)
-            expect(Math.abs(yaw(h))).toBeLessThanOrEqual(70 + 1e-9);
+            expect(Math.abs(yaw(h))).toBeLessThanOrEqual(60 + 1e-9);
     });
 
     it("is for bass and flub drums only", () => {
