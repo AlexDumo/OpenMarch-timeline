@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import type { PointerKind } from "@/field/editor/pointerThresholds";
 import { useFieldMenuPointStore } from "@/field/three/fieldMenuPoint";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { currentShapeField } from "../field/shapeFieldContext";
@@ -28,11 +29,14 @@ function onShape(box: PlacedBox, at: XY, step: number): boolean {
     );
 }
 
-/** What Split here says where the menu was opened on `box`, or null where it doesn't apply */
-function checkAt(box: PlacedBox, at: XY): SplitCheck | null {
+/**
+ * What Split here says where the menu was opened on `box` by a press of `kind`, or null where it
+ * doesn't apply. A finger's long press reaches a marcher from further than a mouse (tablet parity)
+ */
+function checkAt(box: PlacedBox, at: XY, kind: PointerKind): SplitCheck | null {
     const field = currentShapeField();
     if (!field) return null;
-    const env = toolEnvFor(field);
+    const env = toolEnvFor(field, undefined, { kind });
     // A box or circle is offered it greyed, with why, so it's found and understood (sims, #1336)
     if (!isLineKind(box))
         return onShape(box, at, env.stepPx)
@@ -55,9 +59,10 @@ export function useSplitHere(): void {
     const enabled = useBoxSelectionStore((s) => s.enabled);
     const box = useBoxSelectionStore((s) => s.selected);
     const at = useFieldMenuPointStore((s) => s.at);
+    const kind = useFieldMenuPointStore((s) => s.kind);
     const check = useMemo(
-        () => (enabled && box && at ? checkAt(box, at) : null),
-        [enabled, box, at],
+        () => (enabled && box && at ? checkAt(box, at, kind) : null),
+        [enabled, box, at, kind],
     );
     useActionHandler(
         "shapeSplitHere",

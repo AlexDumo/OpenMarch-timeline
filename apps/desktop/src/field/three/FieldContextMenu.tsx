@@ -61,6 +61,7 @@ import { useShowShortcutHints } from "@/stores/KeyboardSeenStore";
 import type { FieldMarchers } from "./fieldMarchers";
 import { elementToField, fieldToElement, useFieldViewStore } from "./fieldView";
 import { useFieldMenuPointStore } from "./fieldMenuPoint";
+import type { PointerKind } from "@/field/editor/pointerThresholds";
 import {
     MENU_CONTENT_CLASS,
     POINT_MENU_PLACEMENT,
@@ -820,6 +821,7 @@ export function useFieldMenu({
             point: MenuPoint,
             marcher: number | null = null,
             actions?: readonly string[],
+            kind: PointerKind = "mouse",
         ) => {
             useFieldMenuPointStore.setState({
                 at: elementToField(
@@ -827,6 +829,7 @@ export function useFieldMenu({
                     point.x,
                     point.y,
                 ),
+                kind,
             });
             setOpen({
                 at: point,
