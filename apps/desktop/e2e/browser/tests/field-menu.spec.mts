@@ -219,7 +219,8 @@ test("offers Clear this page, not Remove keyframe, and Clear is unavailable wher
         "true",
     );
     await expect(entry(page, "Align horizontally")).not.toHaveAttribute(
-        "data-disabled",
+        "aria-disabled",
+        "true",
     );
 });
 

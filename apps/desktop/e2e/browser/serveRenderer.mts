@@ -39,13 +39,22 @@ export async function serveRenderer(
 ): Promise<RendererServer> {
     const server = http.createServer((request, response) => {
         const url = new URL(request.url ?? "/", "http://127.0.0.1");
-        const file = path.join(
-            rendererDir,
-            url.pathname === "/"
-                ? "index.html"
-                : decodeURIComponent(url.pathname),
-        );
+        // A malformed escape (`%zz`) is a 404, not a throw that takes the worker down
+        let pathname: string | null;
+        try {
+            pathname = decodeURIComponent(url.pathname);
+        } catch {
+            pathname = null;
+        }
+        const file =
+            pathname === null
+                ? null
+                : path.join(
+                      rendererDir,
+                      pathname === "/" ? "index.html" : pathname,
+                  );
         if (
+            file === null ||
             !file.startsWith(rendererDir + path.sep) ||
             !fs.existsSync(file) ||
             !fs.statSync(file).isFile()
@@ -60,7 +69,9 @@ export async function serveRenderer(
                 CONTENT_TYPES[path.extname(file)] ?? "application/octet-stream",
             ...(worker ? { "Content-Security-Policy": worker.csp } : {}),
         });
-        fs.createReadStream(file).pipe(response);
+        fs.createReadStream(file)
+            .on("error", () => response.destroy())
+            .pipe(response);
     });
     await new Promise<void>((resolve, reject) => {
         server.once("error", reject);
