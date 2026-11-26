@@ -1720,6 +1720,11 @@
             }
         ]
     },
+    "shapeSplitHere": {
+        "label": "Shape: Split here",
+        "category": "shape",
+        "bindings": []
+    },
     "pathPen": {
         "label": "Path pen",
         "category": "path",

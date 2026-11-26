@@ -9,6 +9,7 @@ import {
     type RefObject,
 } from "react";
 import clsx from "clsx";
+import type { PointerKind } from "@/field/editor/pointerThresholds";
 import { useFieldTopInset } from "@/components/canvas/fieldLayers";
 import { useShallow } from "zustand/react/shallow";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
@@ -535,6 +536,7 @@ function ThreeFieldView() {
             _at: { x: number; y: number },
             _marcher: number | null,
             _actions?: readonly string[],
+            _kind?: PointerKind,
         ) => {},
     );
     const takeMenuPress = useRef((): boolean => false);
@@ -622,7 +624,7 @@ function ThreeFieldView() {
                     propDrawn: (outline) => latest.current.propDrawn(outline),
                     // #315: a right-click opens the field's menu there
                     openMenu: (at, hit, actions) =>
-                        openMenuAt.current(at.screen, hit, actions),
+                        openMenuAt.current(at.screen, hit, actions, at.kind),
                 },
                 {
                     isMac: isMacPlatform(),
