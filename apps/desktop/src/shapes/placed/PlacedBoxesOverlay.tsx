@@ -231,10 +231,10 @@ export function PlacedBoxesOverlay({
                 const rowPoints = rows.map(toPoints);
                 const attr = (line: readonly XY[]) =>
                     line.map((p) => `${p.x},${p.y}`).join(" ");
-                // The label sits over the point highest on screen
-                const a = [...points, ...rowPoints.flat()].reduce((top, p) =>
-                    p.y < top.y ? p : top,
-                );
+                // The label sits over the point highest on screen; nothing to draw without one
+                const all = [...points, ...rowPoints.flat()];
+                if (all.length === 0) return null;
+                const a = all.reduce((top, p) => (p.y < top.y ? p : top));
                 return (
                     <g key={id} data-testid="placedBox">
                         {open ? (
