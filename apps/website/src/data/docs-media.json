@@ -362,8 +362,8 @@
     "marchers-equipment-icons-setting": {
         "chapter": "marchers",
         "kind": "still",
-        "width": 840,
-        "height": 1436
+        "width": 920,
+        "height": 1424
     },
     "marchers-equipment-lane": {
         "chapter": "marchers",
@@ -410,8 +410,8 @@
     "marchers-facing-setting": {
         "chapter": "marchers",
         "kind": "still",
-        "width": 324,
-        "height": 400
+        "width": 920,
+        "height": 652
     },
     "marchers-facing-stretch": {
         "chapter": "marchers",
