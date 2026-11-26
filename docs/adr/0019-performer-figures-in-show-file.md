@@ -27,12 +27,13 @@ figures show shape and size, not the uniform's colors.
 2. **The app bakes missing looks in the background.** When a show opens, or a setting changes
    the looks it uses, the editor works out the fingerprints it needs and renders the missing
    ones straight down at a fixed scale, from the 3D View's own marcher classes, on a WebGL
-   renderer of its own that it throws away after. It runs on the editor's main thread, one
-   figure per turn, with shaders compiled in the background where the browser can. The owner
-   (2026-11-26) chose this over a worker: a bake runs only when a look changes, and a worker
-   would load a second copy of the models and untangle them from the editor's database code
-   for a fraction of a second now and then. The field keeps the shipped set until every
-   performer's picture is ready.
+   renderer of its own that it throws away after. It runs in a worker on an `OffscreenCanvas`,
+   one worker per bake, ended after. Where a worker can't draw (no WebGL in workers), or a
+   worker bake fails, the session bakes on the editor's main thread instead, one figure per
+   turn. The owner (2026-11-26) first chose the main thread, then the worker once measured: on
+   a CPU slowed to a quarter, the main-thread bake froze the editor for about 1 s twice; in the
+   worker the editor had no long task, and the field missed at most a frame or two while the
+   shaders compiled. The field keeps the shipped set until every performer's picture is ready.
 3. **The show file keeps them** in a `performer_figures` table: one row per fingerprint with the
    picture (WebP) and where the performer stands in it. Migration 0031, numbered past the
    shape-count branch's 0030 and dated before it, so whichever merges first a file takes both; the
@@ -52,8 +53,8 @@ figures show shape and size, not the uniform's colors.
 - A show carries about 100 to 250 KB of pictures; audio is usually several MB.
 - A new app version with a changed model bakes that look again on open; the fingerprint
   includes the model version.
-- The editor loads the model-building code for a bake only when one runs (`import()`), apart
-  from the 3D View window: about 3 MB of models and clips, once per session.
+- The model-building code loads only in the bake's worker (or, on the main-thread fallback,
+  through `import()`): about 3 MB of models and clips per bake, from the app's own files.
 - Another device opening the show draws the figures at once; one without WebGL still has them.
 - Merging into upstream carries one more table.
 

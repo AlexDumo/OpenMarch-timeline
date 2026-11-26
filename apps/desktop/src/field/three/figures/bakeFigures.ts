@@ -6,10 +6,8 @@
  * 3D View draws.
  *
  * It runs on a WebGL renderer of its own, made for the bake and thrown away after, so the field's
- * renderer never changes. The work is spread over frames, one figure at a time; the shaders
- * compile in the background where the browser can.
- *
- * Loaded on demand (`import()`): the editor carries none of this until a show needs a figure.
+ * renderer never changes. The editor runs it in a worker (`figureBake.worker.ts`), so the editor
+ * never waits on it; where a worker can't draw, on the editor's main thread, one figure per turn.
  */
 import {
     AmbientLight,
@@ -111,6 +109,12 @@ const nextTurn = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 const aborted = () => new DOMException("The figure bake stopped", "AbortError");
 
+/** Where a bake's time went, for the console. */
+export type BakeReport = (text: string) => void;
+
+// eslint-disable-next-line no-console -- where a bake's time goes
+const logReport: BakeReport = (text) => console.info(text);
+
 /**
  * Bakes a figure of each look, in order: null for a look that drew nothing. Stops with an
  * `AbortError` when `signal` aborts.
@@ -119,6 +123,7 @@ const aborted = () => new DOMException("The figure bake stopped", "AbortError");
 export async function bakeFigures(
     looks: readonly UniformLook[],
     signal?: AbortSignal,
+    report: BakeReport = logReport,
 ): Promise<(BakedFigure | null)[]> {
     if (looks.length === 0) return [];
     const t0 = performance.now();
@@ -295,8 +300,7 @@ export async function bakeFigures(
             await wait("crop", nextTurn());
             if (signal?.aborted) throw aborted();
         }
-        // eslint-disable-next-line no-console -- where a bake's time goes
-        console.info(
+        report(
             `Performer figures: load ${(t1 - t0).toFixed(0)} ms, set up ${(t2 - t1).toFixed(0)} ms, ` +
                 `compile ${(t3 - t2).toFixed(0)} ms, draw ${(performance.now() - t3).toFixed(0)} ms; ` +
                 `longest held ${JSON.stringify(Object.fromEntries(Object.entries(held).map(([k, v]) => [k, Math.round(v)])))}`,

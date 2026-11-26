@@ -1,6 +1,7 @@
 /**
  * The show's own performer figures (ADR 0019): read from the show file, the missing ones baked
- * in the background (`bakeFigures.ts`) and written back quietly (not an edit), then packed into
+ * in a worker (`figureBake.worker.ts`; on the main thread where a worker can't draw) and written
+ * back quietly (not an edit), then packed into
  * one texture for the field. Until every performer's figure is there, the field keeps the
  * figures that ship with the app (`figureAtlas.ts`).
  */
@@ -15,7 +16,10 @@ import {
     type FigurePerformer,
     type ShowFigureLooks,
 } from "./figureLooks";
-import type { FigureLayout } from "./bakeFigures";
+import type { BakedFigure, FigureLayout } from "./bakeFigures";
+import type { FigureBakeReply } from "./figureBakeProtocol";
+import FigureBakeWorker from "./figureBake.worker.ts?worker";
+import type { UniformLook } from "@/view3d/core/marchers/looks";
 
 /** A figure as the show file keeps it. */
 interface StoredFigure {
@@ -65,6 +69,62 @@ async function readStored(): Promise<Map<string, StoredFigure>> {
     return out;
 }
 
+/** False once a worker couldn't bake this session: later bakes run on the main thread. */
+let workerBakes = typeof Worker !== "undefined";
+
+// eslint-disable-next-line no-console -- where a bake's time goes
+const logReport = (text: string) => console.info(text);
+
+/** Bakes `looks` in a worker of its own, ended after; null when the worker couldn't. */
+function bakeInWorker(
+    looks: readonly UniformLook[],
+): Promise<(BakedFigure | null)[] | null> {
+    return new Promise((resolve) => {
+        let worker: Worker;
+        try {
+            worker = new FigureBakeWorker();
+        } catch (error) {
+            console.warn("Performer figures: no bake worker", error);
+            resolve(null);
+            return;
+        }
+        const done = (result: (BakedFigure | null)[] | null) => {
+            worker.terminate();
+            resolve(result);
+        };
+        worker.onmessage = ({ data }: MessageEvent<FigureBakeReply>) => {
+            if (data.type !== "unsupported") data.reports.forEach(logReport);
+            if (data.type === "baked") done(data.figures);
+            else {
+                if (data.type === "error")
+                    console.warn(
+                        "Performer figures: the bake worker failed",
+                        data.message,
+                    );
+                done(null);
+            }
+        };
+        worker.onerror = (event) => {
+            console.warn("Performer figures: the bake worker failed", event);
+            done(null);
+        };
+        worker.postMessage({ looks });
+    });
+}
+
+/** Bakes `looks` in a worker, or on the main thread when a worker can't. */
+async function bakeLooks(
+    looks: readonly UniformLook[],
+): Promise<(BakedFigure | null)[]> {
+    if (workerBakes) {
+        const baked = await bakeInWorker(looks);
+        if (baked) return baked;
+        workerBakes = false;
+    }
+    const { bakeFigures } = await import("./bakeFigures");
+    return bakeFigures(looks);
+}
+
 /** Looks whose bake failed this session: not tried again until the app restarts. */
 const failed = new Set<string>();
 /** Looks being baked now, by any field. */
@@ -80,9 +140,8 @@ async function bakeMissing(
 ): Promise<Map<string, StoredFigure>> {
     for (const f of missing) baking.add(f);
     try {
-        const { bakeFigures } = await import("./bakeFigures");
         const t0 = performance.now();
-        const baked = await bakeFigures(
+        const baked = await bakeLooks(
             missing.map((f) => figures.looks.get(f)!),
         );
         const out = new Map<string, StoredFigure>();
@@ -90,9 +149,9 @@ async function bakeMissing(
             if (b) out.set(missing[i], b);
             else failed.add(missing[i]);
         });
-        // eslint-disable-next-line no-console -- the bake's time is the cost to watch
-        console.info(
-            `Performer figures: baked ${out.size} in ${(performance.now() - t0).toFixed(0)} ms`,
+        logReport(
+            `Performer figures: baked ${out.size} in ${(performance.now() - t0).toFixed(0)} ms` +
+                (workerBakes ? " (worker)" : " (main thread)"),
         );
         const write = api()?.writePerformerFigures;
         if (write && out.size > 0)
