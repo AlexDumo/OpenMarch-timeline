@@ -338,7 +338,7 @@ The Line shape (spec #522, #523) stores a new kind:
    #525, `measured` (`"x"` or `"y"`, with any of these) with #527, `"straight"` with the
    change of 2026-11-01 below, `closed` with its
    `distribution` with #529, together with tensions and groups, a point's `marcher` with
-   #569 (decision 7), and Fit's `groups`, `measured: "offset"` and `offset` with decision 9, and `turn` with decision 10. From #569 a point with any other field reads as plain positions. A closed line is never measured
+   #569 (decision 7), and Fit's `groups`, `measured: "offset"` and `offset` with decision 9, and `turn` with decision 10, `rows` (rows alongside the drawn line, each with its count, shift and empty spots, the drawn one, `apart` and `slant`) with #1190, and `rows.go` (`"follow"`, `"back"` or `"side"`; absent, the rows slide) with #1193. From #569 a point with any other field reads as plain positions. A closed line is never measured
    along an axis (it always turns back), so it's laid out along the path when its `measured`
    says `"x"` or `"y"`; `"straight"` applies to it as to an open line.
 6. **A closed Line (#529).** `closed: true` joins the last point to the first: a closed line has
