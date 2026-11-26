@@ -1,13 +1,16 @@
 import clsx from "clsx";
+import { useId, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { CaretDownIcon } from "@phosphor-icons/react";
+import * as Tooltip from "@radix-ui/react-tooltip";
+import { TooltipClassName } from "@openmarch/ui";
+import { CaretDownIcon, QuestionIcon } from "@phosphor-icons/react";
 import tolgee from "@/global/singletons/Tolgee";
 import { ORDER_CHOICES, type OrderChoice } from "../assign";
 import type { OrderWhy, ShapeEditTarget } from "./editTargets";
 import { arrowFocus, useEditorMenu, useMenuFocus } from "./menuFocus";
 import { OrderPicture } from "./OrderPicture";
 import { isPictured, ORDER_PICTURE_SIZE } from "./orderPictures";
-import { Tip } from "@/components/ui/Tip";
+import { Tip, TIP_DATA } from "@/components/ui/Tip";
 
 /** A choice's name */
 export function orderLabel(choice: OrderChoice): string {
@@ -122,6 +125,113 @@ function ChoicePicture({
 }
 
 /**
+ * One answer in the menu. One that doesn't fit these marchers dims and does nothing; a **?** at
+ * its end shows why beside it while the row is under the pointer, has the keys or is pressed (as
+ * the timeline menus' unavailable entries do). Screen readers hear the reason as its description.
+ * Escape closes the tip and the menu together.
+ */
+function OrderRow({
+    option,
+    current,
+    onPick,
+    onClose,
+}: {
+    option: ReturnType<typeof orderOptions>[number];
+    current: boolean;
+    onPick: () => void;
+    /** Closes the menu: an open tip is the top layer and gets Escape first */
+    onClose: () => void;
+}) {
+    const reasonId = useId();
+    const [open, setOpen] = useState(false);
+    const refused = option.refusal !== null;
+    const testId = `shape-order-${option.value}`;
+    return (
+        <>
+            <button
+                type="button"
+                role="menuitemradio"
+                aria-checked={current}
+                aria-disabled={refused ? true : undefined}
+                aria-describedby={refused ? reasonId : undefined}
+                // A finger's long press shows the reason too (LongPressGuard, #928)
+                {...(refused ? { [TIP_DATA.label]: option.refusal } : {})}
+                onClick={() => (refused ? setOpen(true) : onPick())}
+                onPointerEnter={() => setOpen(true)}
+                onPointerLeave={() => setOpen(false)}
+                onFocus={() => setOpen(true)}
+                onBlur={() => setOpen(false)}
+                data-testid={testId}
+                className={clsx(
+                    "rounded-4 flex min-h-24 items-center gap-8 px-4 py-2 text-left",
+                    refused
+                        ? "cursor-not-allowed"
+                        : current
+                          ? "bg-fg-2 text-accent"
+                          : "hover:text-accent",
+                )}
+            >
+                <span
+                    className={clsx(
+                        "flex items-center gap-8",
+                        refused && "opacity-40",
+                    )}
+                >
+                    <ChoicePicture
+                        choice={option.value}
+                        testId={`${testId}-picture`}
+                    />
+                    <span className="flex max-w-[16rem] flex-col">
+                        <span data-label>{option.label}</span>
+                        {option.hint && (
+                            <span
+                                className="text-text/60"
+                                data-testid={`${testId}-note`}
+                            >
+                                {option.hint}
+                            </span>
+                        )}
+                    </span>
+                </span>
+                {refused && (
+                    <Tooltip.Provider delayDuration={0} disableHoverableContent>
+                        {/* Only the row opens and closes it, so it doesn't close as the pointer
+                            crosses the ? */}
+                        <Tooltip.Root open={open} onOpenChange={() => {}}>
+                            <Tooltip.Trigger asChild>
+                                <span
+                                    aria-hidden="true"
+                                    data-testid={`${testId}-why-icon`}
+                                    className="text-text/60 ml-auto pl-16"
+                                >
+                                    <QuestionIcon size={14} />
+                                </span>
+                            </Tooltip.Trigger>
+                            <Tooltip.Portal>
+                                <Tooltip.Content
+                                    side="right"
+                                    sideOffset={8}
+                                    onEscapeKeyDown={onClose}
+                                    data-testid={`${testId}-why-tip`}
+                                    className={`${TooltipClassName} text-body max-w-[240px]`}
+                                >
+                                    {option.refusal}
+                                </Tooltip.Content>
+                            </Tooltip.Portal>
+                        </Tooltip.Root>
+                    </Tooltip.Provider>
+                )}
+            </button>
+            {refused && (
+                <span id={reasonId} data-testid={`${testId}-why`} hidden>
+                    {option.refusal}
+                </span>
+            )}
+        </>
+    );
+}
+
+/**
  * Who goes where on a kind with an order along it (a Line, #528; 09-who-goes-where.md): Least
  * travel, Keep order, Reverse order, Inside out, Zipper or Within sections. A choice that doesn't
  * fit these marchers is greyed out and says why. Like the kind's own menus, its button names the
@@ -198,45 +308,13 @@ export function OrderMenu({
                         }
                     >
                         {options.map((option) => (
-                            <button
+                            <OrderRow
                                 key={option.value}
-                                type="button"
-                                role="menuitemradio"
-                                aria-checked={option.value === order.current}
-                                aria-disabled={
-                                    option.refusal ? true : undefined
-                                }
-                                title={option.refusal ?? undefined}
-                                onClick={() => pick(option.value)}
-                                data-testid={`shape-order-${option.value}`}
-                                className={clsx(
-                                    "rounded-4 flex min-h-24 items-center gap-8 px-4 py-2 text-left",
-                                    option.refusal
-                                        ? "text-text/60 cursor-not-allowed"
-                                        : option.value === order.current
-                                          ? "bg-fg-2 text-accent"
-                                          : "hover:text-accent",
-                                )}
-                            >
-                                <ChoicePicture
-                                    choice={option.value}
-                                    testId={`shape-order-${option.value}-picture`}
-                                />
-                                <span className="flex max-w-[16rem] flex-col">
-                                    <span data-label>{option.label}</span>
-                                    {(option.refusal ?? option.hint) && (
-                                        <span
-                                            className={clsx(
-                                                "text-text/60",
-                                                option.refusal && "italic",
-                                            )}
-                                            data-testid={`shape-order-${option.value}-note`}
-                                        >
-                                            {option.refusal ?? option.hint}
-                                        </span>
-                                    )}
-                                </span>
-                            </button>
+                                option={option}
+                                current={option.value === order.current}
+                                onPick={() => pick(option.value)}
+                                onClose={() => setOpen(false)}
+                            />
                         ))}
                     </div>
                     {readout && (

@@ -102,7 +102,8 @@ test("change: the menu greys out what doesn't fit, W picks by hand back and fort
     const spots = [...drawn.spots].sort((a, b) => a.x - b.x);
 
     // Every option is listed; with no order set, Keep order and Inside out are
-    // greyed out and say why, and one section greys out Within sections
+    // greyed out, and one section greys out Within sections: each says why in
+    // a tip behind its ?
     await page.getByTestId("shape-order").click();
     await expect(
         page
@@ -121,12 +122,17 @@ test("change: the menu greys out what doesn't fit, W picks by hand back and fort
         "aria-disabled",
         "true",
     );
-    await expect(page.getByTestId("shape-order-keep-note")).toContainText(
+    await expect(page.getByTestId("shape-order-keep-note")).toHaveCount(0);
+    await expect(page.getByTestId("shape-order-keep-why-icon")).toBeVisible();
+    await page.getByTestId("shape-order-keep").hover();
+    await expect(page.getByTestId("shape-order-keep-why-tip")).toContainText(
         "These marchers have no order yet",
     );
-    await expect(page.getByTestId("shape-order-sections-note")).toContainText(
-        "Everyone here is in one section",
-    );
+    await page.getByTestId("shape-order-sections").hover();
+    await expect(page.getByTestId("shape-order-keep-why-tip")).toBeHidden();
+    await expect(
+        page.getByTestId("shape-order-sections-why-tip"),
+    ).toContainText("Everyone here is in one section");
     await expect(page.getByTestId("shape-order-readout")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("shape-order-content")).toBeHidden();

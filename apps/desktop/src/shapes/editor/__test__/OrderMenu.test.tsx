@@ -87,11 +87,21 @@ describe("who goes where's menu", () => {
         openMenu();
         const keep = screen.getByTestId("shape-order-keep");
         expect(keep).toHaveAttribute("aria-disabled", "true");
-        expect(screen.getByTestId("shape-order-keep-note")).toHaveTextContent(
-            "These marchers have no order yet",
+        // The reason waits behind a ? instead of showing under the name
+        expect(screen.queryByTestId("shape-order-keep-note")).toBeNull();
+        expect(
+            screen.getByTestId("shape-order-keep-why-icon"),
+        ).toBeInTheDocument();
+        expect(keep).toHaveAccessibleDescription(
+            /These marchers have no order yet/,
         );
+        expect(screen.queryByTestId("shape-order-keep-why-tip")).toBeNull();
         fireEvent.click(keep);
         expect(pick).not.toHaveBeenCalled();
+        // A press shows it beside the row
+        expect(
+            screen.getAllByTestId("shape-order-keep-why-tip")[0],
+        ).toHaveTextContent("These marchers have no order yet");
         // Reverse order fits any line, as before
         expect(screen.getByTestId("shape-order-reverse")).not.toHaveAttribute(
             "aria-disabled",
