@@ -246,6 +246,13 @@ export class LiveBoxMode implements FieldMode {
     private scissors: Scissors | null = null;
     /** A press on the scissors: it splits there when let go */
     private scissorsPress: Scissors | null = null;
+    /**
+     * A finger's or pen's press on a gap of the line (#1336): with no hover to show the scissors,
+     * a tap there shows them, and they stay until the next press
+     */
+    private gapPress: Scissors | null = null;
+    /** The scissors were shown by a tap, not a hover: they stay when the pointer leaves */
+    private scissorsTapped = false;
 
     constructor(
         box: PlacedBox,
@@ -306,6 +313,8 @@ export class LiveBoxMode implements FieldMode {
 
     claims(pointer: FieldPointer, press: FieldModePress): boolean {
         if (this.onScissors(pointer)) return true;
+        // A finger or pen on a gap of the line: a tap there shows the scissors
+        if (this.gapAt(pointer)) return true;
         return (
             !this.yieldsToEditor(pointer, press) &&
             this.pressed(pointer) !== null
@@ -339,7 +348,20 @@ export class LiveBoxMode implements FieldMode {
         );
     }
 
+    /** The scissors a tap at `pointer` shows: a finger's or pen's, over a gap of the line */
+    private gapAt(pointer: FieldPointer): Scissors | null {
+        const field = currentShapeField();
+        if (!field || pointer.kind === "mouse" || this.live.gesture)
+            return null;
+        return scissorsAt(
+            { ...this.live.box, params: this.live.params },
+            pointer.field,
+            toolEnvFor(field, undefined, { kind: pointer.kind }),
+        );
+    }
+
     private showScissors(scissors: Scissors | null): void {
+        this.scissorsTapped = false;
         this.scissors = scissors;
         showSplit(scissors?.check.gap ?? null, scissors?.at ?? null);
     }
@@ -383,6 +405,9 @@ export class LiveBoxMode implements FieldMode {
             this.scissorsPress = this.scissors;
             return;
         }
+        // Any other press puts away scissors a tap showed
+        if (this.scissorsTapped) this.showScissors(null);
+        this.gapPress = this.gapAt(pointer);
         const { held, reachInside } = pressShapeKeys(
             pointer,
             {
@@ -460,6 +485,8 @@ export class LiveBoxMode implements FieldMode {
             this.emit();
             return;
         }
+        const gap = this.gapPress;
+        this.gapPress = null;
         const before = this.live;
         const out = releaseLive(
             before,
@@ -479,6 +506,11 @@ export class LiveBoxMode implements FieldMode {
             this.readDuringGesture = null;
         }
         this.catchUp();
+        // A finger's or pen's tap on a gap: the scissors there, to tap to split (no hover shows them)
+        if (gap && click && !click.double && !out.changed && !out.enter) {
+            this.showScissors(gap);
+            this.scissorsTapped = true;
+        }
         this.emit();
         if (!out.changed && out.enter) this.enterAt(pointer);
     }
@@ -609,6 +641,7 @@ export class LiveBoxMode implements FieldMode {
 
     cancel(): void {
         this.scissorsPress = null;
+        this.gapPress = null;
         this.showScissors(null);
         this.endHeld();
         this.live = openLive(this.live.box, this.live.selected);
@@ -623,7 +656,8 @@ export class LiveBoxMode implements FieldMode {
 
     leave(): void {
         setShapePointerOver(false);
-        if (!this.scissorsPress) this.showScissors(null);
+        if (!this.scissorsPress && !this.scissorsTapped)
+            this.showScissors(null);
     }
 
     cursorAt(pointer: FieldPointer, hover?: FieldModeHover) {
@@ -644,7 +678,9 @@ export class LiveBoxMode implements FieldMode {
             target === null || target.type !== "handle"
                 ? this.scissorsFor(pointer)
                 : null;
-        if (!this.scissorsPress) this.showScissors(scissors);
+        // Scissors a tap showed stay until the next press, wherever a pen hovers meanwhile
+        if (!this.scissorsPress && !(this.scissorsTapped && !scissors))
+            this.showScissors(scissors);
         if (scissors && this.onScissors(pointer)) {
             setShapePointerOver(true);
             return "pointer";
