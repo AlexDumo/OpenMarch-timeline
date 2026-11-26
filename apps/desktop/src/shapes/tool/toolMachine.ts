@@ -2,6 +2,7 @@ import {
     assignSlots,
     orderFields,
     orderOn,
+    withPins,
     type AssignMarcher,
     type OrderChoice,
 } from "../assign";
@@ -62,6 +63,13 @@ export interface ToolSnapshot {
      * Kept through other kinds, which go by least travel.
      */
     readonly order: OrderChoice;
+    /**
+     * Who goes where picked by hand, and Swap (09-who-goes-where.md): marcher (by index into
+     * `marchers`) and slot pairs, laid over the order picked whenever it's worked out again
+     * (`withPins`), later ones winning. A fresh draw or another kind starts without them. Absent
+     * when none.
+     */
+    readonly pins?: readonly (readonly [marcher: number, slot: number])[];
     /**
      * Whether the pivot has been moved by hand (dragged, pulled out, double-clicked back to the
      * center or picked in the pivot menu) since the shape was drawn. Until it has, it is where the
@@ -199,14 +207,20 @@ const snapshot = (s: ToolState): ToolSnapshot => ({
     params: s.params,
     assignment: s.assignment,
     order: s.order,
+    // Always written, so going back to a snapshot without any drops them
+    pins: s.pins,
     pivotMoved: s.pivotMoved,
     // Always written, so going back to a snapshot without one unties the shape
     mirror: s.mirror,
 });
 
-/** Whether every marcher has a place along one placed Line, so their order there can be kept */
+/**
+ * Whether every marcher has a place along one line (a placed Line's, or an order set by hand), so
+ * their order there can be kept. Marchers from two lines (`lane`) aren't one order: Zipper is theirs.
+ */
 const keepsOrder = (marchers: readonly AssignMarcher[]) =>
-    marchers.length > 0 && marchers.every((m) => m.along !== undefined);
+    marchers.length > 0 &&
+    marchers.every((m) => m.along !== undefined && m.lane === undefined);
 
 /**
  * Whether Keep order is offered (#528): every selected marcher is a member of one placed Line.
@@ -214,6 +228,52 @@ const keepsOrder = (marchers: readonly AssignMarcher[]) =>
  */
 export const keepOrderOffered = (state: ToolState): boolean =>
     keepsOrder(state.marchers);
+
+/**
+ * Why a choice of who goes where doesn't fit these marchers (09-who-goes-where.md), or null when
+ * it does: Keep order and Inside out need an order along a line (a placed Line's, or one set by
+ * hand); Zipper needs two such lines; Within sections needs two sections or more. Least travel and
+ * Reverse always fit, as before.
+ */
+export type OrderRefusal =
+    | "noOrder"
+    | "twoLines"
+    | "notTwoLines"
+    | "oneSection";
+
+/** Whether every marcher comes from one of exactly two lines with an order (Zipper's) */
+const fromTwoLines = (marchers: readonly AssignMarcher[]) => {
+    const lanes = new Set(marchers.map((m) => m.lane));
+    return (
+        marchers.every((m) => m.along !== undefined) &&
+        lanes.size === 2 &&
+        lanes.has(0) &&
+        lanes.has(1)
+    );
+};
+
+export function orderRefusal(
+    marchers: readonly AssignMarcher[],
+    choice: OrderChoice,
+): OrderRefusal | null {
+    switch (choice) {
+        case "keep":
+        case "inside":
+            return keepsOrder(marchers)
+                ? null
+                : fromTwoLines(marchers)
+                  ? "twoLines"
+                  : "noOrder";
+        case "zipper":
+            return fromTwoLines(marchers) ? null : "notTwoLines";
+        case "sections":
+            return new Set(marchers.map((m) => m.section ?? "")).size >= 2
+                ? null
+                : "oneSection";
+        default:
+            return null;
+    }
+}
 
 /** Who goes where as the open shape works it out: least travel unless its kind has an order */
 export const orderOf = (state: Pick<ToolState, "kind" | "order">) =>
@@ -252,7 +312,7 @@ function reassign(state: ToolState, ctx: ShapeContext): ToolState {
     if (state.params === null) return { ...state, assignment: null };
     const slots = slotsOf(state, ctx);
     const { orderMode, reverse } = orderOf(state);
-    const assignment = assignSlots({
+    const solved = assignSlots({
         kind: state.kind.shape,
         params: state.params,
         slots,
@@ -261,6 +321,9 @@ function reassign(state: ToolState, ctx: ShapeContext): ToolState {
         reverse,
         ctx,
     });
+    const assignment = state.pins?.length
+        ? withPins(solved, state.pins, startsOf(state), slots).assignment
+        : solved;
     if (assignment && !state.gesture)
         solvedFor.set(assignment, {
             params: state.params,
@@ -457,7 +520,12 @@ export function finishPoints(state: ToolState, ctx: ShapeContext): ToolState {
     if (g.drawn === undefined) return cancelGesture(state);
     return reassign(
         pushHistory(
-            { ...state, params: g.drawn, gesture: null, pivotMoved: false },
+            withoutPins({
+                ...state,
+                params: g.drawn,
+                gesture: null,
+                pivotMoved: false,
+            }),
             g.before,
         ),
         ctx,
@@ -599,9 +667,8 @@ export function release(
     };
     if (state.params === g.before.params) return ended;
     const next = pushHistory(ended, g.before);
-    return g.type === "draw" || !holdsSpots(state, g.before.params, ctx)
-        ? reassign(next, ctx)
-        : next;
+    if (g.type === "draw") return reassign(withoutPins(next), ctx);
+    return holdsSpots(state, g.before.params, ctx) ? next : reassign(next, ctx);
 }
 
 /** A click while clicking points: a point added, or the line finished */
@@ -898,7 +965,7 @@ export function switchKind(
         : made;
     return reassign(
         pushHistory(
-            { ...state, kind, params, selected: null },
+            withoutPins({ ...state, kind, params, selected: null }),
             snapshot(state),
         ),
         ctx,
@@ -940,6 +1007,115 @@ export function setOrder(
 export function recalculate(state: ToolState, ctx: ShapeContext): ToolState {
     if (state.gesture || !canRecalculate(state, ctx)) return state;
     return reassign(pushHistory(state, snapshot(state)), ctx);
+}
+
+/**
+ * The marchers' order set by hand (Set order; 09-who-goes-where.md), read after the shape opened:
+ * each marcher's place in `order` (ids, first to last) becomes its place along a line, so Keep
+ * order, Reverse and Inside out follow it. Unless the writer has picked an order, it goes on Keep
+ * order, as a shape opened on a placed Line does. Not an undo step: it's what the marchers were. Unchanged
+ * when any marcher already has a place along a line, or `order` isn't exactly these marchers.
+ */
+export function takeHandOrder(
+    state: ToolState,
+    order: readonly number[],
+    ctx: ShapeContext,
+): ToolState {
+    if (state.marchers.some((m) => m.along !== undefined)) return state;
+    const place = new Map(order.map((id, i) => [id, i]));
+    if (
+        place.size !== state.marchers.length ||
+        !state.marchers.every((m) => place.has(m.id))
+    )
+        return state;
+    // Keep order unless the writer has picked an order: they only ever had Least travel
+    const unpicked =
+        state.order === "nearest" &&
+        !state.pins?.length &&
+        state.past.every((p) => p.order === "nearest") &&
+        !state.gesture;
+    const next: ToolState = {
+        ...state,
+        marchers: state.marchers.map((m) => ({
+            ...m,
+            along: place.get(m.id)!,
+        })),
+        order: unpicked ? "keep" : state.order,
+    };
+    return next.order !== state.order && next.params !== null && !next.gesture
+        ? reassign(next, ctx)
+        : next;
+}
+
+/** The state without hand picks: a fresh draw or another kind starts over */
+const withoutPins = (state: ToolState): ToolState =>
+    state.pins ? { ...state, pins: undefined } : state;
+
+/**
+ * Who goes where picked by hand (09-who-goes-where.md): each marcher (by index into `marchers`)
+ * on its slot, everyone else kept where they are unless a pick took their spot (those bumped share
+ * the spots left by least travel). One undo step; kept when the order is picked again, as later
+ * picks over it. Unchanged with nothing drawn, a gesture under way, or no pairs.
+ */
+export function pinPairs(
+    state: ToolState,
+    pairs: readonly (readonly [marcher: number, slot: number])[],
+    ctx: ShapeContext,
+): ToolState {
+    if (state.gesture || state.params === null || !state.assignment)
+        return state;
+    const fresh = pairs.filter(
+        ([m, slot]) =>
+            m >= 0 &&
+            m < state.marchers.length &&
+            slot >= 0 &&
+            slot < state.spots &&
+            state.assignment![m] !== slot,
+    );
+    if (fresh.length === 0) return state;
+    const { assignment } = withPins(
+        state.assignment,
+        fresh,
+        startsOf(state),
+        slotsOf(state, ctx),
+    );
+    return pushHistory(
+        { ...state, assignment, pins: [...(state.pins ?? []), ...fresh] },
+        snapshot(state),
+    );
+}
+
+/**
+ * Swap (09-who-goes-where.md): two marchers (by index) trade spots, as two hand picks. One undo
+ * step; unchanged for the same marcher twice.
+ */
+export function swapMarchers(
+    state: ToolState,
+    a: number,
+    b: number,
+    ctx: ShapeContext,
+): ToolState {
+    if (a === b || !state.assignment) return state;
+    const sa = state.assignment[a];
+    const sb = state.assignment[b];
+    if (sa === undefined || sb === undefined) return state;
+    return pinPairs(
+        state,
+        [
+            [a, sb],
+            [b, sa],
+        ],
+        ctx,
+    );
+}
+
+/**
+ * Every hand pick and swap dropped: who goes where worked out again by the order picked, as one
+ * undo step. Unchanged when there are none.
+ */
+export function clearPins(state: ToolState, ctx: ShapeContext): ToolState {
+    if (state.gesture || !state.pins?.length) return state;
+    return reassign(pushHistory(withoutPins(state), snapshot(state)), ctx);
 }
 
 /** Whether {@link recalculate} would change who goes where */

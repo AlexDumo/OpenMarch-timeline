@@ -293,7 +293,13 @@ export function liveTargets(
     // An outline's count across isn't in its distribution, so the spots are compared too (#390)
     const sameSpots = !newLayout(box, params) && sameLattice(box, slots, ctx);
     if (!layOutAgain && sameSpots) return onSlots((m) => m.slot);
-    const choice = orderOn(box.kind, order);
+    // Inside out, Zipper and Within sections are worked out from where the marchers came from when
+    // the shape was open; once placed, its members keep that order along it, as Keep order does
+    const picked = orderOn(box.kind, order);
+    const choice: OrderChoice =
+        picked === "inside" || picked === "zipper" || picked === "sections"
+            ? "keep"
+            : picked;
     // A Line laid out again as it was saved (Recalculate, an order picked) keeps its spots, holes
     // and all: Keep order and Reverse go from the order it was saved in, and Least travel fills
     // the spots nearest (#528). New params (Close up's) are laid out for the members below

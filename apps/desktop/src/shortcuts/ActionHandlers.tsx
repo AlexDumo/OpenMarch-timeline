@@ -10,7 +10,12 @@ import { useTimelineActionEffects } from "./handlers/useTimelineActionEffects";
 import { useUiActionHandlers } from "./handlers/useUiActionHandlers";
 import { useShapeToolActions } from "@/shapes/tool/useShapeToolActions";
 import { useClipboardActions } from "@/shapes/clipboard/useClipboardActions";
-import { DiscardedShapeKeys, ShapeToolKeys } from "@/shapes/tool/ShapeToolKeys";
+import {
+    DiscardedShapeKeys,
+    ShapePickKeys,
+    ShapeToolKeys,
+} from "@/shapes/tool/ShapeToolKeys";
+import { usePickStore } from "@/shapes/tool/pickByHand";
 import {
     useShapeHidden,
     useShapeToolStore,
@@ -69,6 +74,8 @@ export function EditorActionHandlers() {
     // what is shown
     const shapeToolOpen = useShapeToolStore((s) => s.tool !== null);
     const shapeHidden = useShapeHidden();
+    // Picking who goes where by hand takes the open shape's keys (09-who-goes-where.md)
+    const picking = usePickStore((s) => s.session !== null);
     const boxSelected = useBoxSelectionStore(
         (s) => s.selected !== null || s.inside !== null,
     );
@@ -85,7 +92,8 @@ export function EditorActionHandlers() {
     if (fieldPanelOpen) return <FieldPanelKeys />;
     if (sweeping) return <OrderSweepKeys />;
     if (pathOpen) return <PathPenKeys />;
-    if (shapeToolOpen && !shapeHidden) return <ShapeToolKeys />;
+    if (shapeToolOpen && !shapeHidden)
+        return picking ? <ShapePickKeys /> : <ShapeToolKeys />;
     return (
         <>
             {boxSelected && <PlacedBoxKeys />}

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { useQueryClient } from "@tanstack/react-query";
-import type { OrderChoice } from "../assign";
+import { crossings, ORDER_CHOICES, type OrderChoice } from "../assign";
 import type { FlipAxis, Pivot } from "../frame/frame";
 import { carryPivot } from "../frame/pivot";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
@@ -28,14 +28,17 @@ import {
     cancelGesture,
     edit,
     canRecalculate,
-    keepOrderOffered,
+    orderRefusal,
     setOrder,
+    targetsOf,
     previewEdit,
     pickPivot,
     recalculate,
     release,
     setMirrorAxes,
     toggleMirror,
+    type OrderRefusal,
+    type ToolState,
 } from "../tool/toolMachine";
 import type { MirrorAxes } from "../tool/mirror";
 import {
@@ -100,8 +103,22 @@ export interface ShapeEditTarget {
      */
     readonly order?: {
         readonly current: OrderChoice;
-        readonly keepOffered: boolean;
+        /**
+         * Why a choice can't be picked here (09-who-goes-where.md), or null when it can: the menu
+         * greys it out and says so
+         */
+        why(choice: OrderChoice): OrderWhy | null;
         pick(choice: OrderChoice): void;
+        /**
+         * What the current choice gives, on an open shape: the biggest step (null when the move
+         * has no counts or nobody moves) and how many walks cross
+         */
+        readonly readout?: {
+            readonly biggest: string | null;
+            readonly crossings: number;
+        };
+        /** Changes whenever anything the menu shows does, so a memoized bar redraws */
+        readonly key: string;
     };
     /**
      * A mirrored paste (Paste mirrored): which ways it mirrors through its point, set by the
@@ -178,17 +195,51 @@ export function useToolEditTarget(): ShapeEditTarget | null {
                 },
             }),
             ...(tool.kind.ordered && {
-                order: {
-                    current: tool.order,
-                    keepOffered: keepOrderOffered(tool),
-                    pick: (choice: OrderChoice) =>
-                        withField((ctx) =>
-                            updateTool((t) => setOrder(t, choice, ctx)),
-                        ),
-                },
+                order: toolOrder(tool),
             }),
         };
     }, [tool, away, place]);
+}
+
+/** Why a choice can't be picked: the open shape's reasons, or a placed shape's */
+export type OrderWhy = OrderRefusal | "placed";
+
+/** Who goes where on the open shape, with why each choice fits or not and what it gives */
+function toolOrder(tool: ToolState): NonNullable<ShapeEditTarget["order"]> {
+    const field = currentShapeField();
+    const ctx = field ? shapeContextFor(field) : null;
+    const walks =
+        ctx && !tool.gesture
+            ? targetsOf(tool, ctx).map((t) => ({ from: t.from, to: t.to }))
+            : [];
+    const longest = Math.max(
+        0,
+        ...walks.map((w) => Math.hypot(w.to.x - w.from.x, w.to.y - w.from.y)),
+    );
+    const readout =
+        walks.length > 0
+            ? {
+                  biggest:
+                      longest > 1e-6 && ctx?.steps
+                          ? ctx.steps.describe(longest)
+                          : null,
+                  crossings: crossings(walks),
+              }
+            : undefined;
+    const why = (choice: OrderChoice) => orderRefusal(tool.marchers, choice);
+    return {
+        current: tool.order,
+        why,
+        pick: (choice: OrderChoice) =>
+            withField((ctx) => updateTool((t) => setOrder(t, choice, ctx))),
+        ...(readout && { readout }),
+        key: [
+            tool.order,
+            ORDER_CHOICES.map((c) => why(c) ?? "").join(","),
+            readout?.biggest ?? "",
+            readout?.crossings ?? "",
+        ].join("|"),
+    };
 }
 
 /** How long a saved drag's preview may outlast the save before the box is read back */
@@ -354,7 +405,15 @@ const placedOrder = (
     box.kind.ordered
         ? {
               current: placedOrderChoice(box),
-              keepOffered: true,
+              // Inside out, Zipper and Within sections are worked out from where the marchers come
+              // from while the shape is open; a placed one keeps its members' order (`liveTargets`)
+              why: (choice) =>
+                  choice === "inside" ||
+                  choice === "zipper" ||
+                  choice === "sections"
+                      ? "placed"
+                      : null,
+              key: placedOrderChoice(box),
               pick: (choice) =>
                   write(() =>
                       commitBox(

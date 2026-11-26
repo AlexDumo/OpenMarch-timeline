@@ -1,6 +1,9 @@
 import { useMemo } from "react";
-import type { OrderChoice } from "../assign";
-import { ORDER_PICTURE_SIZE, orderPicture } from "./orderPictures";
+import {
+    ORDER_PICTURE_SIZE,
+    orderPicture,
+    type PicturedOrder,
+} from "./orderPictures";
 
 /** The arrowhead's length, in CSS px */
 const HEAD = 3;
@@ -15,7 +18,7 @@ export function OrderPicture({
     choice,
     testId,
 }: {
-    choice: OrderChoice;
+    choice: PicturedOrder;
     testId?: string;
 }) {
     const picture = useMemo(() => orderPicture(choice), [choice]);

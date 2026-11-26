@@ -2,6 +2,16 @@ import type { PivotKey } from "../frame/frame";
 import { create } from "zustand";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import type { FieldMode, FieldModeDrawing } from "@/field/editor/fieldEditor";
+import {
+    hoverPick,
+    isPicking,
+    movePick,
+    pickDrawing,
+    pressPick,
+    releasePick,
+    usePickStore,
+    type PickSession,
+} from "./pickByHand";
 import { lineCoordinate } from "../field/lineCoordinate";
 import type { PointerKind } from "@/field/editor/pointerThresholds";
 import type { ShapeField } from "../field/shapeField";
@@ -499,6 +509,47 @@ export function removeLastShapePoint(): boolean {
 }
 
 /**
+ * The drawing with picking by hand's marks laid over it (09-who-goes-where.md), while a session is
+ * on: no handles or knob then, since presses pick instead of editing the shape
+ */
+function withPick<D extends FieldModeDrawing | null>(drawing: D): D {
+    const tool = useShapeToolStore.getState().tool;
+    const session = usePickStore.getState().session;
+    if (!drawing || !tool || !session) return drawing;
+    // The same object for the same drawing, shape and session: the field reads it as a snapshot
+    if (
+        lastPick?.drawing === drawing &&
+        lastPick.tool === tool &&
+        lastPick.session === session
+    )
+        return lastPick.value as D;
+    const pick = pickDrawing(tool);
+    const value = pick
+        ? {
+              ...drawing,
+              pick,
+              handles: [],
+              addHandles: [],
+              selectedHandles: [],
+              barHandles: [],
+              knob: undefined,
+              centerDot: undefined,
+              pivotMark: undefined,
+              pivotPreview: undefined,
+          }
+        : drawing;
+    lastPick = { drawing, tool, session, value };
+    return value as D;
+}
+
+let lastPick: {
+    drawing: FieldModeDrawing;
+    tool: ToolState;
+    session: PickSession;
+    value: FieldModeDrawing;
+} | null = null;
+
+/**
  * The open shape tool on the field (docs/timeline/research/shapes/06-box-v1.md): a field editor
  * mode that takes every edit press while the tool is open and hands it to the tool's state
  * machine, so nothing selects, drags or lassos underneath. Navigation keeps its presses (right and
@@ -508,6 +559,11 @@ export function removeLastShapePoint(): boolean {
 export const shapeToolMode: FieldMode = {
     claims: () => useShapeToolStore.getState().tool !== null,
     press(pointer, { isMac }) {
+        // Picking who goes where by hand, or Swap (09-who-goes-where.md), takes every press
+        if (isPicking()) {
+            pressPick(pointer.field);
+            return;
+        }
         const field = currentShapeField();
         const tool = useShapeToolStore.getState().tool;
         if (!field || !tool) return;
@@ -534,6 +590,10 @@ export const shapeToolMode: FieldMode = {
         );
     },
     move(pointer) {
+        if (isPicking()) {
+            movePick(pointer.field);
+            return;
+        }
         const field = currentShapeField();
         if (!field) return;
         const roles = held?.move(pointer);
@@ -542,6 +602,10 @@ export const shapeToolMode: FieldMode = {
         );
     },
     release(_pointer, click) {
+        if (isPicking()) {
+            releasePick();
+            return;
+        }
         endHeld();
         const field = currentShapeField();
         if (!field) return;
@@ -550,6 +614,10 @@ export const shapeToolMode: FieldMode = {
     // A press lost (a second finger landed to pan, the window lost focus): while clicking a line's
     // points only that press's point is dropped, not the points already down
     cancel() {
+        if (isPicking()) {
+            releasePick();
+            return;
+        }
         endHeld();
         updateTool(losePress);
     },
@@ -557,6 +625,7 @@ export const shapeToolMode: FieldMode = {
     // clicking a line's points it takes the last one back instead, a Mac's Ctrl-click and a long
     // press too, as they open the menu (owner, option A on #522)
     openMenu(pointer) {
+        if (isPicking()) return true;
         if (removeLastShapePoint()) return true;
         const tool = useShapeToolStore.getState().tool;
         const field = currentShapeField();
@@ -605,6 +674,10 @@ export const shapeToolMode: FieldMode = {
         );
     },
     cursorAt(pointer) {
+        if (isPicking()) {
+            hoverPick(pointer.field);
+            return "crosshair";
+        }
         const tool = useShapeToolStore.getState().tool;
         const field = currentShapeField();
         if (!tool || !field) return null;
@@ -642,19 +715,22 @@ export const shapeToolMode: FieldMode = {
         );
     },
     leave() {
+        hoverPick(null);
         setShapePointerOver(false);
         if (useSpotHover.getState().hover)
             useSpotHover.setState({ hover: null });
     },
-    drawing: () => glidingSnapshot(shownNow()),
+    drawing: () => withPick(glidingSnapshot(shownNow())),
     subscribe: (listener) => {
         const offTool = useShapeToolStore.subscribe(listener);
+        const offPick = usePickStore.subscribe(listener);
         const offHover = useSpotHover.subscribe(listener);
         const offPointer = useShapePointerStore.subscribe(listener);
         const offSettings = useUiSettingsStore.subscribe(listener);
         glideListeners.add(listener);
         return () => {
             offTool();
+            offPick();
             offHover();
             offPointer();
             offSettings();

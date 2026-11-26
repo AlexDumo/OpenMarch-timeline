@@ -22,6 +22,7 @@ import {
 } from "../tool/shapeToolStore";
 import { isAwayFrom } from "../tool/shapeMoment";
 import { forgetDiscardedShape } from "../tool/shapeLeave";
+import { useHandOrder } from "./handOrder";
 import { subscribeHistoryChanges } from "@/db-functions/history";
 import { shapeToolMode } from "../tool/shapeToolMode";
 import { resetShapePointer, watchShapeEditorFocus } from "./shapePointer";
@@ -150,6 +151,7 @@ export function useShapeFieldModes(
     useEffect(() => watchShapeEditorFocus(), []);
 
     useShapeWaits(isPlaying, toolOpen);
+    useHandOrder();
 }
 
 /**

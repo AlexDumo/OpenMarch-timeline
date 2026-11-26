@@ -4,15 +4,37 @@ import type { OrderChoice } from "../../assign";
 import { OrderMenu } from "../OrderMenu";
 
 /**
- * Who goes where on the floating editor (#528, #559): one menu of Least travel, Keep order and
- * Reverse order, each pictured as the new line read as numbers
+ * Who goes where on the floating editor (#528, #559, 09-who-goes-where.md): one menu of Least
+ * travel, Keep order and Reverse order, each pictured as the new line read as numbers, then Inside
+ * out, Zipper and Within sections, each described in words. A choice that doesn't fit is greyed
+ * out and says why.
  */
 
 afterEach(cleanup);
 
-const renderMenu = (current: OrderChoice, keepOffered = true) => {
+const renderMenu = (
+    current: OrderChoice,
+    keepOffered = true,
+    readout?: { biggest: string | null; crossings: number },
+) => {
     const pick = vi.fn();
-    render(<OrderMenu target={{ order: { current, keepOffered, pick } }} />);
+    render(
+        <OrderMenu
+            target={{
+                order: {
+                    current,
+                    why: (choice) =>
+                        !keepOffered &&
+                        (choice === "keep" || choice === "inside")
+                            ? "noOrder"
+                            : null,
+                    pick,
+                    ...(readout && { readout }),
+                    key: current,
+                },
+            }}
+        />,
+    );
     return pick;
 };
 const openMenu = () => fireEvent.click(screen.getByTestId("shape-order"));
@@ -20,7 +42,7 @@ const sequence = (testId: string) =>
     screen.getByTestId(testId).getAttribute("data-sequence");
 
 describe("who goes where's menu", () => {
-    it("lists Least travel, Keep order and Reverse order, with no toggle beside it", () => {
+    it("lists every answer, with no toggle beside it", () => {
         renderMenu("keep");
         openMenu();
         const items = screen.getAllByRole("menuitemradio");
@@ -28,22 +50,70 @@ describe("who goes where's menu", () => {
             "shape-order-nearest",
             "shape-order-keep",
             "shape-order-reverse",
+            "shape-order-inside",
+            "shape-order-zipper",
+            "shape-order-sections",
         ]);
-        // The pictures are hidden, so each row is named by its label alone
+        // The pictures are hidden, so each row is named by its label
         expect(
-            items.map((item) => item.querySelector("span")?.textContent),
-        ).toEqual(["Least travel", "Keep order", "Reverse order"]);
+            items.map(
+                (item) => item.querySelector("[data-label]")?.textContent,
+            ),
+        ).toEqual([
+            "Least travel",
+            "Keep order",
+            "Reverse order",
+            "Inside out",
+            "Zipper",
+            "Within sections",
+        ]);
         expect(screen.queryByRole("button", { pressed: true })).toBeNull();
     });
 
-    it("offers Reverse order on any line, Keep order only when offered", () => {
-        renderMenu("nearest", false);
+    it("says in words what the answers without a picture do", () => {
+        renderMenu("keep");
         openMenu();
-        expect(
-            screen
-                .getAllByRole("menuitemradio")
-                .map((item) => item.getAttribute("data-testid")),
-        ).toEqual(["shape-order-nearest", "shape-order-reverse"]);
+        expect(screen.getByTestId("shape-order-inside-note")).toHaveTextContent(
+            "The middle of the line goes to the ends of the shape",
+        );
+        expect(screen.getByTestId("shape-order-zipper-note")).toHaveTextContent(
+            "Two lines merge into one, taking turns",
+        );
+        expect(screen.queryByTestId("shape-order-keep-note")).toBeNull();
+    });
+
+    it("greys out an answer that doesn't fit, says why, and won't pick it", () => {
+        const pick = renderMenu("nearest", false);
+        openMenu();
+        const keep = screen.getByTestId("shape-order-keep");
+        expect(keep).toHaveAttribute("aria-disabled", "true");
+        expect(screen.getByTestId("shape-order-keep-note")).toHaveTextContent(
+            "These marchers have no order yet",
+        );
+        fireEvent.click(keep);
+        expect(pick).not.toHaveBeenCalled();
+        // Reverse order fits any line, as before
+        expect(screen.getByTestId("shape-order-reverse")).not.toHaveAttribute(
+            "aria-disabled",
+        );
+    });
+
+    it("says what the current answer gives: the biggest step and paths crossing", () => {
+        renderMenu("keep", true, { biggest: "6 to 5", crossings: 2 });
+        openMenu();
+        expect(screen.getByTestId("shape-order-readout")).toHaveTextContent(
+            "Biggest step 6 to 5 · 2 pairs of paths cross",
+        );
+        cleanup();
+        renderMenu("keep", true, { biggest: null, crossings: 0 });
+        openMenu();
+        expect(screen.getByTestId("shape-order-readout")).toHaveTextContent(
+            "No paths cross",
+        );
+        cleanup();
+        renderMenu("keep");
+        openMenu();
+        expect(screen.queryByTestId("shape-order-readout")).toBeNull();
     });
 
     it("names Reverse order on a line saved reversed", () => {

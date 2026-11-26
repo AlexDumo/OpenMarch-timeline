@@ -708,6 +708,12 @@ const PULL_ARROW = {
 
 /** How see-through a start ghost is (#417; the owner picked ghosts over rings in the lab) */
 const GHOST_OPACITY = 0.35;
+/** Picking by hand: the start ghosts while they're the shape picked from */
+const PICK_FRONT_GHOST_OPACITY = 0.85;
+/** Picking by hand: the shape not picked from, drawn behind the other */
+const PICK_BEHIND_OPACITY = 0.2;
+/** Picking by hand: a marcher's walk placed by hand, heavier than the others */
+const PICKED_WALK_WIDTH = 2;
 
 /**
  * Where an open shape's marchers start (#346, #417): a faint, see-through dot in each marcher's
@@ -751,6 +757,13 @@ const StartMarks = memo(function StartMarks({
     }, [ringKey, theme, marchers, looks, ids]);
     const shape = rgbaToString(theme.shape);
     const r = DOT_RADIUS * scale;
+    // Picking by hand (09-who-goes-where.md): the ghosts are what's picked while they're in front,
+    // and step back behind the spots otherwise
+    const ghostOpacity = drawing.pick
+        ? drawing.pick.front === "marchers"
+            ? PICK_FRONT_GHOST_OPACITY
+            : PICK_BEHIND_OPACITY
+        : GHOST_OPACITY;
     return (
         <>
             {drawing.rings?.map((point, i) => (
@@ -762,7 +775,7 @@ const StartMarks = memo(function StartMarks({
                     y={point.y}
                     r={r}
                     fill={ghosts[i]?.color ?? shape}
-                    opacity={GHOST_OPACITY}
+                    opacity={ghostOpacity}
                     data-testid="fieldShapeStartGhost"
                 />
             ))}
@@ -1401,26 +1414,75 @@ const ShapeBody = memo(function ShapeBody({
                     />
                 );
             })}
-            {/* The real marchers stand on them instead (pathways step 4c) */}
-            {(drawing.marchersAt ? [] : drawing.spots).map((p, i) => {
-                return (
-                    // In the marchers' shape, so a spot under a square marcher doesn't read as a
-                    // round mark on it
-                    <MarkerSvg
-                        key={i}
-                        shape={spotShape}
-                        x={p.x}
-                        y={p.y}
-                        r={SPOT_RADIUS}
-                        // Solid while drawn and once open (#403): the spots are where everyone will
-                        // stand, unlike the hollow start rings
-                        fill={dots || open ? shape : "none"}
-                        stroke={dots || open ? "white" : shape}
-                        strokeWidth={SPOT_WIDTH}
-                        data-testid="fieldShapeSpot"
-                    />
-                );
-            })}
+            {drawing.pick?.picked.map(({ from: a, to: b }, i) => (
+                <line
+                    key={`picked${i}`}
+                    x1={a.x}
+                    y1={a.y}
+                    x2={b.x}
+                    y2={b.y}
+                    stroke={shape}
+                    strokeWidth={PICKED_WALK_WIDTH}
+                    vectorEffect="non-scaling-stroke"
+                    data-testid="fieldShapePickedWalk"
+                />
+            ))}
+            {drawing.pick?.trail && drawing.pick.trail.length > 1 && (
+                <polyline
+                    points={drawing.pick.trail
+                        .map((p) => `${p.x},${p.y}`)
+                        .join(" ")}
+                    fill="none"
+                    stroke={shape}
+                    strokeOpacity={0.3}
+                    strokeWidth={DOT_RADIUS * scale * 2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    data-testid="fieldShapePickTrail"
+                />
+            )}
+            {drawing.pick?.hover && (
+                <circle
+                    cx={drawing.pick.hover.at.x}
+                    cy={drawing.pick.hover.at.y}
+                    r={DOT_RADIUS * scale * 1.9}
+                    fill="none"
+                    stroke={shape}
+                    strokeWidth={1.5}
+                    strokeDasharray="3 2"
+                    vectorEffect="non-scaling-stroke"
+                    data-testid="fieldShapePickHover"
+                />
+            )}
+            {/* The real marchers stand on them instead (pathways step 4c). Picking by hand, they
+                step back while the marchers are picked from */}
+            <g
+                opacity={
+                    drawing.pick?.front === "marchers"
+                        ? PICK_BEHIND_OPACITY
+                        : undefined
+                }
+            >
+                {(drawing.marchersAt ? [] : drawing.spots).map((p, i) => {
+                    return (
+                        // In the marchers' shape, so a spot under a square marcher doesn't read as a
+                        // round mark on it
+                        <MarkerSvg
+                            key={i}
+                            shape={spotShape}
+                            x={p.x}
+                            y={p.y}
+                            r={SPOT_RADIUS}
+                            // Solid while drawn and once open (#403): the spots are where everyone will
+                            // stand, unlike the hollow start rings
+                            fill={dots || open ? shape : "none"}
+                            stroke={dots || open ? "white" : shape}
+                            strokeWidth={SPOT_WIDTH}
+                            data-testid="fieldShapeSpot"
+                        />
+                    );
+                })}
+            </g>
         </>
     );
 });
@@ -1902,12 +1964,62 @@ function ModeDrawing({
                         className="font-sans"
                         textAnchor="middle"
                         fill={shape}
+                        // Picking by hand, the names step back with the spots
+                        opacity={
+                            drawing.pick?.front === "marchers"
+                                ? 0.35
+                                : undefined
+                        }
                         data-testid="fieldShapeSpotLabel"
                     >
                         {text}
                     </text>
                 );
             })}
+            {/* Picking by hand (09-who-goes-where.md): each pick waiting for a partner, numbered
+                in the order picked, and the name of what a press would pick */}
+            {drawing.pick?.marks.map(({ at: point, text }, i) => {
+                const p = at(point);
+                return (
+                    <text
+                        key={`pick${i}`}
+                        x={p.x - (DOT_RADIUS + 3) * z}
+                        y={p.y + 4}
+                        fontSize={SPOT_LABEL_PX + 2}
+                        fontWeight={700}
+                        className="font-sans"
+                        textAnchor="end"
+                        fill={shape}
+                        stroke="white"
+                        strokeWidth={3}
+                        paintOrder="stroke"
+                        data-testid="fieldShapePickMark"
+                    >
+                        {text}
+                    </text>
+                );
+            })}
+            {drawing.pick?.hover &&
+                (() => {
+                    const p = at(drawing.pick.hover.at);
+                    return (
+                        <text
+                            x={p.x}
+                            y={p.y + (DOT_RADIUS * 2 + 2) * z + SPOT_LABEL_PX}
+                            fontSize={SPOT_LABEL_PX}
+                            fontWeight={600}
+                            className="font-sans"
+                            textAnchor="middle"
+                            fill={shape}
+                            stroke="white"
+                            strokeWidth={3}
+                            paintOrder="stroke"
+                            data-testid="fieldShapePickHoverLabel"
+                        >
+                            {drawing.pick.hover.text}
+                        </text>
+                    );
+                })()}
             {drawing.knob &&
                 (() => {
                     const a = at(drawing.knob.stem);

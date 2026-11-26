@@ -21,6 +21,12 @@ import {
 } from "./toolMachine";
 import { updateTool, useShapeToolStore } from "./shapeToolStore";
 import { cancelShapeGesture, removeLastShapePoint } from "./shapeToolMode";
+import {
+    stopPicking,
+    switchPickSide,
+    togglePicking,
+    undoPick,
+} from "./pickByHand";
 
 const NUDGE_DIRECTIONS = {
     up: { x: 0, y: -1 },
@@ -89,6 +95,8 @@ export function ShapeToolKeys(): null {
         if (!removeLastShapePoint()) undoOpenShape();
     });
     useActionHandler("performRedo", () => updateTool(redo));
+    useActionHandler("shapePickByHand", () => togglePicking("pick"));
+    useActionHandler("shapeSwapTwo", () => togglePicking("swap"));
     useActionHandlerGroup(NUDGE_ACTION_IDS, (_id, args) => {
         const field = currentShapeField();
         if (!field) return;
@@ -116,6 +124,24 @@ export function ShapeToolKeys(): null {
             return edit(tool, params, shapeContextFor(field));
         });
     });
+    return null;
+}
+
+/**
+ * The keys while picking who goes where by hand, or Swap, is on (09-who-goes-where.md), instead of
+ * the open shape's: Escape and Enter are Done (the pairs made stay), Tab brings the other shape
+ * forward, Backspace or Delete and undo take back the last pick (or, with none waiting, the last
+ * pair), redo puts a pair back, and W and Shift+W turn picking and Swap off or switch between them.
+ */
+export function ShapePickKeys(): null {
+    useActionHandler("cancelAlignmentUpdates", stopPicking);
+    useActionHandler("applyShape", stopPicking);
+    useActionHandler("shapePickSwitchSide", () => switchPickSide());
+    useActionHandler("shapeRemoveLastPoint", undoPick);
+    useActionHandler("performUndo", undoPick);
+    useActionHandler("performRedo", () => updateTool(redo));
+    useActionHandler("shapePickByHand", () => togglePicking("pick"));
+    useActionHandler("shapeSwapTwo", () => togglePicking("swap"));
     return null;
 }
 

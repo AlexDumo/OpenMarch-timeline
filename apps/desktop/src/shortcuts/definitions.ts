@@ -1349,6 +1349,34 @@ const STATIC_ACTIONS = {
         // One press, one turn or recalculation: a held key doesn't repeat it (review)
         ignoreRepeat: true,
     },
+    // Who goes where picked by hand on the open shape (09-who-goes-where.md): click or drag
+    // through marchers and spots; W as in "who". Again, Enter or Escape is Done
+    shapePickByHand: {
+        labelKey: "actions.shape.pickByHand",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: ["W"],
+        ignoreRepeat: true,
+    },
+    // Two marchers trade spots on the open shape (09-who-goes-where.md)
+    shapeSwapTwo: {
+        labelKey: "actions.shape.swapTwo",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: ["Shift+W"],
+        ignoreRepeat: true,
+    },
+    // While picking by hand: the other shape (marchers or spots) in front. Handled only then
+    // (shapes/tool/ShapeToolKeys, ShapePickKeys)
+    shapePickSwitchSide: {
+        labelKey: "actions.shape.pickSwitchSide",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: ["Tab"],
+        hiddenFromPalette: true,
+    },
     // The shape on its own (#558): hold H to hide the marchers, its spots and walks, tap to keep
     // them hidden; the editor's eye button and the palette turn the latch over. Drawing only, but
     // filed with the shape's keys, which Preview turns off: no shape is edited there

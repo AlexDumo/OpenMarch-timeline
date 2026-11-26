@@ -213,7 +213,10 @@
             "centerPivot": "Shape: Move the pivot back to the center",
             "centerPivotKeywords": "pivot center centre reset turn flip around",
             "arc": "Shape: Arc",
-            "discard": "Shape: Discard"
+            "discard": "Shape: Discard",
+            "pickByHand": "Shape: Pick who goes where by hand",
+            "swapTwo": "Shape: Swap two marchers' spots",
+            "pickSwitchSide": "Shape: Switch between marchers and spots while picking"
         },
         "swap": {
             "selectTwo": "Select 2 marchers to swap them",
@@ -2321,7 +2324,22 @@
                 "nearest": "Least travel",
                 "keep": "Keep order",
                 "reverse": "Reverse order",
-                "label": "Who goes where"
+                "label": "Who goes where",
+                "inside": "Inside out",
+                "zipper": "Zipper",
+                "sections": "Within sections",
+                "insideHint": "The middle of the line goes to the ends of the shape",
+                "zipperHint": "Two lines merge into one, taking turns",
+                "sectionsHint": "Each section stays together, least travel inside it",
+                "why": {
+                    "noOrder": "These marchers have no order yet. Set order on them first, or pick by hand.",
+                    "notTwoLines": "Needs marchers from two lines, each with an order.",
+                    "oneSection": "Everyone here is in one section.",
+                    "placed": "Choose this while drawing the shape, before you place it.",
+                    "twoLines": "These marchers come from two lines. Use Zipper, or set one order on them first."
+                },
+                "readout": "Biggest step {biggest} · {crossings, plural, =0 {no paths cross} one {# pair of paths crosses} other {# pairs of paths cross}}",
+                "readoutNoSteps": "{crossings, plural, =0 {No paths cross} one {# pair of paths crosses} other {# pairs of paths cross}}"
             },
             "drawHintFor": "Drag on the field to draw {shape, select, block {a box} circle {a circle} line {a line} curve {a curve} arc {an arc} other {a shape}} · <keys></keys> to cancel",
             "drawPointsHintFor": "Drag on the field to draw {shape, select, line {a line} curve {a curve} arc {an arc} other {a shape}}, or click point after point · <keys></keys> to cancel",
@@ -2330,7 +2348,26 @@
             "discard": "Discard",
             "drawHintTouchFor": "Drag on the field to draw {shape, select, block {a box} circle {a circle} line {a line} curve {a curve} arc {an arc} other {a shape}}",
             "drawPointsHintTouchFor": "Drag on the field to draw {shape, select, line {a line} curve {a curve} arc {an arc} other {a shape}}, or tap point after point",
-            "pointsHintTouch": "Tap to add points · Double-tap or Finish to end"
+            "pointsHintTouch": "Tap to add points · Double-tap or Finish to end",
+            "pick": {
+                "button": "Pick by hand",
+                "tip": "Click or drag through marchers and spots. The 1st marcher you pick takes the 1st spot you pick.",
+                "clear": "Clear hand picks",
+                "clearTip": "Everyone goes back to the spot Who goes where gives them.",
+                "from": "Pick from",
+                "marchers": "Marchers",
+                "spots": "Spots",
+                "waitingMarchers": "{count, plural, one {# marcher waits for a spot} other {# marchers wait for spots}}",
+                "waitingSpots": "{count, plural, one {# spot waits for a marcher} other {# spots wait for marchers}}",
+                "ready": "Pick a marcher or a spot",
+                "done": "Done"
+            },
+            "swap": {
+                "button": "Swap two",
+                "tip": "Click two marchers to trade their spots.",
+                "first": "Click a marcher",
+                "second": "Click the marcher to trade with"
+            }
         },
         "placed": {
             "label": "{name} · {count, plural, one {{interval} step} other {{interval} steps}}",
