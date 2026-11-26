@@ -1218,7 +1218,8 @@ const shots = [
             await toPage1(page, wait);
             const button = page.getByTestId("field-display-facing");
             await button.click();
-            // Off and back on, so the tooltip opens from a hover rather than the click
+            // The pointer off the button and back on, so the tooltip opens from a hover rather than
+            // the click
             await button.blur();
             await page.mouse.move(800, 500);
             await wait(300);

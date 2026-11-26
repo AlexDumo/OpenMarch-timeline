@@ -27,9 +27,14 @@ export type FieldTestMarcher = {
     equipmentIcon: string;
     /**
      * Which way the field's facing caret points for them (fork #1316), in unwrapped degrees (0
-     * front, 90 side 2), or null for no caret (Show facing off, or a prop)
+     * front, 90 side 2), or null for no caret (Show facing off, a prop, or hidden)
      */
     facing: number | null;
+    /**
+     * How far its label is drawn from its usual place round the dot, in field units: moved to the
+     * dot's other side, off its facing caret (fork #1316). 0, 0 when it isn't moved.
+     */
+    labelMoved: { x: number; y: number };
     /** Where the dot is drawn, in field units. */
     x: number;
     y: number;

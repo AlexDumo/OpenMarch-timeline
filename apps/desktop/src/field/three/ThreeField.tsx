@@ -161,6 +161,7 @@ import LabelsLayer, { type LabelStyle } from "./layers/LabelsLayer";
 import FacingCaretsLayer from "./layers/FacingCaretsLayer";
 import { useEquipmentIcons } from "@/cues/useEquipmentIcons";
 import { useFieldFacing } from "@/cues/useFieldFacing";
+import { useShowCues } from "@/cues/useShowCues";
 import OverlayLayer from "./layers/OverlayLayer";
 import StartFlagLayers from "./StartFlagLayers";
 import { ModeMarchers } from "./ModeMarchers";
@@ -363,10 +364,14 @@ function ThreeFieldView() {
         })),
     );
     const numbersOnly = labelForm === "numbers";
+    // The show's cues, compiled once for the equipment icons and the facing carets
+    const showCues = useShowCues();
     // What a performer holds, by their drill number, when it isn't their section's usual (#992)
-    const equipmentIcons = useEquipmentIcons();
+    const equipmentIcons = useEquipmentIcons(showCues);
     // Which way each performer faces at the playhead, as a caret in front of their dot (#1316)
-    const facing = useFieldFacing();
+    const facing = useFieldFacing(showCues);
+    // Where the labels layer anchors each label as drawn, for the field test API
+    const labelAnchors = useRef<Float64Array | null>(null);
     const equipmentIconPlace = useUiSettingsStore(
         (s) => s.uiSettings.equipmentIconPlace ?? "beside",
     );
@@ -705,10 +710,13 @@ function ThreeFieldView() {
                 facing: (id) => {
                     const beat = marchers.drawnBeat;
                     const source = latest.current.facing;
-                    return beat === null || !source
+                    // A hidden performer's caret isn't drawn
+                    const i = marchers.ids.indexOf(id);
+                    return beat === null || !source || marchers.hidden[i]
                         ? null
                         : source.degreesAt(id, beat);
                 },
+                labelAnchors: () => labelAnchors.current,
                 view: () => useFieldViewStore.getState(),
                 element: () => element.current,
                 pageId: () => latest.current.pageId,
@@ -948,6 +956,7 @@ function ThreeFieldView() {
                             iconPlace={equipmentIconPlace}
                             hovered={hoveredMarcher}
                             facing={facing}
+                            placed={labelAnchors}
                         />
                         <OverlayLayer
                             plan={timeline.collisions}
