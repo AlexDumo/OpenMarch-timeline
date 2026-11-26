@@ -18,7 +18,12 @@
  */
 import * as THREE from "three";
 import type { ChannelBake } from "./channelBake";
-import { composeSetupOf, composeSlot, type ComposeSetup } from "./composeMath";
+import {
+    composeSetupOf,
+    composeSlot,
+    NECK_SHARE,
+    type ComposeSetup,
+} from "./composeMath";
 import {
     emptyState,
     stateSize,
@@ -26,6 +31,7 @@ import {
     STATE_TEXELS,
     writeChannelState,
     writeFeetState,
+    writeHeadYaw,
     type ChannelPlay,
     type FeetPlay,
 } from "./channelState";
@@ -54,7 +60,9 @@ uniform sampler2D uAnim;
 uniform sampler2D uState;
 uniform float uCount;
 uniform int uRowsPerColumn, uBones, uSlots, uTurnRoot, uAnchorBody, uAnchorHorn, uProp;
-uniform bool uTurnOn;
+uniform bool uTurnOn, uHeadTurnOn;
+uniform int uNeck, uHead;
+uniform vec3 uNeckAt;
 uniform float uWaist;
 uniform int uChannel[${COMPOSED_BONES}];
 uniform int uTurnClass[${COMPOSED_BONES}];
@@ -104,6 +112,20 @@ mat4 feetBone(int bone) {
   if (blend) m = (1.0 - bw) * m + bw * sampleBone(bone, sa, sb, fr);
   return m;
 }
+// a bone by its channel, before any turn
+mat4 channelBone(int slot, int bone) {
+  int ch = uChannel[bone];
+  if (ch == 0) return feetBone(bone);
+  ivec2 b0, b1, h0, h1; float bf, hf;
+  bool bodyOn = chanAt(slot, 3, b0, b1, bf);
+  bool hornOn = ch == 2 && chanAt(slot, 5, h0, h1, hf);
+  mat4 spBody = mat4(1.0);
+  if (bodyOn) spBody = feetBone(uAnchorBody) * inverse(sampleBone(uAnchorBody, b0, b1, bf));
+  if (!hornOn) return bodyOn ? spBody * sampleBone(bone, b0, b1, bf) : feetBone(bone);
+  if (bone == uProp && state(slot, 6).z > 0.0) return sampleBone(bone, h0, h1, hf);
+  mat4 chest = bodyOn ? spBody * sampleBone(uAnchorHorn, b0, b1, bf) : feetBone(uAnchorHorn);
+  return chest * inverse(sampleBone(uAnchorHorn, h0, h1, hf)) * sampleBone(bone, h0, h1, hf);
+}
 void main() {
   ivec2 p = ivec2(gl_FragCoord.xy);
   int per = p.x / ${COMPOSED_STRIDE};
@@ -121,21 +143,15 @@ void main() {
   blend = bw > 0.0 && bw < 1.0;
   ra = bakedRow(int(first + r0)); rb = bakedRow(int(first + r0) + 1);
   sa = bakedRow(int(f1.y + r0)); sb = bakedRow(int(f1.y + r0) + 1);
-  int ch = uChannel[bone];
-  mat4 m;
-  if (ch == 0) m = feetBone(bone);
-  else {
-    ivec2 b0, b1, h0, h1; float bf, hf;
-    bool bodyOn = chanAt(slot, 3, b0, b1, bf);
-    bool hornOn = ch == 2 && chanAt(slot, 5, h0, h1, hf);
-    mat4 spBody = mat4(1.0);
-    if (bodyOn) spBody = feetBone(uAnchorBody) * inverse(sampleBone(uAnchorBody, b0, b1, bf));
-    if (!hornOn) m = bodyOn ? spBody * sampleBone(bone, b0, b1, bf) : feetBone(bone);
-    else if (bone == uProp && state(slot, 6).z > 0.0) m = sampleBone(bone, h0, h1, hf);
-    else {
-      mat4 chest = bodyOn ? spBody * sampleBone(uAnchorHorn, b0, b1, bf) : feetBone(uAnchorHorn);
-      m = chest * inverse(sampleBone(uAnchorHorn, h0, h1, hf)) * sampleBone(bone, h0, h1, hf);
-    }
+  mat4 m = channelBone(slot, bone);
+  // the head turn: the neck and head yawed about the neck's base where the neck is now
+  float hy = uHeadTurnOn ? state(slot, 7).x : 0.0;
+  if (hy != 0.0 && (bone == uNeck || bone == uHead)) {
+    vec4 nb = channelBone(slot, uNeck) * vec4(uNeckAt, 1.0);
+    vec3 pv = vec3(nb.x, 0.0, nb.z);
+    mat4 hr = yawMatrix(bone == uNeck ? hy * ${NECK_SHARE.toFixed(3)} : hy);
+    m = hr * m;
+    m[3].xyz += pv - mat3(hr) * pv;
   }
   // the leg turn, per bone by its class
   vec4 tn = state(slot, 2);
@@ -202,12 +218,14 @@ export class Composer {
     constructor(
         readonly bake: ChannelBake,
         readonly n: number,
+        /** The neck's base at bind: heads can turn from the chest (`writeHeadYaw`). */
+        neckAt: readonly [number, number, number] | null = null,
     ) {
         if (bake.bones !== COMPOSED_BONES)
             throw new Error(
                 `Composer: the bake has ${bake.bones} bones a row, not ${COMPOSED_BONES}`,
             );
-        this.setup = composeSetupOf(bake.boneNames, bake.turn);
+        this.setup = composeSetupOf(bake.boneNames, bake.turn, neckAt);
         this.height = Math.max(1, Math.ceil(n / COMPOSED_PER_ROW));
         this.state = emptyState(n);
         const { width, height } = stateSize(n);
@@ -235,6 +253,12 @@ export class Composer {
         if (slot >= this.n) return;
         writeChannelState(this.state, slot, channel, play);
         this.touch();
+    }
+
+    /** Turns slot `slot`'s head from its chest by `yaw` radians (eyes front); 0 for none. */
+    writeHeadYaw(slot: number, yaw: number): void {
+        if (slot >= this.n || !this.setup.headTurn) return;
+        if (writeHeadYaw(this.state, slot, yaw)) this.touch();
     }
 
     private touch() {
@@ -298,6 +322,14 @@ export class Composer {
                     uAnchorHorn: { value: s.anchorHorn },
                     uProp: { value: s.propBone },
                     uTurnOn: { value: !!s.turn },
+                    uHeadTurnOn: { value: !!s.headTurn },
+                    uNeck: { value: s.headTurn?.neck ?? -1 },
+                    uHead: { value: s.headTurn?.head ?? -1 },
+                    uNeckAt: {
+                        value: new THREE.Vector3(
+                            ...(s.headTurn?.at ?? [0, 0, 0]),
+                        ),
+                    },
                     uWaist: { value: s.turn?.waist ?? 0 },
                     uChannel: { value: Array.from(s.channel) },
                     uTurnClass: { value: Array.from(s.turnClass) },

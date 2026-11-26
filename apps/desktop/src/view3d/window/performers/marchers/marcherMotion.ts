@@ -33,6 +33,7 @@ import type { MarcherPlan } from "@/view3d/core/marchers/planner";
 import { bodyAt, eventIndexAt } from "@/view3d/core/marchers/planner";
 import type { HeightClass } from "@/view3d/core/marchers/looks";
 import { marcherCueInputs } from "@/view3d/core/marchers/cueInputs";
+import { eyesFrontYaw } from "@/view3d/core/marchers/facing";
 import type {
     DirectionChange,
     DotMode,
@@ -364,6 +365,11 @@ export class MarcherMotion {
          * height class). None given leaves it at attention there.
          */
         private readonly podium: readonly string[] = [],
+        /**
+         * Per slot: looks at the front whichever way it faces (`isEyesFrontSection`), its
+         * head turned from its chest by `eyesFrontYaw` of its heading. None given, none do.
+         */
+        private readonly eyesFront: readonly boolean[] = [],
     ) {
         this.cursor = new Int32Array(plans.length).fill(-1);
         this.hornCursor = new Int32Array(plans.length).fill(-1);
@@ -451,7 +457,7 @@ export class MarcherMotion {
                 this.apply(i, plan, index, planCount);
                 this.cursor[i] = index;
             }
-            if (headings) headings[i] = headingAt(plan, planCount);
+            this.turnTo(i, headingAt(plan, planCount), headings);
             if (!placed[i]) continue;
             bodyAt(
                 this.manifest,
@@ -491,7 +497,7 @@ export class MarcherMotion {
             const plan = this.plans[i];
             if (!plan || plan.events.length === 0) continue;
             // the dot's own count: the plan clock runs a count ahead
-            if (headings) headings[i] = headingAt(plan, count);
+            this.turnTo(i, headingAt(plan, count), headings);
             if (players && players[i] >= 0 && this.holdPlaying(i)) continue;
             if (onPodium && onPodium[i] && this.holdPodium(i)) continue;
             const row = rows[this.attention[i]];
@@ -508,6 +514,12 @@ export class MarcherMotion {
             // `update` finds the event again and writes its clip
             this.cursor[i] = CLOSED;
         }
+    }
+
+    /** Slot `i` faces `heading`: into `headings`, and its head to the front when it looks there. */
+    private turnTo(i: number, heading: number, headings?: Float32Array) {
+        if (headings) headings[i] = heading;
+        if (this.eyesFront[i]) this.bodies.setHeadYaw(i, eyesFrontYaw(heading));
     }
 
     /**

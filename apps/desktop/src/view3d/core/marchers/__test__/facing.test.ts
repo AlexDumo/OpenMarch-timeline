@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { pixelsToWorld } from "@openmarch/core";
 import FieldPropertiesTemplates from "../../../../global/classes/FieldProperties.templates";
-import { FRONT_HEADING, SLIDE_BAND, travelDirection } from "../facing";
+import {
+    eyesFrontYaw,
+    FRONT_HEADING,
+    isEyesFrontSection,
+    SLIDE_BAND,
+    travelDirection,
+} from "../facing";
 import { writeMatrix } from "../../../render/instanced-marchers.js";
 
 const fp = FieldPropertiesTemplates.HIGH_SCHOOL_FOOTBALL_FIELD_WITH_END_ZONES;
@@ -123,5 +129,38 @@ describe("slides face the 50", () => {
         expect(d.family).toBe("forward");
         expect(deg(d.legYaw)).toBeCloseTo(85, 9);
         expect(travelDirection(...at(-90)).family).toBe("slideR");
+    });
+});
+
+describe("eyes front", () => {
+    const yaw = (headingDeg: number) =>
+        deg(eyesFrontYaw((headingDeg * Math.PI) / 180)) + 0;
+
+    it("turns the head all the way back to the front from either side", () => {
+        expect(yaw(0)).toBeCloseTo(0, 9);
+        // side 2: turned 90° to their left, so the head turns 90° to their right
+        expect(yaw(90)).toBeCloseTo(-90, 9);
+        expect(yaw(-90)).toBeCloseTo(90, 9);
+        expect(yaw(270)).toBeCloseTo(90, 9);
+        expect(yaw(45)).toBeCloseTo(-45, 9);
+        // a spin later, the same
+        expect(yaw(450)).toBeCloseTo(-90, 9);
+    });
+
+    it("brings the head back to the chest toward the back, with no snap across it", () => {
+        expect(yaw(135)).toBeCloseTo(-45, 9);
+        expect(yaw(-135)).toBeCloseTo(45, 9);
+        expect(yaw(180)).toBeCloseTo(0, 9);
+        expect(Math.abs(yaw(179.9) - yaw(180.1))).toBeLessThan(0.5);
+        // never past a quarter turn
+        for (let h = -360; h <= 360; h += 5)
+            expect(Math.abs(yaw(h))).toBeLessThanOrEqual(90 + 1e-9);
+    });
+
+    it("is for bass and flub drums only", () => {
+        expect(isEyesFrontSection("Bass Drum")).toBe(true);
+        expect(isEyesFrontSection(" flub drum ")).toBe(true);
+        expect(isEyesFrontSection("Snare")).toBe(false);
+        expect(isEyesFrontSection("Trumpet")).toBe(false);
     });
 });

@@ -81,7 +81,8 @@ import {
  * Contact shadow under each marcher: a soft dark disc on the turf, in place
  * of real shadows (the instanced skinning has no depth pass yet).
  */
-/** The head bone, as the bake names it (`HEAD_BONES` in `composeMath.ts`). */
+/** The neck and head bones, as the bake names them (`HEAD_BONES` in `composeMath.ts`). */
+const NECK_BONE = "DEF-spine004";
 const HEAD_BONE = "DEF-spine006";
 /**
  * Between the eyes, just inside the face, on the om-pose bodies at rest
@@ -99,8 +100,16 @@ export const EYE_AT_REST: readonly [number, number, number] = [0, 1.678, 0.06];
 export function headBase(
     skeleton: THREE.Skeleton,
 ): [number, number, number] | null {
+    return boneBase(skeleton, HEAD_BONE);
+}
+
+/** Bone `name`'s origin at bind in `skeleton` (dots dropped from names), metres, or null. */
+function boneBase(
+    skeleton: THREE.Skeleton,
+    name: string,
+): [number, number, number] | null {
     const i = skeleton.bones.findIndex(
-        (b) => b.name.replace(/\./g, "") === HEAD_BONE,
+        (b) => b.name.replace(/\./g, "") === name,
     );
     if (i < 0) return null;
     const at = new THREE.Vector3().setFromMatrixPosition(
@@ -418,7 +427,11 @@ export class MarcherBodies {
         this.bake = bake;
         const anyBody = bodies.values().next().value!;
         this.headAt = headBase(anyBody.mesh.skeleton);
-        this.composer = new Composer(bake, looks.length);
+        this.composer = new Composer(
+            bake,
+            looks.length,
+            boneBase(anyBody.mesh.skeleton, NECK_BONE),
+        );
         const firstRow = this.firstRow();
         for (let i = 0; i < looks.length; i++)
             this.composer.writeFeet(i, { row: firstRow });
@@ -627,6 +640,11 @@ export class MarcherBodies {
     /** Sets what slot `slot`'s Horn/Equipment channel plays; null follows the Feet. */
     setHorn(slot: number, play: ChannelPlay | null): void {
         this.composer.writeChannel(slot, "horn", play);
+    }
+
+    /** Turns slot `slot`'s head from its chest by `yaw` radians (`eyesFrontYaw`); 0 for none. */
+    setHeadYaw(slot: number, yaw: number): void {
+        this.composer.writeHeadYaw(slot, yaw);
     }
 
     /**
