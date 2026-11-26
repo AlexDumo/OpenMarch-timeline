@@ -1195,6 +1195,7 @@ const TimelineSurface = memo(function TimelineSurface({
                     {touchZoom && (
                         <TimelineTouchZoom className="right-20 bottom-24" />
                     )}
+                    {lanes?.corner}
                 </>
             }
             transport={

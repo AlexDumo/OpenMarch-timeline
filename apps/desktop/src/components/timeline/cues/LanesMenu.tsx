@@ -1,6 +1,6 @@
 /**
- * The timeline's lane controls (fork #992, owner's mockup of 2026-11-17): the **Lanes** row under
- * the lane names, last in the lanes area, and the right-click menu on a lane's name. Both open the
+ * The timeline's lane controls (fork #992, owner's mockup of 2026-11-17): the **Lanes** button in
+ * the timeline's bottom-left corner, and the right-click menu on a lane's name. Both open the
  * same list (`timeline/timelineLanes.ts`):
  *
  * - a search box that filters everything under it;
@@ -24,6 +24,7 @@ import {
 } from "@phosphor-icons/react";
 import { useTranslate } from "@tolgee/react";
 import clsx from "clsx";
+import { ShortcutTooltip } from "@/components/timeline/ShortcutTooltip";
 import {
     KEEP_MENU_EVENTS,
     TIMELINE_MENU_CONTENT_CLASS,
@@ -44,9 +45,6 @@ import {
     type LaneState,
     type TimelineLaneId,
 } from "@/timeline/timelineLanes";
-
-/** The Lanes row's height, last in the lanes area. */
-export const LANES_ROW_HEIGHT = 28;
 
 const CHECK_SLOT_CLASS = "flex w-[14px] shrink-0 justify-center";
 
@@ -84,7 +82,7 @@ function LaneItem({ state, family }: { state: LaneState; family?: string }) {
 
 /**
  * The list both menus show, with its own search box. `autoFocusSearch` puts the cursor in the
- * box when the menu opens (the Lanes row's menu; a submenu keeps the keyboard on its items).
+ * box when the menu opens (the Lanes button's menu; a submenu keeps the keyboard on its items).
  */
 function LanesList({ autoFocusSearch }: { autoFocusSearch?: boolean }) {
     const { t } = useTranslate();
@@ -186,35 +184,44 @@ function LanesList({ autoFocusSearch }: { autoFocusSearch?: boolean }) {
 }
 
 /**
- * The **Lanes** row: last in the lanes area, at the visible left edge. It reads "Lanes", or
- * "Lanes · 2 hidden" while lanes in this show are hidden, and opens the lane list.
+ * The **Lanes** button: an icon in the timeline's bottom-left corner, where it stays in view while
+ * the timeline scrolls. Its tooltip reads "Lanes", or "Lanes · 2 hidden" while lanes in this show
+ * are hidden (a count badge shows the number too). It opens the lane list.
  */
 export function LanesRow() {
     const { t } = useTranslate();
     const hidden = hiddenLaneCount(useLaneStates());
     const [open, setOpen] = useState(false);
+    const label = t("cues.lane.lanesLabel", { count: hidden });
     return (
         <DropdownMenu.Root open={open} onOpenChange={setOpen} modal={false}>
-            <DropdownMenu.Trigger asChild>
-                <button
-                    type="button"
-                    data-testid="timeline-lanes-row"
-                    data-timeline-interactive=""
-                    onPointerDown={(e) => e.stopPropagation()}
-                    className={clsx(
-                        "text-micro border-stroke bg-bg-1/80 hover:text-accent hover:border-accent touch:min-h-44 flex h-20 items-center gap-4 rounded-full border px-8 backdrop-blur-sm",
-                        open ? "text-accent border-accent" : "text-text",
-                    )}
-                >
-                    <ListChecksIcon size={12} />
-                    <span className="font-medium">{t("cues.lane.lanes")}</span>
-                    {hidden > 0 && (
-                        <span className="text-text-subtitle">
-                            {t("cues.lane.hiddenCount", { count: hidden })}
-                        </span>
-                    )}
-                </button>
-            </DropdownMenu.Trigger>
+            <ShortcutTooltip label={label} disabled={open}>
+                <DropdownMenu.Trigger asChild>
+                    <button
+                        type="button"
+                        aria-label={label}
+                        data-testid="timeline-lanes-row"
+                        data-timeline-interactive=""
+                        // As the transport buttons do: a click doesn't take keyboard focus, so Space
+                        // after clicking is still Play, not a second press of this button
+                        onMouseDown={(e) => e.preventDefault()}
+                        className={clsx(
+                            "focus-visible:ring-accent rounded-4 bg-bg-1 enabled:hover:text-accent enabled:hover:bg-fg-2 touch:size-44 relative flex size-24 items-center justify-center outline-hidden transition-[color,background-color,transform] duration-150 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent enabled:active:translate-y-px",
+                            open ? "text-accent" : "text-text",
+                        )}
+                    >
+                        <ListChecksIcon size={16} />
+                        {hidden > 0 && (
+                            <span
+                                data-testid="timeline-lanes-hidden-count"
+                                className="text-micro bg-accent text-text-invert absolute -top-4 -right-4 flex h-14 min-w-14 items-center justify-center rounded-full px-3 font-medium"
+                            >
+                                {hidden}
+                            </span>
+                        )}
+                    </button>
+                </DropdownMenu.Trigger>
+            </ShortcutTooltip>
             <DropdownMenu.Portal>
                 <DropdownMenu.Content
                     data-testid="timeline-lanes-menu"

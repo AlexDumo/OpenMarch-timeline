@@ -645,7 +645,7 @@ const shots = [
     {
         id: "timeline-lanes-menu",
         kind: "still",
-        // Page 3 with a move mid-page, the list open from the Lanes row under the lane names:
+        // Page 3 with a move mid-page, the list open from the Lanes button in the bottom-left corner:
         // the search box, Moves ticked under In this show, and Equipment to add; the Moves heading
         // with its eye button over the move's row
         async setup({ page, around, union, wait }) {

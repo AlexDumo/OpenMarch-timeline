@@ -154,3 +154,53 @@ test("a finger's tap on empty lane space moves the playhead there; a tap on the 
         await stop();
     }
 });
+
+// The Lanes button (#992): an icon in the timeline's bottom-left corner. It is found by its name,
+// its count badge follows the hidden lanes, and it stays in the corner while the timeline scrolls.
+test("the Lanes button sits in the bottom-left corner, counts hidden lanes, and stays put while the timeline scrolls", async ({
+    show,
+}) => {
+    const { page } = show;
+    await waitForField(page);
+    await waitForIdle(page);
+    const lanes = page.getByRole("button", { name: "Lanes", exact: true });
+    await expect(lanes).toBeVisible();
+
+    const pane = (await page.getByTestId("timeline-pane").boundingBox())!;
+    const corner = async () => {
+        const box = (await lanes.boundingBox())!;
+        return {
+            x: box.x,
+            y: box.y,
+            left: box.x - pane.x,
+            bottom: pane.y + pane.height - (box.y + box.height),
+        };
+    };
+    const before = await corner();
+    expect(before.left).toBeLessThanOrEqual(80);
+    expect(before.bottom).toBeLessThanOrEqual(80);
+
+    // The viewport must really move, or "the button didn't move" proves nothing
+    const viewport = page.getByTestId("timeline-viewport");
+    const scroll = await viewport.evaluate((v) => {
+        const start = v.scrollLeft;
+        v.scrollLeft += 500;
+        return { start, end: v.scrollLeft };
+    });
+    expect(scroll.end - scroll.start).toBeGreaterThanOrEqual(400);
+    await waitForIdle(page);
+    const scrolled = await corner();
+    expect(Math.abs(scrolled.x - before.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(scrolled.y - before.y)).toBeLessThanOrEqual(1);
+    await viewport.evaluate((v) => {
+        v.scrollLeft = 0;
+    });
+
+    await page.getByTestId("equipment-lane-hide").click();
+    await expect(
+        page.getByRole("button", { name: "Lanes · 1 hidden", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByTestId("timeline-lanes-hidden-count")).toHaveText(
+        "1",
+    );
+});

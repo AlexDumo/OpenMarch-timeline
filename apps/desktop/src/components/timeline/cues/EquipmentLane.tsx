@@ -1,8 +1,8 @@
 /**
  * The timeline's Equipment lane (ADR 0015 D-7; fork #991 option E, #992): under the drill rows,
- * shown while the show has Equipment cues or the user added it from the Lanes row. One row per group of performers with the same
- * Equipment history (a cue for the whole guard is one row of bars), folding into a stacked summary
- * of how many hold each thing.
+ * shown while the show has Equipment cues or the user added it from the Lanes button. One row per
+ * group of performers with the same Equipment history (a cue for the whole guard is one row of
+ * bars), folding into a stacked summary of how many hold each thing.
  *
  * - A lasting cue is a bar to the performer's next cue, a momentary one a rounded pill; the
  *   section's usual (not a cue) is a dashed bar.
@@ -94,7 +94,7 @@ import {
     useLaneFolded,
     useLaneShown,
 } from "@/timeline/timelineLanes";
-import { LANES_ROW_HEIGHT, LanesRow, useLaneNameMenu } from "./LanesMenu";
+import { LanesRow, useLaneNameMenu } from "./LanesMenu";
 import { useFacingLaneParts } from "./FacingLane";
 import {
     DRAG_SLOP_PX,
@@ -157,12 +157,13 @@ export function useEquipmentLaneBand(): TimelineBand | undefined {
     );
     return useMemo(() => {
         if (!beats) return undefined;
-        // The lanes area: the cue lanes that show, then the Lanes row, always last
+        // The lanes area: the cue lanes that show. The Lanes button isn't in it: it sits in the
+        // timeline's bottom-left corner (`corner`), where it's in view however the timeline scrolls
         const equipmentHeight = shown ? equipmentLaneHeight(lane, folded) : 0;
         const facingHeight = facing.height;
         const lanesHeight = equipmentHeight + facingHeight;
         return {
-            height: lanesHeight + LANES_ROW_HEIGHT,
+            height: lanesHeight,
             // Only a shown cue lane keeps the playhead and start flag above it
             takesPresses: shown || facingHeight > 0,
             render: (geometry) => (
@@ -180,21 +181,12 @@ export function useEquipmentLaneBand(): TimelineBand | undefined {
                         ...geometry,
                         top: geometry.top + equipmentHeight,
                     })}
-                    <div
-                        data-testid="timeline-lanes-row-area"
-                        className="absolute left-0 flex items-center"
-                        style={{
-                            top: geometry.top + lanesHeight,
-                            width: geometry.width,
-                            height: LANES_ROW_HEIGHT,
-                        }}
-                        onPointerDown={(e) => e.stopPropagation()}
-                    >
-                        <div className="sticky left-0 z-[5] px-4">
-                            <LanesRow />
-                        </div>
-                    </div>
                 </>
+            ),
+            corner: (
+                <div className="absolute bottom-6 left-6 z-[5]">
+                    <LanesRow />
+                </div>
             ),
         };
     }, [shown, folded, lane, show, beats, facing]);

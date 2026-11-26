@@ -42,9 +42,14 @@ export interface TimelineBand {
     header?: ReactNode;
     /**
      * Lanes under the clip rows: something in them takes presses (a cue lane shows), so the
-     * playhead and start flag are grabbed only above them. Without it (only the Lanes row shows),
+     * playhead and start flag are grabbed only above them. Without it (only the Lanes button shows),
      * they're grabbed the whole way down, as with no lanes.
      */
     takesPresses?: boolean;
     render(geometry: TimelineBandGeometry): ReactNode;
+    /**
+     * Drawn in the timeline's bottom-left corner, over the viewport, where it stays in view while
+     * the timeline scrolls. It takes no room in the band (the Lanes button).
+     */
+    corner?: ReactNode;
 }
