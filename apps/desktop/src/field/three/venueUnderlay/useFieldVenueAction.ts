@@ -14,6 +14,9 @@ export function useFieldVenueAction(style: FieldSurfaceStyle): void {
     const settings = () => useUiSettingsStore.getState().uiSettings;
     const on = () => (settings().fieldVenue ?? "off") !== "off";
     const shows = venueShows(style);
+    const checked = useUiSettingsStore(
+        (s) => (s.uiSettings.fieldVenue ?? "off") !== "off",
+    );
     useActionHandler(
         "toggleFieldVenue",
         () =>
@@ -22,6 +25,7 @@ export function useFieldVenueAction(style: FieldSurfaceStyle): void {
             ),
         {
             enabled: shows,
+            checked: shows && checked,
             disabledReason: shows
                 ? undefined
                 : () => tolgee.t("toolbar.view.venueBlank"),

@@ -694,40 +694,74 @@ test("change: while a box is open everyone else fades, and nobody once it closes
     await expect.poll(dimmedIds).toEqual([]);
 });
 
-test("change: the field display bar holds paths, labels, equipment icons, facing, shapes and the venue; the rest is in Settings › Field", async ({
+test("change: the field display bar holds paths and one Show on field panel (a switch per thing shown); set-once looks are in Settings › Field", async ({
     show,
 }) => {
     const { page } = show;
     // The toolbar's View tab is gone: display settings sit on the field
     await expect(page.getByRole("tab", { name: "View" })).toHaveCount(0);
     const bar = page.getByTestId("field-display-bar");
-    for (const id of [
-        "start-flag-positions",
-        "field-display-labels",
-        // What each performer holds, as an icon by the drill number (fork #992)
-        "field-display-equipment",
-        // Show facing: a caret in front of every dot the way they face (fork #1316)
-        "field-display-facing",
-        "field-display-shapes",
-        // The show's 3D venue under the grid (#1207), off by default
-        "field-display-venue",
-    ])
-        await expect(bar.getByTestId(id)).toBeVisible();
+    await expect(bar.getByTestId("start-flag-positions")).toBeVisible();
+    // One button for what the field draws, not an icon for every setting (owner, 2026-11-25)
+    const overlays = bar.getByTestId("field-display-overlays");
+    await expect(overlays).toBeVisible();
     // Nothing else crept in
-    await expect(bar.getByRole("button")).toHaveCount(6);
+    await expect(bar.getByRole("button")).toHaveCount(2);
     await expect(page.getByTestId("open-view3d")).toBeVisible();
-    // Show facing is one toggle, off by default (fork #1316)
-    const facing = bar.getByTestId("field-display-facing");
-    await expect(facing).toHaveAttribute("aria-pressed", "false");
+    await overlays.click();
+    const panel = page.getByTestId("field-display-overlays-panel");
+    // One row per thing the field can show, each a switch (fork #1332's redesign)
+    for (const name of ["Drill numbers", "Equipment icons", "Shape outlines"])
+        await expect(panel.getByRole("switch", { name })).toBeChecked();
+    for (const name of ["Facing", "Venue"])
+        await expect(panel.getByRole("switch", { name })).not.toBeChecked();
+    // A row's choice shows beside its switch while it's on
+    await expect(
+        panel.getByRole("group", { name: "Drill numbers" }),
+    ).toBeVisible();
+    await panel.getByRole("switch", { name: "Drill numbers" }).click();
+    await expect(
+        panel.getByRole("group", { name: "Drill numbers" }),
+    ).toHaveCount(0);
+    // The row's name stays on one line beside Holding something else: the who button gives way
+    const equipmentName = panel.getByText("Equipment icons", { exact: true });
+    expect(
+        await equipmentName.evaluate(
+            (el) =>
+                el.getBoundingClientRect().height <
+                parseFloat(getComputedStyle(el).lineHeight) * 1.5,
+        ),
+    ).toBe(true);
+    // Equipment icons for some sections only: the who menu lists the show's sections
+    await panel.getByTestId("field-display-equipment-who").click();
+    const menu = page.getByTestId("field-display-equipment-menu");
+    await expect(
+        menu.getByRole("menuitemcheckbox", { name: "Everyone" }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    const facing = panel.getByRole("switch", { name: "Facing" });
     await facing.click();
-    await expect(facing).toHaveAttribute("aria-pressed", "true");
-    await facing.click();
-    await expect(facing).toHaveAttribute("aria-pressed", "false");
+    await expect(facing).toBeChecked();
+    // Something differs from how it ships: the button says so, and Reset puts it back
+    await expect(overlays).toHaveAttribute("data-changed", "true");
+    await panel.getByTestId("field-display-overlays-reset").click();
+    await expect(facing).not.toBeChecked();
+    await expect(
+        panel.getByRole("switch", { name: "Drill numbers" }),
+    ).toBeChecked();
+    await expect(overlays).toHaveAttribute("data-changed", "false");
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
 
     const settings = await openSettings(page, "Field");
     for (const name of ["Grid lines", "Half lines", "Step size warnings"])
         await expect(settings.getByRole("switch", { name })).toBeVisible();
-    for (const name of ["Normal", "Above the dot"])
+    for (const name of [
+        "Auto: smaller when crowded",
+        "Above the dot",
+        "After the drill number",
+        "Faint",
+    ])
         await expect(settings.getByRole("radio", { name })).toBeChecked();
     // While shaping is gone: an open shape always fades the rest
     await expect(

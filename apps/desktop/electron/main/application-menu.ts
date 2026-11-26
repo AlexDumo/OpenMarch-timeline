@@ -7,6 +7,7 @@ import {
     CHECK_FOR_UPDATES_MENU_ACTION,
     HELP_MENU_ACTIONS,
     PLAYBACK_MENU_ACTIONS,
+    SHOW_ON_FIELD_MENU_ACTIONS,
     VIEW_MENU_ACTIONS,
     type MenuAction,
 } from "../../src/global/menuActions";
@@ -69,15 +70,35 @@ const linkItem = (label: string, url: string): MenuItemConstructorOptions => ({
 export function buildApplicationMenu({
     basic = false,
     saveNow = false,
-}: { basic?: boolean; saveNow?: boolean } = {}): Menu {
+    checked = {},
+}: {
+    basic?: boolean;
+    saveNow?: boolean;
+    checked?: Readonly<Record<string, boolean>>;
+} = {}): Menu {
     return Menu.buildFromTemplate(
         applicationMenuTemplate({
             basic,
             saveNow,
+            checked,
             isMacOS: process.platform === "darwin",
         }),
     );
 }
+
+/**
+ * A ticked item for a renderer action that switches something on or off (Show on field). The
+ * tick is what the renderer last said; clicking runs the action, and the renderer says the new
+ * state, which rebuilds the menu.
+ */
+const checkedActionItem =
+    (checked: Readonly<Record<string, boolean>>) =>
+    ({ action, labelKey }: MenuAction): MenuItemConstructorOptions => ({
+        type: "checkbox",
+        label: t(labelKey),
+        checked: checked[action] === true,
+        click: () => mainProcess.sendMenuAction(action),
+    });
 
 /**
  * The menu's template for one system. Exported for the user guide's Menus page, which shows the
@@ -87,11 +108,14 @@ export function buildApplicationMenu({
 export function applicationMenuTemplate({
     basic,
     saveNow = false,
+    checked = {},
     isMacOS,
 }: {
     basic: boolean;
     /** Show File ▸ Save Now (working-copy saves are on). */
     saveNow?: boolean;
+    /** Which ticked items are on, by action (`MENU_CHECKED_CHANNEL`) */
+    checked?: Readonly<Record<string, boolean>>;
     isMacOS: boolean;
 }): MenuItemConstructorOptions[] {
     const appName = app.name;
@@ -219,6 +243,10 @@ export function applicationMenuTemplate({
                         openView3dWindow();
                     },
                 },
+                { type: "separator" },
+                // What the field draws (fork #1332), as Show on field's switches set it
+                { label: t("menu.view.showOnField"), enabled: false },
+                ...SHOW_ON_FIELD_MENU_ACTIONS.map(checkedActionItem(checked)),
                 { type: "separator" },
                 // The timeline's lanes (fork #992), as the Lanes menu shows and hides them
                 ...VIEW_MENU_ACTIONS.filter(

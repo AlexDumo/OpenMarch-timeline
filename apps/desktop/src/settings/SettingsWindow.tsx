@@ -5,6 +5,7 @@ import TitleBar from "@/components/titlebar/TitleBar";
 import {
     readSavedSection,
     saveSection,
+    SETTINGS_SECTION_STORAGE_KEY,
     SETTINGS_SECTIONS,
     type SettingsSectionId,
 } from "./sections";
@@ -57,6 +58,15 @@ export function SettingsBody() {
         setSelected(id);
         saveSection(id);
     };
+    // Another window asked for a section (`openSettingsAt`) while this one is open
+    useEffect(() => {
+        const onStorage = (event: StorageEvent) => {
+            if (event.key === SETTINGS_SECTION_STORAGE_KEY)
+                setSelected(readSavedSection());
+        };
+        window.addEventListener("storage", onStorage);
+        return () => window.removeEventListener("storage", onStorage);
+    }, []);
 
     return (
         <div className="flex min-h-0 flex-1">

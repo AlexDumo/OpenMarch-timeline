@@ -57,6 +57,19 @@ const savedFacing = async (show: Show) =>
 
 const STILL = { x: 0, y: 0 };
 
+/** Show on field's Facing switch, then the panel closed so it covers nothing */
+async function setFacing(page: Page, on: boolean) {
+    await page.getByTestId("field-display-overlays").click();
+    const facing = page.getByTestId("field-display-facing");
+    await facing.click();
+    if (on) await expect(facing).toBeChecked();
+    else await expect(facing).not.toBeChecked();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("field-display-overlays-panel")).toHaveCount(
+        0,
+    );
+}
+
 test("Show facing turns each performer's caret through the turn, and a label the caret points through moves below the dot", async ({
     show,
 }) => {
@@ -69,11 +82,7 @@ test("Show facing turns each performer's caret through the turn, and a label the
         facing: null,
         labelMoved: STILL,
     });
-    await page.getByTestId("field-display-facing").click();
-    await expect(page.getByTestId("field-display-facing")).toHaveAttribute(
-        "aria-pressed",
-        "true",
-    );
+    await setFacing(page, true);
     // Everyone faces the front until turned; the caret points down, away from the label above
     await expect
         .poll(() => facings(page))
@@ -134,7 +143,7 @@ test("Show facing turns each performer's caret through the turn, and a label the
 
     // Show facing off: no carets, and every label back above its dot
     await goTo(page, "m3");
-    await page.getByTestId("field-display-facing").click();
+    await setFacing(page, false);
     await expect
         .poll(async () => (await facings(page)).T1)
         .toEqual({ facing: null, labelMoved: STILL });

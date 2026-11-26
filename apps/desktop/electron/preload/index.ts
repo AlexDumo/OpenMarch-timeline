@@ -26,7 +26,10 @@ import type {
     AccessTokenResult,
 } from "@om-electron/main/auth/types";
 import { AUTH_IPC_CHANNELS } from "../../src/global/auth/constants";
-import { MENU_ACTION_CHANNEL } from "../../src/global/menuActions";
+import {
+    MENU_ACTION_CHANNEL,
+    MENU_CHECKED_CHANNEL,
+} from "../../src/global/menuActions";
 import { THEME_SYNC_CHANNEL } from "../../src/global/themeSync";
 import {
     UPDATE_IPC_CHANNELS,
@@ -487,6 +490,12 @@ const APP_API = {
         ipcRenderer.invoke("newShow:getPending") as Promise<boolean>,
     clearPendingNewShowDialog: () =>
         ipcRenderer.invoke("newShow:clearPending") as Promise<void>,
+    /**
+     * Which of the app menu's ticked items are on, by action (View ▸ Show on field); main
+     * keeps only the menu's own (docs/adr/0003-menu-actions-ipc.md)
+     */
+    setMenuChecked: (checked: Record<string, boolean>) =>
+        ipcRenderer.send(MENU_CHECKED_CHANNEL, checked),
     /** An app menu item chose a renderer action (docs/adr/0003-menu-actions-ipc.md) */
     onMenuAction: (callback: (action: unknown) => void) => {
         const listener = (_event: unknown, action: unknown) => callback(action);

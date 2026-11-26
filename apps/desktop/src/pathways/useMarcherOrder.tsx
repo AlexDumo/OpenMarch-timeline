@@ -18,6 +18,7 @@ import {
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { isFieldShown, toggleFieldShown } from "@/field/fieldShow";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { editingPositionAt } from "@/timeline/timelineIsolationPlan";
 import {
@@ -122,14 +123,17 @@ export function useMarcherOrderActions(): void {
         if (!followTheLeader) cancelOrderSweep();
     }, [followTheLeader]);
 
-    useActionHandler("toggleMarcherOrder", () => {
-        const { uiSettings, setUiSettings } = useUiSettingsStore.getState();
-        const now = uiSettings.lineOrder ?? "off";
-        setUiSettings({
-            ...uiSettings,
-            lineOrder: now === "off" ? "selected" : "off",
-        });
-    });
+    // Show on field's Line order switch (fork #1332): back to Selected or All, whichever it last showed
+    const orderOn = useUiSettingsStore((s) =>
+        isFieldShown(s.uiSettings, "lineOrder"),
+    );
+    useActionHandler(
+        "toggleMarcherOrder",
+        () => toggleFieldShown("lineOrder"),
+        {
+            checked: orderOn,
+        },
+    );
 
     useActionHandler(
         "setMarcherOrder",

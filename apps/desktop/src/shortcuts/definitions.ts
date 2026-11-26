@@ -732,7 +732,17 @@ const STATIC_ACTIONS = {
         defaultBindings: [],
         args: { shown: "everyone" },
     },
-    // Where those icons go: the popup's Where choice. Unbound
+    // Show on field's Equipment icons switch (fork #1332), back to who it last showed. Unbound
+    toggleEquipmentIcons: {
+        labelKey: "actions.cues.toggleEquipmentIcons",
+        keywordsKey: "actions.cues.equipmentIconsKeywords",
+        toggleOnKey: "actions.cues.showEquipmentIcons",
+        toggleOffKey: "actions.cues.hideEquipmentIcons",
+        category: "field",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    // Where those icons go: Settings › Field's Icon place. Unbound
     equipmentIconsBeside: {
         labelKey: "actions.cues.equipmentIconsBeside",
         keywordsKey: "actions.cues.equipmentIconsKeywords",
@@ -967,7 +977,27 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["M"],
     },
-    // Facing carets on the field (fork #1316): the display bar's Show facing. Unbound
+    // Show on field's Drill numbers and Shape outlines switches (fork #1332), back to the
+    // choice last shown. Unbound
+    toggleMarcherLabels: {
+        labelKey: "actions.ui.toggleMarcherLabels",
+        keywordsKey: "actions.ui.toggleMarcherLabelsKeywords",
+        toggleOnKey: "actions.ui.showMarcherLabels",
+        toggleOffKey: "actions.ui.hideMarcherLabels",
+        category: "ui",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    toggleShapeOutlines: {
+        labelKey: "actions.ui.toggleShapeOutlines",
+        keywordsKey: "actions.ui.toggleShapeOutlinesKeywords",
+        toggleOnKey: "actions.ui.showShapeOutlines",
+        toggleOffKey: "actions.ui.hideShapeOutlines",
+        category: "ui",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+    // Facing carets on the field (fork #1316): Show on field's Facing. Unbound
     toggleFacingArrows: {
         labelKey: "actions.ui.toggleFacingArrows",
         keywordsKey: "actions.ui.toggleFacingArrowsKeywords",

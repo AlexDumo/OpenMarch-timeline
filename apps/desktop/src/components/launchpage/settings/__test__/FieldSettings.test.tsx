@@ -37,7 +37,14 @@ describe("FieldSettings", () => {
         expect(
             screen.getByRole("switch", { name: "Step size warnings" }),
         ).not.toBeChecked();
-        expect(screen.getByRole("radio", { name: "Normal" })).toBeChecked();
+        expect(
+            screen.getByRole("radio", { name: "Auto: smaller when crowded" }),
+        ).toBeChecked();
+        expect(
+            screen.getByRole("radio", { name: "After the drill number" }),
+        ).toBeChecked();
+        expect(screen.getByRole("radio", { name: "Faint" })).toBeChecked();
+        expect(screen.getByRole("radio", { name: "Turf edge" })).toBeChecked();
         expect(
             screen.getByRole("radio", { name: "Above the dot" }),
         ).toBeChecked();
@@ -72,6 +79,31 @@ describe("FieldSettings", () => {
         expect(settings()).toMatchObject({
             marcherLabelSize: "large",
             marcherLabelPosition: "beside",
+        });
+    });
+
+    it("saves where equipment icons go and the venue's look, without turning the venue on (#1332)", async () => {
+        await renderSettings();
+        const user = userEvent.setup();
+        await user.click(
+            screen.getByRole("radio", { name: "Instead of the dot" }),
+        );
+        await user.click(screen.getByRole("radio", { name: "Lines only" }));
+        await user.click(screen.getByRole("radio", { name: "Stands" }));
+        expect(settings()).toMatchObject({
+            equipmentIconPlace: "dot",
+            fieldVenue: "off",
+            fieldVenueLast: "markings",
+            fieldVenueAround: "stands",
+        });
+        // While it shows, the look changes at once
+        useUiSettingsStore.setState({
+            uiSettings: { ...settings(), fieldVenue: "faint" },
+        });
+        await user.click(await screen.findByRole("radio", { name: "Soft" }));
+        expect(settings()).toMatchObject({
+            fieldVenue: "soft",
+            fieldVenueLast: "soft",
         });
     });
 
