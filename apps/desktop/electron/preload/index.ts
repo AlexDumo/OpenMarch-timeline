@@ -11,6 +11,10 @@ import {
 import * as DbServices from "@om-electron/database/database.services";
 
 import type { RecentFile } from "@om-electron/main/services/recent-files-service";
+import {
+    REPORT_RECORDING_CHANNELS,
+    type RecordableWindows,
+} from "@/feedback/recordingWindows";
 import type {
     RecoverableShow,
     SaveOutcome,
@@ -228,6 +232,38 @@ const APP_API = {
             return () => {
                 ipcRenderer.removeListener("report:progress", listener);
             };
+        },
+        /**
+         * Recording every OpenMarch window (fork #1378): which windows are open
+         * and which has focus, and which window the next screen request gets
+         */
+        recording: {
+            /** Starts the window updates; returns the windows now */
+            watch: (callback: (windows: RecordableWindows) => void) => {
+                const listener = (
+                    _e: Electron.IpcRendererEvent,
+                    windows: RecordableWindows,
+                ) => callback(windows);
+                ipcRenderer.on(REPORT_RECORDING_CHANNELS.windows, listener);
+                return {
+                    windows: ipcRenderer.invoke(
+                        REPORT_RECORDING_CHANNELS.watch,
+                    ) as Promise<RecordableWindows | null>,
+                    stop: () => {
+                        ipcRenderer.removeListener(
+                            REPORT_RECORDING_CHANNELS.windows,
+                            listener,
+                        );
+                        ipcRenderer.send(REPORT_RECORDING_CHANNELS.unwatch);
+                    },
+                };
+            },
+            /** The next `getDisplayMedia` call records this window; false if it's gone */
+            target: (windowId: number) =>
+                ipcRenderer.invoke(
+                    REPORT_RECORDING_CHANNELS.target,
+                    windowId,
+                ) as Promise<boolean>,
         },
     },
 
