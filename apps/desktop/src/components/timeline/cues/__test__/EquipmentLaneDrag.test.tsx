@@ -26,6 +26,7 @@ import {
 import { flagCueValues, type ShowFlag } from "@/showAssets/flags";
 import { EquipmentLaneView } from "../EquipmentLane";
 import { ROW_NAME_GAP } from "../cueLaneParts";
+import { LANE_LABEL_INSET } from "../../TimelineBand";
 import { useTimelinePointer } from "../../TimelinePrimitives";
 import type { TimelineBeatRange } from "../../TimelineViewModel";
 
@@ -403,8 +404,11 @@ describe("a cue bar's name beside its row's name (fork #985)", () => {
         )!;
         expect(name.textContent).toBe("Opener red");
         expect(name.classList.contains("sticky")).toBe(true);
-        // jsdom measures the row's name as 0 px wide
-        expect(name.style.left).toBe(`${ROW_NAME_GAP}px`);
+        // jsdom measures the row's name as 0 px wide. Scrolled, the row's name sticks
+        // LANE_LABEL_INSET in (clear of the Lanes button), so the bar's name goes past that too
+        expect(name.style.left).toBe(
+            `calc(${LANE_LABEL_INSET} + ${ROW_NAME_GAP}px)`,
+        );
         // the bar starts at the row's start, under the row's name: no further push at 0 px
         expect(name.style.marginLeft).toBe("0px");
     });

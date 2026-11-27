@@ -933,7 +933,7 @@
         "chapter": "timeline",
         "kind": "still",
         "width": 1600,
-        "height": 264
+        "height": 306
     },
     "timeline-later-pages": {
         "chapter": "timeline",
@@ -973,7 +973,7 @@
         "chapter": "timeline",
         "kind": "still",
         "width": 1600,
-        "height": 252
+        "height": 216
     },
     "timeline-next-paths": {
         "chapter": "timeline",
@@ -1016,7 +1016,7 @@
         "chapter": "timeline",
         "kind": "still",
         "width": 1600,
-        "height": 386
+        "height": 330
     },
     "timeline-paths": {
         "chapter": "timeline",

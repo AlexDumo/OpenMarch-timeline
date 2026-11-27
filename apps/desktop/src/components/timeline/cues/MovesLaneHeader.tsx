@@ -1,14 +1,16 @@
 import { EyeIcon, EyeSlashIcon } from "@phosphor-icons/react";
 import { useTranslate } from "@tolgee/react";
+import clsx from "clsx";
+import { LANE_LABEL_STICKY_CLASS } from "@/components/timeline/TimelineBand";
 import { runAction } from "@/shortcuts/registry";
 import { useLaneNameMenu } from "./LanesMenu";
 
 /**
  * The Moves lane's heading (fork #992): its name and an eye button that hides the move tracks,
  * through the same `toggleMovesLane` action as the Lanes menu. The timeline draws it at the top
- * left of the tracks, over the first row, and it stays at the visible left edge as the timeline
- * scrolls. Hidden, Moves folds into `MovesHiddenStrip`; the strip or the Lanes menu brings it
- * back.
+ * left of the tracks, over the first row, and it stays at the visible left edge, clear of the Lanes
+ * button, as the timeline scrolls. Hidden, Moves folds into `MovesHiddenStrip`; the strip or the
+ * Lanes menu brings it back.
  */
 export function MovesLaneHeader() {
     const { t } = useTranslate();
@@ -58,7 +60,12 @@ export function MovesHiddenStrip() {
             onClick={() => runAction("toggleMovesLane")}
         >
             <span className="border-stroke bg-fg-2 group-hover:bg-accent/10 group-hover:border-accent rounded-4 absolute inset-x-0 top-1/2 h-10 -translate-y-1/2 border border-dashed" />
-            <span className="text-micro text-text-subtitle group-hover:text-accent sticky left-0 z-[1] flex items-center gap-4 px-6">
+            <span
+                className={clsx(
+                    "text-micro text-text-subtitle group-hover:text-accent z-[1] flex items-center gap-4 px-6",
+                    LANE_LABEL_STICKY_CLASS,
+                )}
+            >
                 <EyeIcon size={12} />
                 {t("timeline.lanes.movesHidden")}
             </span>

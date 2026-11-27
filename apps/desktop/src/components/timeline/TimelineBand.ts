@@ -42,9 +42,32 @@ export interface TimelineBand {
     header?: ReactNode;
     /**
      * Lanes under the clip rows: something in them takes presses (a cue lane shows), so the
-     * playhead and start flag are grabbed only above them. Without it (only the Lanes row shows),
+     * playhead and start flag are grabbed only above them. Without it (only the Lanes button shows),
      * they're grabbed the whole way down, as with no lanes.
      */
     takesPresses?: boolean;
     render(geometry: TimelineBandGeometry): ReactNode;
+    /**
+     * A control the timeline draws in its bottom-left corner, over the viewport, where it stays in
+     * view however the timeline scrolls (the Lanes button). It takes no room in the band; lane
+     * labels stick clear of it (`LANE_LABEL_STICKY_CLASS`).
+     */
+    corner?: ReactNode;
 }
+
+/**
+ * How far in from the viewport's left edge a lane's label (its heading, a row's name) sticks while
+ * the timeline scrolls, so the corner control (`TimelineBand.corner`) doesn't cover it. The shell
+ * sets it as `--lane-label-inset`, beside the corner: 40 px, the home page's column
+ * (`TIMELINE_INITIAL_PAGE_WIDTH`), where labels sit before any scroll, so they never move
+ * sideways as the timeline scrolls. It clears the control as drawn (24 px, 28 px on touch), and
+ * the control widened by a one-digit hidden-lane count. On touch its invisible 44 px target
+ * reaches 8 px further, at most into a label's padding.
+ *
+ * For inline styles (a bar's name pinned past its row's name); 0 outside a timeline shell.
+ */
+export const LANE_LABEL_INSET = "var(--lane-label-inset, 0px)";
+
+/** A lane label that sticks at the visible left edge, `LANE_LABEL_INSET` in */
+export const LANE_LABEL_STICKY_CLASS =
+    "sticky left-[var(--lane-label-inset,0px)]";

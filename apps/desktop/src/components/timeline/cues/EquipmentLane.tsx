@@ -1,8 +1,8 @@
 /**
  * The timeline's Equipment lane (ADR 0015 D-7; fork #991 option E, #992): under the drill rows,
- * shown while the show has Equipment cues or the user added it from the Lanes row. One row per group of performers with the same
- * Equipment history (a cue for the whole guard is one row of bars), folding into a stacked summary
- * of how many hold each thing.
+ * shown while the show has Equipment cues or the user added it from the Lanes button. One row per
+ * group of performers with the same Equipment history (a cue for the whole guard is one row of
+ * bars), folding into a stacked summary of how many hold each thing.
  *
  * - A lasting cue is a bar to the performer's next cue, a momentary one a rounded pill; the
  *   section's usual (not a cue) is a dashed bar.
@@ -38,9 +38,11 @@ import { useTranslate } from "@tolgee/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import type { PerformerCarry } from "@openmarch/core";
-import type {
-    TimelineBand,
-    TimelineBandGeometry,
+import {
+    LANE_LABEL_INSET,
+    LANE_LABEL_STICKY_CLASS,
+    type TimelineBand,
+    type TimelineBandGeometry,
 } from "@/components/timeline/TimelineBand";
 import {
     KEEP_MENU_EVENTS,
@@ -97,7 +99,7 @@ import {
     useLaneFolded,
     useLaneShown,
 } from "@/timeline/timelineLanes";
-import { LANES_ROW_HEIGHT, LanesRow, useLaneNameMenu } from "./LanesMenu";
+import { LanesButton, useLaneNameMenu } from "./LanesMenu";
 import { useFacingLaneParts } from "./FacingLane";
 import {
     DRAG_SLOP_PX,
@@ -164,12 +166,13 @@ export function useEquipmentLaneBand(): TimelineBand | undefined {
     );
     return useMemo(() => {
         if (!beats) return undefined;
-        // The lanes area: the cue lanes that show, then the Lanes row, always last
+        // The lanes area: the cue lanes that show. The Lanes button isn't in it: it sits in the
+        // timeline's bottom-left corner (`corner`), where it's in view however the timeline scrolls
         const equipmentHeight = shown ? equipmentLaneHeight(lane, folded) : 0;
         const facingHeight = facing.height;
         const lanesHeight = equipmentHeight + facingHeight;
         return {
-            height: lanesHeight + LANES_ROW_HEIGHT,
+            height: lanesHeight,
             // Only a shown cue lane keeps the playhead and start flag above it
             takesPresses: shown || facingHeight > 0,
             render: (geometry) => (
@@ -187,22 +190,9 @@ export function useEquipmentLaneBand(): TimelineBand | undefined {
                         ...geometry,
                         top: geometry.top + equipmentHeight,
                     })}
-                    <div
-                        data-testid="timeline-lanes-row-area"
-                        className="absolute left-0 flex items-center"
-                        style={{
-                            top: geometry.top + lanesHeight,
-                            width: geometry.width,
-                            height: LANES_ROW_HEIGHT,
-                        }}
-                        onPointerDown={(e) => e.stopPropagation()}
-                    >
-                        <div className="sticky left-0 z-[5] px-4">
-                            <LanesRow />
-                        </div>
-                    </div>
                 </>
             ),
+            corner: <LanesButton />,
         };
     }, [shown, folded, lane, show, beats, facing]);
 }
@@ -518,7 +508,10 @@ export function EquipmentLaneView({
         >
             <div
                 data-testid="equipment-lane-header"
-                className="text-micro text-text-subtitle sticky left-0 z-10 flex w-fit items-center gap-4 px-4"
+                className={clsx(
+                    "text-micro text-text-subtitle z-10 flex w-fit items-center gap-4 px-4",
+                    LANE_LABEL_STICKY_CLASS,
+                )}
                 style={{ height: HEADER }}
                 // Right-click (or a long press) on the lane's name: hide it, fold it, or the lanes
                 onContextMenu={nameMenu.onContextMenu}
@@ -572,7 +565,10 @@ export function EquipmentLaneView({
             </div>
             {rows.length === 0 ? (
                 <div
-                    className="text-micro text-text-subtitle sticky left-0 flex w-fit items-center px-24"
+                    className={clsx(
+                        "text-micro text-text-subtitle flex w-fit items-center px-24",
+                        LANE_LABEL_STICKY_CLASS,
+                    )}
                     style={{ height: EMPTY }}
                 >
                     {t("cues.lane.empty")}
@@ -680,7 +676,10 @@ function EquipmentRow({
                 type="button"
                 data-testid="equipment-lane-row-name"
                 title={t("cues.lane.selectRow")}
-                className="bg-bg-1/80 text-micro text-text hover:text-accent touch:min-h-44 sticky left-0 z-[5] flex h-full max-w-160 items-center gap-4 truncate rounded-full px-6 backdrop-blur-sm"
+                className={clsx(
+                    "bg-bg-1/80 text-micro text-text hover:text-accent touch:min-h-44 z-[5] flex h-full max-w-160 items-center gap-4 truncate rounded-full px-6 backdrop-blur-sm",
+                    LANE_LABEL_STICKY_CLASS,
+                )}
                 onClick={() => activeFieldEditor()?.select(row.marcherIds)}
             >
                 <span className="truncate">{name}</span>
@@ -837,7 +836,7 @@ function Piece({
                 data-testid="equipment-lane-cue-name"
                 className="sticky flex min-w-0 items-center gap-4"
                 style={{
-                    left: nameInset + ROW_NAME_GAP,
+                    left: `calc(${LANE_LABEL_INSET} + ${nameInset + ROW_NAME_GAP}px)`,
                     marginLeft: Math.max(
                         0,
                         nameInset + ROW_NAME_GAP - left - BAR_PADDING,

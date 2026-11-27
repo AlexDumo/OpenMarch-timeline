@@ -154,3 +154,117 @@ test("a finger's tap on empty lane space moves the playhead there; a tap on the 
         await stop();
     }
 });
+
+// The Lanes button (#992): an icon in the timeline's bottom-left corner. It is found by its name,
+// the count beside its icon follows the hidden lanes, and it stays in the corner while the timeline scrolls.
+test("the Lanes button sits in the bottom-left corner, counts hidden lanes, stays put while the timeline scrolls, and never covers a lane label", async ({
+    show,
+}) => {
+    const { page } = show;
+    await waitForField(page);
+    await waitForIdle(page);
+    const lanes = page.getByRole("button", { name: "Lanes", exact: true });
+    await expect(lanes).toBeVisible();
+
+    const pane = (await page.getByTestId("timeline-pane").boundingBox())!;
+    const corner = async () => {
+        const box = (await lanes.boundingBox())!;
+        return {
+            x: box.x,
+            y: box.y,
+            left: box.x - pane.x,
+            bottom: pane.y + pane.height - (box.y + box.height),
+        };
+    };
+    const before = await corner();
+    expect(before.left).toBeLessThanOrEqual(80);
+    expect(before.bottom).toBeLessThanOrEqual(80);
+
+    // The viewport must really move, or "the button didn't move" proves nothing
+    const viewport = page.getByTestId("timeline-viewport");
+    const scroll = await viewport.evaluate((v) => {
+        const start = v.scrollLeft;
+        v.scrollLeft += 500;
+        return { start, end: v.scrollLeft };
+    });
+    expect(scroll.end - scroll.start).toBeGreaterThanOrEqual(400);
+    await waitForIdle(page);
+    // Retries until the layout settles, so a frame of motion doesn't fail the check
+    await expect
+        .poll(async () => {
+            const now = await corner();
+            return Math.max(
+                Math.abs(now.x - before.x),
+                Math.abs(now.y - before.y),
+            );
+        })
+        .toBeLessThanOrEqual(1);
+    // Scrolled, the lane's labels stick clear of the button rather than under it, measured from
+    // where a label's content starts (past its padding)
+    // By test id: its name changes once a lane is hidden
+    const buttonRight = async () => {
+        const box = (await page
+            .getByTestId("timeline-lanes-button")
+            .boundingBox())!;
+        return box.x + box.width;
+    };
+    for (const id of ["equipment-lane-header", "equipment-lane-row-name"]) {
+        await expect
+            .poll(async () => {
+                const contentLeft = await page
+                    .getByTestId(id)
+                    .first()
+                    .evaluate(
+                        (el) =>
+                            el.getBoundingClientRect().left +
+                            parseFloat(getComputedStyle(el).paddingLeft),
+                    );
+                return contentLeft - (await buttonRight());
+            })
+            .toBeGreaterThanOrEqual(0);
+    }
+    await viewport.evaluate((v) => {
+        v.scrollLeft = 0;
+    });
+
+    const rightWithoutCount = await buttonRight();
+    await page.getByTestId("equipment-lane-hide").click();
+    await expect(
+        page.getByRole("button", { name: "Lanes · 1 hidden", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByTestId("timeline-lanes-hidden-count")).toHaveText(
+        "1",
+    );
+    // The count widens the button, but no further right than where lane labels stick
+    const edge = await viewport.evaluate(
+        (v) =>
+            v.getBoundingClientRect().left +
+            parseFloat(
+                getComputedStyle(v).getPropertyValue("--lane-label-inset"),
+            ),
+    );
+    expect(await buttonRight()).toBeLessThanOrEqual(
+        Math.max(edge, rightWithoutCount) + 0.5,
+    );
+});
+
+// On a tablet the Lanes button is drawn small, and a finger's press just off its tile still opens
+// the list
+test("a finger's tap just off the Lanes button's tile opens the lanes list", async ({
+    show,
+}) => {
+    const { page } = show;
+    await waitForField(page);
+    await waitForIdle(page);
+    const stop = await emulateTouchScreen(page);
+    try {
+        const button = page.getByTestId("timeline-lanes-button");
+        await expect(button).toBeVisible();
+        const box = (await button.boundingBox())!;
+        expect(box.height).toBeLessThan(44);
+        await tap(page, { x: box.x + box.width / 2, y: box.y - 5 });
+        await expect(page.getByTestId("timeline-lanes-menu")).toBeVisible();
+    } finally {
+        await stop();
+    }
+});

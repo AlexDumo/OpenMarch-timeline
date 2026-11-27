@@ -4716,7 +4716,7 @@
             "dragEnd": "Drag to change where it ends",
             "hide": "Hide this lane",
             "lanes": "Lanes",
-            "hiddenCount": "· {count} hidden",
+            "lanesLabel": "{count, plural, =0 {Lanes} other {Lanes · # hidden}}",
             "find": "Find a lane…",
             "inThisShow": "In this show",
             "addLane": "Add a lane",
