@@ -94,6 +94,32 @@ describe("who goes where's menu", () => {
         ).not.toHaveAttribute("data-refused");
     });
 
+    it("shows a walking picture above the words in every tip, refused ones too", () => {
+        renderMenu("nearest", false);
+        openMenu();
+        fireEvent.pointerEnter(screen.getByTestId("shape-order-inside"));
+        const picture = screen.getAllByTestId(
+            "shape-order-inside-animation",
+        )[0]!;
+        expect(picture).toHaveAttribute("aria-hidden", "true");
+        expect(picture.getAttribute("data-sequence")).toBe("3 2 1 4 7 6 5");
+        expect(
+            picture.querySelectorAll(
+                '[data-testid="shape-order-inside-animation-marcher"]',
+            ).length,
+        ).toBe(7);
+        // No drill numbers on the dots, so they can't pass for the show's own marchers; Inside
+        // out's two ends are ringed instead
+        expect(picture.querySelectorAll("text")).toHaveLength(0);
+        expect(picture.querySelectorAll("[data-lead]")).toHaveLength(2);
+        // Screen readers still hear just the words
+        expect(
+            screen.getByTestId("shape-order-inside"),
+        ).toHaveAccessibleDescription(
+            /^The middle of the line goes to the ends of the shape\. These marchers have no order yet/,
+        );
+    });
+
     it("greys out an answer that doesn't fit, says why, and won't pick it", () => {
         const pick = renderMenu("nearest", false);
         openMenu();

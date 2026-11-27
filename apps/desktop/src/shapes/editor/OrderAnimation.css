@@ -1,0 +1,39 @@
+/*
+ * Who goes where's walking pictures (OrderAnimation.tsx): each marcher waits where they stand,
+ * walks at an even pace to the spot the option gives them (linear, as a move plays on the field),
+ * holds there, fades and starts again. Everyone takes the same time, as in a move. With reduced
+ * motion everyone just stands on their spot, with their walk drawn from where they started.
+ */
+.order-walk {
+    animation: order-walk 3.6s linear infinite;
+}
+
+@keyframes order-walk {
+    0% {
+        transform: translate(0, 0);
+        opacity: 0;
+    }
+    5% {
+        opacity: 1;
+    }
+    18% {
+        transform: translate(0, 0);
+    }
+    62% {
+        transform: translate(var(--dx), var(--dy));
+    }
+    92% {
+        opacity: 1;
+    }
+    100% {
+        transform: translate(var(--dx), var(--dy));
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .order-walk {
+        animation: none;
+        transform: translate(var(--dx), var(--dy));
+    }
+}
