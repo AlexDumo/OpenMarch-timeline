@@ -272,8 +272,7 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
             DROP TRIGGER IF EXISTS timeline_routes_dt;
             ALTER TABLE timeline_routes DROP COLUMN exact_path;
         `),
-    // Performer figures (ADR 0019): a new table only. Its file is 0031 (0030 is the shape-count
-    // branch's), but it is the journal's entry 30.
+    // Performer figures (ADR 0019): a new table only.
     30: (db) => dropTables(db, ["performer_figures"]),
 };
 

@@ -450,7 +450,11 @@ async function showFigures(page, wait, withDots = false) {
     await page.getByTestId("field-display-figures-on").click();
     if (withDots)
         await page.getByTestId("field-display-figures-withDots").click();
-    for (let i = 0; i < 120 && !logs.some((l) => l.includes("Performer figures: baked")); i++)
+    for (
+        let i = 0;
+        i < 120 && !logs.some((l) => l.includes("Performer figures: baked"));
+        i++
+    )
         await wait(250);
     if (!logs.some((l) => l.includes("Performer figures: baked")))
         throw new Error("the show's figures weren't baked");
@@ -460,8 +464,13 @@ async function showFigures(page, wait, withDots = false) {
 /** Zooms the field by `factor` about the middle of the marchers `ids` (Ctrl + wheel), off camera. */
 async function zoomOnMarchers(page, ids, factor) {
     const at = await page.evaluate((ids) => {
-        const ms = window.fieldTest.marchers().filter((m) => ids.includes(m.id));
-        const sum = ms.reduce((a, m) => ({ x: a.x + m.screen.x, y: a.y + m.screen.y }), { x: 0, y: 0 });
+        const ms = window.fieldTest
+            .marchers()
+            .filter((m) => ids.includes(m.id));
+        const sum = ms.reduce(
+            (a, m) => ({ x: a.x + m.screen.x, y: a.y + m.screen.y }),
+            { x: 0, y: 0 },
+        );
         return { x: sum.x / ms.length, y: sum.y / ms.length };
     }, ids);
     await page.mouse.move(at.x, at.y);
@@ -478,7 +487,11 @@ async function zoomOnMarchers(page, ids, factor) {
 /** The screen box around the marchers `ids`, `pad` px out, inside the window */
 async function boxAroundMarchers(page, ids, pad) {
     const pts = await page.evaluate(
-        (ids) => window.fieldTest.marchers().filter((m) => ids.includes(m.id)).map((m) => m.screen),
+        (ids) =>
+            window.fieldTest
+                .marchers()
+                .filter((m) => ids.includes(m.id))
+                .map((m) => m.screen),
         ids,
     );
     const x = Math.max(0, Math.floor(Math.min(...pts.map((p) => p.x)) - pad));
@@ -486,8 +499,12 @@ async function boxAroundMarchers(page, ids, pad) {
     return {
         x,
         y,
-        width: Math.min(1600, Math.ceil(Math.max(...pts.map((p) => p.x)) + pad)) - x,
-        height: Math.min(1000, Math.ceil(Math.max(...pts.map((p) => p.y)) + pad)) - y,
+        width:
+            Math.min(1600, Math.ceil(Math.max(...pts.map((p) => p.x)) + pad)) -
+            x,
+        height:
+            Math.min(1000, Math.ceil(Math.max(...pts.map((p) => p.y)) + pad)) -
+            y,
     };
 }
 

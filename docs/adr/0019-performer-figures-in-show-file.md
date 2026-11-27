@@ -35,9 +35,9 @@ figures show shape and size, not the uniform's colors.
    worker the editor had no long task, and the field missed at most a frame or two while the
    shaders compiled. The field keeps the shipped set until every performer's picture is ready.
 3. **The show file keeps them** in a `performer_figures` table: one row per fingerprint with the
-   picture (WebP) and where the performer stands in it. Migration 0031, numbered past the
-   shape-count branch's 0030 and dated before it, so whichever merges first a file takes both; the
-   app also makes the table on its first write when a file missed the migration. The table is a
+   picture (WebP) and where the performer stands in it. Migration 0030, dated before the
+   shape-count branch's migration (which takes the next number when it merges), so a file takes
+   both whichever order they land in; the app also makes the table on its first write when a file missed the migration. The table is a
    cache:
    - A row whose fingerprint no look uses is ignored, and dropped when the figures are next
      written. A row that can't be decoded is ignored and baked again.

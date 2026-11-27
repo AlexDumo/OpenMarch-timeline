@@ -24,7 +24,7 @@ export interface PerformerFiguresWrite {
 }
 
 /**
- * The table, as migration 0031 makes it. Made here too when a file missed that migration (a file
+ * The table, as migration 0030 makes it. Made here too when a file missed that migration (a file
  * from a branch whose migration is dated after it), so the figures never depend on the order
  * branches merged in.
  */
