@@ -16,17 +16,6 @@ import layout from "./figures.json";
 /** Field units in a meter (1 unit = 2 in). */
 export const UNITS_PER_METER = 1 / 0.0508;
 
-/**
- * The fewest CSS pixels a meter may cover for figures to draw: closer than that a figure is a
- * speck, so the field draws dots.
- */
-export const MIN_PX_PER_METER = 28;
-
-/** Whether figures draw at `zoom` (CSS pixels per field unit), or dots stand in. */
-export function figuresDrawnAt(zoom: number): boolean {
-    return zoom * UNITS_PER_METER >= MIN_PX_PER_METER;
-}
-
 /** A figure in the atlas: its picture, in field units, and where the performer stands in it. */
 export interface Figure {
     /** `[u0, v0, u1, v1]`, v down (the texture isn't flipped) */

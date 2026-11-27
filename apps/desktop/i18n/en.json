@@ -814,8 +814,6 @@
         "label": "Field display",
         "overlays": "Show on field",
         "overlaysHint": "Drill numbers, equipment icons, facing, figures, shape outlines and venue",
-        "overlaysChangedLabel": "{label}, some changed",
-        "reset": "Reset",
         "labels": "Drill numbers",
         "labelsNamesExample": "T12",
         "labelsNumbersExample": "12",

@@ -352,41 +352,6 @@ describe("FieldDisplayBar", () => {
         venue.kit = "hs";
     });
 
-    it("dots the button while anything differs from how it ships, and Reset puts it all back", () => {
-        open();
-        const button = screen.getByTestId("field-display-overlays");
-        expect(screen.queryByTestId("field-display-overlays-dot")).toBeNull();
-        panel();
-        expect(screen.queryByTestId("field-display-overlays-reset")).toBeNull();
-        fireEvent.click(screen.getByRole("switch", { name: "Drill numbers" }));
-        fireEvent.click(screen.getByRole("switch", { name: "Facing" }));
-        fireEvent.click(screen.getByTestId("field-display-shapes-always"));
-        expect(screen.getByTestId("field-display-overlays-dot")).toBeTruthy();
-        expect(button.getAttribute("aria-label")).toBe(
-            "Show on field, some changed",
-        );
-        fireEvent.click(screen.getByTestId("field-display-overlays-reset"));
-        expect(settings()).toMatchObject({
-            marcherLabels: "names",
-            facingArrows: false,
-            shapes: "selected",
-            equipmentIcons: "changed",
-            equipmentIconSections: [],
-            fieldVenue: "off",
-        });
-        expect(screen.queryByTestId("field-display-overlays-dot")).toBeNull();
-    });
-
-    it("leaves Settings › Field's looks alone: a label size or icon place isn't a change here", () => {
-        useUiSettingsStore.getState().setUiSettings({
-            ...settings(),
-            marcherLabelSize: "large",
-            equipmentIconPlace: "dot",
-        });
-        open();
-        expect(screen.queryByTestId("field-display-overlays-dot")).toBeNull();
-    });
-
     it("opens Settings at Field from the footer", () => {
         const opened = vi.fn();
         const unregister = registerActionHandler("openSettings", {

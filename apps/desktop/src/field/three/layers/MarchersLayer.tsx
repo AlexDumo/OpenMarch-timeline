@@ -23,7 +23,6 @@ import { dotSizes, SELECTION_RGBA01 } from "../selectionRing";
 import type { LabelIcons } from "@/cues/useEquipmentIcons";
 import type { EquipmentIconPlace } from "@/cues/equipmentIcons";
 import { useIconAtlas } from "../iconBatch";
-import { figuresDrawnAt } from "../figures/figureAtlas";
 
 /**
  * Every marcher's dot in one instanced draw, shaded in the fragment shader so
@@ -257,7 +256,7 @@ export default function MarchersLayer({
     iconPlace?: EquipmentIconPlace;
     /**
      * Performer figures stand in for the dots (fork #1319), once loaded: only selection rings
-     * draw here, except zoomed out too far for figures, where the dots come back
+     * draw here
      */
     figuresInstead?: boolean;
     /** Performer figures draw under the dots (fork #1319): the dots shrink to sit on them */
@@ -334,10 +333,7 @@ export default function MarchersLayer({
         const { zoom } = draw.view.getState();
         const sizes = dotSizes(zoom);
         const { ringGap, ringWidth } = sizes;
-        const scale =
-            figuresUnder && figuresDrawnAt(zoom)
-                ? sizes.scale * DOT_ON_FIGURE
-                : sizes.scale;
+        const scale = figuresUnder ? sizes.scale * DOT_ON_FIGURE : sizes.scale;
         const { uniforms } = mesh.material;
         uniforms.uScale.value = scale;
         // In the shape's own units, as the edge distance `d`
@@ -354,7 +350,7 @@ export default function MarchersLayer({
                 ? (icons?.at(marchers.drawnBeat) ?? null)
                 : null;
         const iconDotsKey = iconDots?.key ?? "";
-        const figureDots = figuresInstead && figuresDrawnAt(zoom);
+        const figureDots = figuresInstead;
         const restyled =
             resized ||
             iconDotsKey !== last.iconDotsKey ||

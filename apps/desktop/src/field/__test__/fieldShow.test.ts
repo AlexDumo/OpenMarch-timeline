@@ -1,11 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { defaultSettings, useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
-    changedFieldShow,
     equipmentSectionChoices,
     equipmentWho,
     equipmentWhoInShow,
-    resetFieldShow,
     setEquipmentIcons,
     setFieldChoice,
     setFieldShown,
@@ -16,7 +14,6 @@ import {
 /** Show on field's rules (fork #1332), as the panel, the View menu and the palette run them */
 
 const settings = () => useUiSettingsStore.getState().uiSettings;
-const nowhere = { followTheLeader: false, view3dOpen: false };
 
 beforeEach(() => {
     useUiSettingsStore.getState().setUiSettings({ ...defaultSettings });
@@ -32,22 +29,14 @@ describe("Show on field", () => {
         expect(settings().shapes).toBe("always");
     });
 
-    it("Figures: on to figures alone the first time, back to With dots after; Reset puts dots back", () => {
+    it("Figures: on to figures alone the first time, back to With dots after", () => {
         toggleFieldShown("performerFigures");
         expect(settings().performerFigures).toBe("figures");
-        expect(changedFieldShow(settings(), nowhere)).toContain(
-            "performerFigures",
-        );
         setFieldChoice("performerFigures", "withDots");
         toggleFieldShown("performerFigures");
         expect(settings().performerFigures).toBe("off");
         toggleFieldShown("performerFigures");
         expect(settings().performerFigures).toBe("withDots");
-        resetFieldShow();
-        expect(settings().performerFigures).toBe("off");
-        expect(changedFieldShow(settings(), nowhere)).not.toContain(
-            "performerFigures",
-        );
     });
 
     it("turns Line order on to Selected the first time", () => {
@@ -106,34 +95,5 @@ describe("Show on field", () => {
             kind: "sections",
             sections: ["Battery"],
         });
-    });
-
-    it("counts a mode's row only in its mode, and resets every row", () => {
-        useUiSettingsStore.getState().setUiSettings({
-            ...settings(),
-            lineOrder: "always",
-            view3dCameraOnField: true,
-        });
-        expect(changedFieldShow(settings(), nowhere)).toEqual([]);
-        expect(
-            changedFieldShow(settings(), {
-                followTheLeader: true,
-                view3dOpen: true,
-            }),
-        ).toEqual(["lineOrder", "view3dCameraOnField"]);
-        toggleEquipmentSection("Color Guard");
-        toggleFieldShown("marcherLabels");
-        expect(changedFieldShow(settings(), nowhere)).toEqual([
-            "marcherLabels",
-            "equipmentIconSections",
-        ]);
-        resetFieldShow();
-        expect(
-            changedFieldShow(settings(), {
-                followTheLeader: true,
-                view3dOpen: true,
-            }),
-        ).toEqual([]);
-        expect(settings().fieldShowLast).toEqual({});
     });
 });

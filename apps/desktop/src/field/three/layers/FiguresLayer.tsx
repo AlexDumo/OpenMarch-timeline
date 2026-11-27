@@ -14,12 +14,7 @@ import { resolveMarcherLook } from "@/entity-components/appearance";
 import type { FieldMarchers } from "../fieldMarchers";
 import type { FieldDimming } from "../fieldDimming";
 import { notDefinedAmount, type FieldNotDefined } from "../fieldNotDefined";
-import { useFieldDraw } from "../fieldDrawContext";
-import {
-    figureOf,
-    figuresDrawnAt,
-    type FigureAtlas,
-} from "../figures/figureAtlas";
+import { figureOf, type FigureAtlas } from "../figures/figureAtlas";
 
 /**
  * Every performer's figure (fork #1319) in one instanced draw: a square of the figure atlas per
@@ -71,7 +66,7 @@ type Drawn = {
     keys: ReadonlyMap<number, string> | null;
 };
 
-/** The performers as figures, while `atlas` is loaded; the dots stand in when zoomed far out. */
+/** The performers as figures, while `atlas` is loaded, at every zoom. */
 export default function FiguresLayer({
     marchers,
     dimming,
@@ -91,7 +86,6 @@ export default function FiguresLayer({
     renderOrder: number;
 }) {
     const invalidate = useThree((s) => s.invalidate);
-    const draw = useFieldDraw();
     const drawn = useRef<Drawn>({
         version: -1,
         idsVersion: -1,
@@ -142,8 +136,6 @@ export default function FiguresLayer({
     );
 
     useFrame(() => {
-        mesh.visible = figuresDrawnAt(draw.view.getState().zoom);
-        if (!mesh.visible) return;
         const last = drawn.current;
         const geometry = mesh.geometry;
         const resized =
