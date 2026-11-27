@@ -997,6 +997,17 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: [],
     },
+    // Performers drawn as figures seen from above (fork #1319): Show on field's Figures, back to
+    // the choice last shown (with or without dots). Unbound
+    togglePerformerFigures: {
+        labelKey: "actions.ui.togglePerformerFigures",
+        keywordsKey: "actions.ui.togglePerformerFiguresKeywords",
+        toggleOnKey: "actions.ui.showPerformerFigures",
+        toggleOffKey: "actions.ui.hidePerformerFigures",
+        category: "ui",
+        scope: "canvas",
+        defaultBindings: [],
+    },
     // Facing carets on the field (fork #1316): Show on field's Facing. Unbound
     toggleFacingArrows: {
         labelKey: "actions.ui.toggleFacingArrows",

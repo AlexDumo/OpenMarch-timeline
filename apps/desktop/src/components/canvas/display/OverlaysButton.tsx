@@ -31,12 +31,10 @@ import {
 } from "@/global/classes/Sections";
 import { venueShows } from "@/field/three/venueUnderlay/fieldVenue";
 import {
-    changedFieldShow,
     equipmentSectionChoices,
     equipmentWho,
     equipmentWhoInShow,
     fieldShowValue,
-    resetFieldShow,
     setEquipmentIcons,
     setFieldChoice,
     toggleEquipmentSection,
@@ -67,16 +65,12 @@ function useFieldShowContext() {
  * linked from the footer. Precedents: Blender's viewport Overlays popover, Figma's View menu.
  *
  * Every switch runs its action, which the View menu and the palette run too
- * (`field/fieldShow.ts` holds the rules). A dot on the button says something differs from how
- * it shipped, and Reset puts it all back.
+ * (`field/fieldShow.ts` holds the rules). What you set is how you want the field, so the panel
+ * has no Reset and the button no "changed" dot (owner, 2026-11-27).
  */
 export default function OverlaysButton() {
     const { t } = useTranslate();
     const context = useFieldShowContext();
-    const changed = useUiSettingsStore(
-        useShallow((s) => changedFieldShow(s.uiSettings, context)),
-    );
-    const anyChanged = changed.length > 0;
     const label = t("fieldDisplay.overlays");
     return (
         <Popover.Root>
@@ -88,28 +82,11 @@ export default function OverlaysButton() {
                 <Popover.Trigger asChild>
                     <button
                         type="button"
-                        aria-label={
-                            anyChanged
-                                ? t("fieldDisplay.overlaysChangedLabel", {
-                                      label,
-                                  })
-                                : label
-                        }
+                        aria-label={label}
                         data-testid="field-display-overlays"
-                        data-changed={anyChanged}
-                        className={clsx(
-                            DISPLAY_BUTTON_CLASS,
-                            "text-text relative",
-                        )}
+                        className={clsx(DISPLAY_BUTTON_CLASS, "text-text")}
                     >
                         <EyeIcon size={16} />
-                        {anyChanged && (
-                            <span
-                                aria-hidden
-                                data-testid="field-display-overlays-dot"
-                                className="bg-accent touch:top-8 touch:right-8 absolute top-2 right-2 size-6 rounded-full"
-                            />
-                        )}
                     </button>
                 </Popover.Trigger>
             </ShortcutTooltip>
@@ -128,18 +105,8 @@ export default function OverlaysButton() {
                         "max-h-[var(--radix-popover-content-available-height)] overflow-y-auto overscroll-contain",
                     )}
                 >
-                    <div className="touch:min-h-44 flex min-h-26 items-center justify-between gap-8">
+                    <div className="touch:min-h-44 flex min-h-26 items-center">
                         <h2 className="text-body font-medium">{label}</h2>
-                        {anyChanged && (
-                            <button
-                                type="button"
-                                data-testid="field-display-overlays-reset"
-                                onClick={resetFieldShow}
-                                className="text-sub text-text-subtitle border-stroke hover:text-accent focus-visible:ring-accent touch:min-h-44 rounded-full border px-8 py-2 outline-hidden transition-colors duration-150 focus-visible:ring-2"
-                            >
-                                {t("fieldDisplay.reset")}
-                            </button>
-                        )}
                     </div>
                     <MainRows />
                     <ModeRows context={context} />
@@ -228,6 +195,11 @@ const LABEL_CHOICES: readonly Choice<"names" | "numbers">[] = [
         spokenKey: "fieldDisplay.labelsNumbers",
     },
 ];
+/** Figures alone, or with each performer's dot on top (fork #1319) */
+const FIGURE_CHOICES: readonly Choice<"figures" | "withDots">[] = [
+    { value: "figures", key: "fieldDisplay.figuresAlone" },
+    { value: "withDots", key: "fieldDisplay.figuresWithDots" },
+];
 const SELECTED_OR_ALL: readonly Choice<"selected" | "always">[] = [
     { value: "selected", key: "fieldDisplay.selected" },
     { value: "always", key: "fieldDisplay.all" },
@@ -304,7 +276,7 @@ const onValue = (s: UiSettings, key: FieldShowChoiceKey) => {
     return value === "off" ? null : value;
 };
 
-/** The five rows always there: drill numbers, equipment icons, facing, shape outlines, venue */
+/** The rows always there: drill numbers, equipment icons, facing, figures, shape outlines, venue */
 function MainRows() {
     const { t } = useTranslate();
     const s = useUiSettingsStore(
@@ -312,6 +284,7 @@ function MainRows() {
             labels: onValue(state.uiSettings, "marcherLabels"),
             equipment: onValue(state.uiSettings, "equipmentIcons"),
             facing: state.uiSettings.facingArrows === true,
+            figures: onValue(state.uiSettings, "performerFigures"),
             shapes: onValue(state.uiSettings, "shapes"),
             venue: (state.uiSettings.fieldVenue ?? "off") !== "off",
         })),
@@ -360,6 +333,30 @@ function MainRows() {
                     checked={s.facing}
                     action="toggleFacingArrows"
                     testId="field-display-facing"
+                />
+            </Row>
+            {/* Each performer as their instrument seen from above, to scale (fork #1319) */}
+            <Row
+                name={t("fieldDisplay.figures")}
+                choice={
+                    s.figures && (
+                        <Choices
+                            name={t("fieldDisplay.figures")}
+                            choices={FIGURE_CHOICES}
+                            value={s.figures as "figures" | "withDots"}
+                            onChange={(value) =>
+                                setFieldChoice("performerFigures", value)
+                            }
+                            testId="field-display-figures"
+                        />
+                    )
+                }
+            >
+                <OnOff
+                    name={t("fieldDisplay.figures")}
+                    checked={s.figures !== null}
+                    action="togglePerformerFigures"
+                    testId="field-display-figures-on"
                 />
             </Row>
             {/* Placed boxes' outlines (docs/timeline/research/shapes/07-placed-boxes.md) */}

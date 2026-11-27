@@ -39,3 +39,4 @@ Use this template:
 - [0015: Cue model: one parameter per cue type](0015-cue-model.md)
 - [0016: A move can follow a drawn path](0016-moves-follow-drawn-paths.md) (amended by 0017)
 - [0017: A group path is one route; lanes bind slots to it](0017-lanes-on-slots.md)
+- [0019: Performer figures are baked by the app and kept in the show file](0019-performer-figures-in-show-file.md)

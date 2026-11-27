@@ -1,4 +1,8 @@
 import type AudioFile from "@/global/classes/AudioFile";
+import type {
+    PerformerFigureRow,
+    PerformerFiguresWrite,
+} from "../database/performerFigures";
 import type { ModifiedAudioFileArgs } from "@/global/classes/AudioFile";
 import type Page from "@/global/classes/Page";
 import {
@@ -669,6 +673,14 @@ const APP_API = {
     getRedoStackLength: () => ipcRenderer.invoke("history:getRedoStackLength"),
 
     // **** Timing Objects ****
+
+    // Performer figures for the 2D field (ADR 0019): a cache; writing them isn't an edit
+    readPerformerFigures: (fingerprints?: readonly string[]) =>
+        ipcRenderer.invoke("figures:read", fingerprints ?? null) as Promise<
+            PerformerFigureRow[]
+        >,
+    writePerformerFigures: (write: PerformerFiguresWrite) =>
+        ipcRenderer.invoke("figures:write", write) as Promise<void>,
 
     // Audio File
     launchInsertAudioFileDialogue: () =>

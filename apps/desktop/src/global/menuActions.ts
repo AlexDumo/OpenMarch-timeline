@@ -82,6 +82,7 @@ export const SHOW_ON_FIELD_MENU_ACTIONS: readonly MenuAction[] = [
     { action: "toggleMarcherLabels", labelKey: "fieldDisplay.labels" },
     { action: "toggleEquipmentIcons", labelKey: "fieldDisplay.equipmentIcons" },
     { action: "toggleFacingArrows", labelKey: "fieldDisplay.facing" },
+    { action: "togglePerformerFigures", labelKey: "fieldDisplay.figures" },
     { action: "toggleShapeOutlines", labelKey: "fieldDisplay.shapes" },
     { action: "toggleFieldVenue", labelKey: "toolbar.view.venue" },
 ];

@@ -272,6 +272,8 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
             DROP TRIGGER IF EXISTS timeline_routes_dt;
             ALTER TABLE timeline_routes DROP COLUMN exact_path;
         `),
+    // Performer figures (ADR 0019): a new table only.
+    30: (db) => dropTables(db, ["performer_figures"]),
 };
 
 /**

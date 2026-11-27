@@ -1,0 +1,70 @@
+---
+title: See instruments to scale on the field
+description: Draw each performer on the 2D field as their instrument seen from above, at real size, instead of a dot, to see how big tubas and bass drums sit in a form.
+type: how-to
+covers:
+  - apps/desktop/src/components/canvas/display/OverlaysButton.tsx
+  - apps/desktop/src/field/three/figures
+  - apps/desktop/src/field/three/layers/FiguresLayer.tsx
+  - action:togglePerformerFigures
+  - i18n:fieldDisplay.figures
+sidebar:
+  order: 5
+---
+
+import Media from "@/components/docs/Media.astro";
+import Ui from "@/components/docs/Ui.astro";
+import InShort from "@/components/docs/InShort.astro";
+import { Steps } from "@astrojs/starlight/components";
+
+<InShort>Select <Ui k="fieldDisplay.overlays" /> on the field's display bar (top right of the field) and turn on <Ui k="fieldDisplay.figures" />.</InShort>
+
+The 2D field can draw each performer as a figure: a small picture of a performer seen from straight above, holding their section's instrument, at its real size on the field. Tubas, bass drums and flags take up the room they do on a real field, so you can see whether a form has space for them. Figures are off until you turn them on, and the choice is kept on this computer, not in the show.
+
+## Show figures instead of dots
+
+<Steps>
+
+1. On the display bar at the top right of the field, select <Ui k="fieldDisplay.overlays" /> (the eye).
+
+2. Turn on <Ui k="fieldDisplay.figures" />.
+
+3. Beside the switch, choose <Ui k="fieldDisplay.figuresAlone" /> for figures only, or <Ui k="fieldDisplay.figuresWithDots" /> to draw each performer's dot on top of their figure.
+
+</Steps>
+
+<Media
+  id="figures-on-field"
+  alt="The 2D field zoomed in on three rows of brass: three tubas with their wide gold bells at the back, baritones in the middle row and trumpets in front, each a figure in the show's uniform seen from above holding its horn, with its drill number above it."
+/>
+
+<Media
+  id="figures-with-dots"
+  alt="The same rows of brass with With dots chosen: each figure has the performer's blue dot drawn over its head."
+/>
+
+Figures show at every zoom. Zoomed out to the whole field they're small, but you can still tell a tuba from a trumpet; zoom in to see them in detail.
+
+To turn figures on or off without the panel, use View › <Ui k="fieldDisplay.figures" plain /> in the app menu, or <Ui k="actions.ui.showPerformerFigures" /> and <Ui k="actions.ui.hidePerformerFigures" /> in the command palette.
+
+## What the figures show
+
+Each figure is made from the 3D View's own models, so it shows what the 3D View shows for that performer: their section's instrument, held as they stand at attention. It follows the show's 3D View settings ([Change the venue and uniforms](/guides/3d-view/venue-and-uniforms/#choose-the-horns)):
+
+- <Ui k="view3d.settings.tuba" />: a <Ui k="view3d.tuba.contra" plain /> or a <Ui k="view3d.tuba.sousaphone" plain />, whichever the show uses.
+- <Ui k="view3d.settings.brassFinish" />: brass horns in gold or silver.
+- Bass drums: each bass drum player carries their own drum size, from smallest to largest, as in the 3D View.
+
+Each figure wears the show's uniform, as the 3D View dresses it ([Change the venue and uniforms](/guides/3d-view/venue-and-uniforms/)), and drum shells and flag silks take their section's color. Everyone has the same body, so what you compare between figures is what they carry. Until a show's figures are made, the field shows ready-made grey ones.
+
+Figures don't yet change with Equipment cues (someone handed a flag still shows their own instrument), and they all face the front, whichever way the performers face.
+
+## When a show's figures are made
+
+OpenMarch makes the figures a show needs in the background, the first time you turn figures on for that show, and again after a setting that changes them, such as <Ui k="view3d.settings.tuba" plain />. Until they're ready, the field shows a ready-made set; you can keep working the whole time. The show keeps its figures, so the next time you open it they're there at once, on this computer or another one.
+
+## Related
+
+- [See the venue on the field](/guides/3d-view/venue-on-the-field/): the 3D View's stadium or gym under the 2D grid.
+- [Change the venue and uniforms](/guides/3d-view/venue-and-uniforms/): the settings the figures follow.
+- [Change what performers hold](/guides/marchers/equipment/): Equipment cues, which the 3D View shows.

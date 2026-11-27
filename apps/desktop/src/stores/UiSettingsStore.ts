@@ -123,6 +123,11 @@ export interface UiSettings {
     /** Where those icons go: after the drill number, in place of the dot, or of the number */
     equipmentIconPlace?: EquipmentIconPlace;
     /**
+     * How the field draws performers (fork #1319): dots, figures seen from above, or figures
+     * with their dots on top: Show on field's Figures. Dots by default.
+     */
+    performerFigures?: PerformerFigures;
+    /**
      * Whether the field draws a caret in front of every performer's dot the way they face (fork #1316):
      * Show on field's Facing. Off by default. Was `facingMarks` (Not front, Everyone
      * or Off) in early builds; `parseSettings` carries it over
@@ -176,8 +181,18 @@ export interface FieldShowLast {
     equipmentIcons?: Exclude<EquipmentIcons, "off">;
     shapes?: Exclude<ShapeOutlines, "off">;
     lineOrder?: Exclude<ShapeOutlines, "off">;
+    performerFigures?: Exclude<PerformerFigures, "off">;
 }
 export type { EquipmentIconPlace, EquipmentIcons };
+
+/** How the field draws performers (fork #1319): dots, figures, or figures with their dots on top. */
+export type PerformerFigures = "off" | "figures" | "withDots";
+
+const PERFORMER_FIGURES: readonly PerformerFigures[] = [
+    "off",
+    "figures",
+    "withDots",
+];
 
 export const FIELD_VENUE_LOOKS = [
     "off",
@@ -248,6 +263,7 @@ export const defaultSettings: UiSettings = {
     equipmentIcons: "changed",
     equipmentIconSections: [],
     equipmentIconPlace: "beside",
+    performerFigures: "off",
     facingArrows: false,
     shapeWalks: false,
     followTheLeader: false,
@@ -347,6 +363,11 @@ export const parseSettings = (raw: string): UiSettings => {
         equipmentIcons: parseEquipmentIcons(parsed.equipmentIcons),
         equipmentIconSections: stringList(parsed.equipmentIconSections),
         equipmentIconPlace: parseEquipmentIconPlace(parsed.equipmentIconPlace),
+        performerFigures: oneOf(
+            PERFORMER_FIGURES,
+            parsed.performerFigures,
+            "off",
+        ),
         facingArrows: parsed.facingArrows === true,
         startFlagPositions: parseStartFlagPositions(parsed.startFlagPositions),
         fieldVenue: oneOf(FIELD_VENUE_LOOKS, parsed.fieldVenue, "off"),
@@ -400,6 +421,8 @@ const parseFieldShowLast = (value: unknown): FieldShowLast => {
         last.shapes = v.shapes;
     if (v.lineOrder === "selected" || v.lineOrder === "always")
         last.lineOrder = v.lineOrder;
+    if (v.performerFigures === "figures" || v.performerFigures === "withDots")
+        last.performerFigures = v.performerFigures;
     return last;
 };
 

@@ -742,14 +742,6 @@ test("change: the field display bar holds paths and one Show on field panel (a s
     const facing = panel.getByRole("switch", { name: "Facing" });
     await facing.click();
     await expect(facing).toBeChecked();
-    // Something differs from how it ships: the button says so, and Reset puts it back
-    await expect(overlays).toHaveAttribute("data-changed", "true");
-    await panel.getByTestId("field-display-overlays-reset").click();
-    await expect(facing).not.toBeChecked();
-    await expect(
-        panel.getByRole("switch", { name: "Drill numbers" }),
-    ).toBeChecked();
-    await expect(overlays).toHaveAttribute("data-changed", "false");
     await page.keyboard.press("Escape");
     await expect(panel).toHaveCount(0);
 

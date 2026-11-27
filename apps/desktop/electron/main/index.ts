@@ -2540,6 +2540,7 @@ async function openShowWithSaveMode(
                     showPath: session.showPath,
                     workingPath: session.workingPath,
                     onActivity: () => session.noteActivity(),
+                    quietly: (write) => session.quietly(write),
                 }),
         });
     } catch (error) {

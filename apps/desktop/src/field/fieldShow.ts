@@ -4,11 +4,12 @@
  * actions set it. One place for the rules, so each of those does exactly the same thing:
  *
  * - A row with a choice beside its switch (Drill numbers, Equipment icons, Shape outlines, Line
- *   order) keeps that choice while off: switching it off remembers it in `fieldShowLast`, and
+ *   order, Figures) keeps that choice while off: switching it off remembers it in `fieldShowLast`, and
  *   switching it on brings it back (its default the first time).
  * - Equipment icons' "who" is Holding something else, Everyone, or some of the show's sections.
- * - Reset puts every row back as shipped. Set-once preferences (label size and position, where
- *   equipment icons go, the venue's look) live in Settings › Field and aren't touched.
+ * - What you set is how you want the field, kept on this computer: there's no Reset (owner,
+ *   2026-11-27). Set-once looks (label size and position, where equipment icons go, the venue's
+ *   look) live in Settings › Field.
  */
 import {
     useUiSettingsStore,
@@ -26,6 +27,7 @@ const SHIPPED = {
     equipmentIcons: "changed",
     shapes: "selected",
     lineOrder: "off",
+    performerFigures: "off",
 } as const satisfies Record<FieldShowChoiceKey, string>;
 
 /** What a row turns on to when it has never been on: its shipped choice, or Selected for order */
@@ -34,6 +36,7 @@ const FIRST_ON: Required<FieldShowLast> = {
     equipmentIcons: "changed",
     shapes: "selected",
     lineOrder: "selected",
+    performerFigures: "figures",
 };
 
 const change = (patch: Partial<UiSettings>) => {
@@ -161,61 +164,4 @@ export function toggleEquipmentSection(section: string): void {
             ? { equipmentIcons: s.fieldShowLast?.equipmentIcons ?? "changed" }
             : {}),
     });
-}
-
-/** Where Show on field is right now: rows that only apply in a mode count only in that mode */
-export interface FieldShowContext {
-    /** Follow-the-leader is on, so Line order applies */
-    followTheLeader: boolean;
-    /** The 3D View is open, so 3D View camera applies */
-    view3dOpen: boolean;
-}
-
-/** Each row Reset puts back, with its shipped value */
-const ROW_DEFAULTS = {
-    marcherLabels: "names",
-    equipmentIcons: "changed",
-    equipmentIconSections: [] as string[],
-    facingArrows: false,
-    shapes: "selected",
-    fieldVenue: "off",
-    lineOrder: "off",
-    view3dCameraOnField: false,
-} satisfies Partial<UiSettings>;
-
-export type FieldShowRow = keyof typeof ROW_DEFAULTS;
-
-/** The rows that differ from how they ship, so the button shows its dot and the panel Reset */
-export function changedFieldShow(
-    s: UiSettings,
-    { followTheLeader, view3dOpen }: FieldShowContext,
-): FieldShowRow[] {
-    const value: Record<FieldShowRow, unknown> = {
-        marcherLabels: fieldShowValue(s, "marcherLabels"),
-        equipmentIcons: fieldShowValue(s, "equipmentIcons"),
-        // Sections only count while the icons show
-        equipmentIconSections:
-            fieldShowValue(s, "equipmentIcons") === "off"
-                ? []
-                : (s.equipmentIconSections ?? []),
-        facingArrows: s.facingArrows === true,
-        shapes: fieldShowValue(s, "shapes"),
-        fieldVenue: s.fieldVenue ?? "off",
-        lineOrder: followTheLeader ? fieldShowValue(s, "lineOrder") : "off",
-        view3dCameraOnField: view3dOpen && s.view3dCameraOnField === true,
-    };
-    return (Object.keys(ROW_DEFAULTS) as FieldShowRow[]).filter((row) => {
-        const shipped = ROW_DEFAULTS[row];
-        return Array.isArray(shipped)
-            ? (value[row] as string[]).length > 0
-            : value[row] !== shipped;
-    });
-}
-
-/**
- * Puts every row back as shipped. The venue's look stays for its next time on, and the choices
- * the switches remember are forgotten.
- */
-export function resetFieldShow(): void {
-    change({ ...ROW_DEFAULTS, equipmentIconSections: [], fieldShowLast: {} });
 }

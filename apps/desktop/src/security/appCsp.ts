@@ -30,6 +30,12 @@ export interface WorkerPolicy {
 export const WORKER_POLICIES: readonly WorkerPolicy[] = [
     // Reads files from the internet (fork #998): WebAssembly decoders, nothing else
     { file: "modelImport.worker", csp: MODEL_IMPORT_WORKER_CSP },
+    // Bakes performer figures (ADR 0019): fetches the app's own models, and the pictures inside
+    // them through `blob:` URLs
+    {
+        file: "figureBake.worker",
+        csp: "default-src 'none'; script-src 'self'; connect-src 'self' blob: data:",
+    },
     // Trims and pads decoded music
     { file: "audioOffset.worker", csp: COMPUTE_ONLY },
     // 3D View: bleeds a composed uniform flats atlas (fork #1255)
