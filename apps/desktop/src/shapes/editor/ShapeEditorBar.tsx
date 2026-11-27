@@ -556,6 +556,10 @@ function ShapeEditorBar({
     const whatRow = useRef<HTMLSpanElement>(null);
     const doRow = useRef<HTMLSpanElement>(null);
     const twoRows = useTwoRows(whatRow, doRow, place.rowRoom, place.held);
+    // Picking who goes where by hand, only its own bar shows (owner, 09-who-goes-where.md): the
+    // shape isn't being changed, and a small bar finds room between the spots being picked
+    const picking =
+        usePickStore((s) => s.session !== null) && target.place !== undefined;
 
     return (
         <animated.div
@@ -580,6 +584,7 @@ function ShapeEditorBar({
                 className={clsx(
                     EDITOR_BAR,
                     twoRows ? "flex-col gap-4" : "gap-6",
+                    picking && "hidden",
                 )}
                 data-testid={`${testId}-bar`}
                 data-rows={twoRows ? 2 : 1}
@@ -779,10 +784,12 @@ function ShapeEditorBar({
                     canPlace={target.place !== undefined}
                     order={target.order?.key}
                     testId={testId}
+                    hidden={picking}
                 />
             )}
-            {/* Picking who goes where by hand: which shape, what waits, Done (09-who-goes-where.md) */}
-            {target.place !== undefined && <PickBar />}
+            {/* Picking who goes where by hand, in place of the rows above: the option, which
+                shape, what waits, Done (09-who-goes-where.md) */}
+            {target.place !== undefined && <PickBar target={live} />}
             {/* An open paste that doesn't fit says so here, beside Place (#961) */}
             {testId === "shape-tool-readout" && <PasteFitNotice />}
         </animated.div>
@@ -1559,6 +1566,7 @@ const FillPill = memo(function FillPill({
     live: target,
     canPlace,
     testId,
+    hidden,
 }: {
     live: ShapeEditTarget;
     /** Only redraw it */
@@ -1568,11 +1576,16 @@ const FillPill = memo(function FillPill({
     /** Only redraw it: what the Who goes where menu shows */
     order: string | undefined;
     testId: string;
+    /** While picking by hand, when the pick bar takes its place */
+    hidden: boolean;
 }) {
     const env = () => envFor();
     return (
         <div
-            className="rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal flex items-center gap-6 border px-6 py-2 empty:hidden"
+            className={clsx(
+                "rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal flex items-center gap-6 border px-6 py-2 empty:hidden",
+                hidden && "hidden",
+            )}
             data-testid={`${testId}-fill`}
         >
             {/* The kind's own menus (a Line's spacing, #523) */}
@@ -1580,7 +1593,8 @@ const FillPill = memo(function FillPill({
             {/* The marchers split into rows alongside the shape (spec #1190) */}
             <RowsMenu target={target} />
             {/* Who goes where on a Line (#528) */}
-            <OrderMenu target={target} />
+            {/* While picking, it's in the pick bar instead */}
+            {!hidden && <OrderMenu target={target} />}
             {/* Who goes where by hand and Swap, on an open shape (09-who-goes-where.md) */}
             {canPlace && <PickControls />}
             <ModeMenu target={target} envFor={env} />
@@ -2360,12 +2374,13 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
                     .handles(params, spots, null)
                     .map(({ at }) => fieldToElement(view, at.x, at.y)),
                 // #933, touch layout: its slots as the field draws them, which it keeps off when it
-                // can only sit on the shape
-                spots: touch
-                    ? (activeFieldEditor()?.modeDrawing()?.spots ?? []).map(
-                          (p) => fieldToElement(view, p.x, p.y),
-                      )
-                    : [],
+                // can only sit on the shape. Picking by hand too: they're what's clicked
+                spots:
+                    touch || usePickStore.getState().session
+                        ? (activeFieldEditor()?.modeDrawing()?.spots ?? []).map(
+                              (p) => fieldToElement(view, p.x, p.y),
+                          )
+                        : [],
                 width: room.width,
                 height: room.height,
                 fieldWidth: room.fieldWidth,
@@ -2374,8 +2389,9 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
             [...obstacles.current.all, ...clearOfPoint, ...clearOfStarts],
             obstacles.current.covers,
             // #936, touch layout: never off the field or under the toolbar panel, so Place and
-            // Discard can always be tapped
-            touch && Number.isFinite(room.fieldWidth)
+            // Discard can always be tapped. Picking by hand too, so Done stays in view
+            (touch || usePickStore.getState().session) &&
+                Number.isFinite(room.fieldWidth)
                 ? visibleField(
                       room.fieldWidth,
                       room.fieldHeight,

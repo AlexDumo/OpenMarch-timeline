@@ -17,6 +17,9 @@ import {
 } from "../tool/pickByHand";
 import { updateTool, useShapeToolStore } from "../tool/shapeToolStore";
 import { clearPins } from "../tool/toolMachine";
+import type { ShapeEditTarget } from "./editTargets";
+import { Divider } from "./EditorBarParts";
+import { OrderMenu } from "./OrderMenu";
 
 const BUTTON =
     "rounded-4 hover:bg-text/10 flex min-h-24 items-center gap-4 px-4 py-2";
@@ -112,11 +115,15 @@ export function PickControls() {
 }
 
 /**
- * While picking or swapping, its own row under the floating editor: which shape is in front (the
- * source, where the marchers start, or the destination, the new shape's spots), what's paired and
- * waiting, and Done
+ * While picking or swapping, its own bar in place of the floating editor's rows (owner): the Who
+ * goes where option the rest follow, which shape is in front (the source, where the marchers
+ * start, or the destination, the new shape's spots), what's paired and waiting, and Done
  */
-export function PickBar() {
+export function PickBar({
+    target,
+}: {
+    target: Pick<ShapeEditTarget, "order">;
+}) {
     const session = usePickStore((s) => s.session);
     if (!session) return null;
     const side = (value: PickSide, label: string, tip: string) => (
@@ -145,6 +152,13 @@ export function PickBar() {
             className="rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal flex items-center gap-6 border px-6 py-2"
             data-testid="shape-pick-bar"
         >
+            {/* What everyone not picked by hand follows, and how many are */}
+            {target.order && (
+                <>
+                    <OrderMenu target={target} />
+                    <Divider />
+                </>
+            )}
             {session.kind === "pick" ? (
                 <>
                     <span

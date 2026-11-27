@@ -141,6 +141,12 @@ test("change: the menu greys out what doesn't fit, W picks by hand back and fort
     // W: picking by hand, from the marchers first
     await page.keyboard.press("w");
     await expect(page.getByTestId("shape-pick-bar")).toBeVisible();
+    // Its own bar in place of the editor's rows, with the option the rest follow
+    await expect(page.getByTestId("shape-tool-readout-bar")).toBeHidden();
+    await expect(page.getByTestId("shape-tool-readout-fill")).toBeHidden();
+    await expect(
+        page.getByTestId("shape-pick-bar").getByTestId("shape-order"),
+    ).toContainText("Least travel");
     await expect(page.getByTestId("shape-pick-marchers")).toHaveAttribute(
         "aria-pressed",
         "true",

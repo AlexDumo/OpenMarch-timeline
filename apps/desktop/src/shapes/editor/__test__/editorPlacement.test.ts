@@ -234,6 +234,53 @@ describe("clearPlacement", () => {
         expect(hits(at, PANEL)).toBe(false);
     });
 
+    // Picking by hand (09-who-goes-where.md, owner): a line running down past the field, its
+    // spots what's clicked and the marchers' starts above. The pick bar, one row, sits between
+    // two spots rather than on one, and off the starts
+    it("picking by hand, a one-row bar sits between the spots of a shape taller than the field", () => {
+        const field = { fieldWidth: 1500, fieldHeight: 950 };
+        const spots = Array.from({ length: 10 }, (_, i) => ({
+            x: 760,
+            y: 47 + 108 * i,
+        }));
+        const starts = [
+            180, 290, 410, 550, 690, 830, 970, 1110, 1230, 1340,
+        ].map((x, i) => ({
+            left: x - 16,
+            top: 200 + Math.abs(i - 4.5) * 50 - 16,
+            width: 32,
+            height: 32,
+        }));
+        const input = {
+            outline: [
+                { x: 760, y: 47 },
+                { x: 760, y: 1019 },
+            ],
+            handles: [
+                { x: 760, y: 47 },
+                { x: 760, y: 1019 },
+            ],
+            spots,
+            width: 570,
+            height: 40,
+            ...field,
+        };
+        const visible = { left: 0, top: 0, width: 1500, height: 950 };
+        const at = placed(input, clearPlacement(input, starts, [], visible));
+        expect(isInside(at, visible)).toBe(true);
+        // The spots in view: the last runs off the field's bottom
+        for (const s of spots.filter((p) => p.y <= 950))
+            expect(
+                hits(at, {
+                    left: s.x - FINGER_REACH,
+                    top: s.y - FINGER_REACH,
+                    width: 2 * FINGER_REACH,
+                    height: 2 * FINGER_REACH,
+                }),
+            ).toBe(false);
+        for (const s of starts) expect(hits(at, s)).toBe(false);
+    });
+
     // #936: a 12 × 8 box pinch-zoomed to 200 %, bigger than the field every way
     describe("kept inside the field's visible box (#936)", () => {
         // 1180 × 820 landscape: the field 747 × 556, the toolbar panel over its top 60 px
