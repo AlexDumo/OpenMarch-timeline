@@ -147,6 +147,7 @@ export default function DrawWhenNeeded() {
         const delay = nextFrameDelay(state.current, now, {
             moving: !!clock?.playing,
             onBattery: scene.onBattery,
+            playing: !!clock?.playing,
         });
         if (delay === null) return;
         if (delay === 0) {

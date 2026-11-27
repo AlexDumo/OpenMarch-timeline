@@ -518,14 +518,17 @@ function SceneContents({
     const fallbackRef = useRef(createQualityFallbackState());
     const qualityMode = useView3dSceneStore((s) => s.qualityMode);
     const autoLowered = useView3dSceneStore((s) => s.autoLowered);
-    const capped = useView3dSceneStore((s) => frameCapped(s.onBattery));
+    const onBattery = useView3dSceneStore((s) => s.onBattery);
+    const playing = useView3dSyncStore((s) => !!s.clock?.playing);
+    const capped = frameCapped(onBattery, playing);
     useEffect(() => {
         fallbackRef.current = createQualityFallbackState();
     }, [qualityMode, autoLowered, capped]);
     useFrame((_, dt) => {
         const store = useView3dSceneStore.getState();
         if (store.qualityMode !== "auto" || store.quality !== "high") return;
-        if (frameCapped(store.onBattery)) return;
+        const clock = useView3dSyncStore.getState().clock;
+        if (frameCapped(store.onBattery, !!clock?.playing)) return;
         if (stepQualityFallback(fallbackRef.current, dt)) {
             // Heavy imported models first (#1091): their Light copies, then measure again
             if (fallbackStep(store) === "lightenHeavyModels") {
