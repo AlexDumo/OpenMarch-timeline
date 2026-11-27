@@ -2433,7 +2433,10 @@
             "selectWholeShape": "Select {shape, select, block {box} circle {circle} other {shape}}",
             "splitClosed": "A closed line can't be split yet",
             "splitRows": "A line with rows can't be split yet",
-            "splitNotLine": "Only lines, curves and arcs can be split for now",
+            "splitKind": "Only lines, curves, arcs and boxes can be split for now",
+            "splitOutline": "A box in Outline can't be split yet",
+            "splitSpread": "A box in Spread can't be split yet",
+            "splitMoves": "Splitting here would move marchers",
             "splitEnd": "Open this menu between two marchers to split there",
             "splitError": "Couldn't split the shape",
             "splitIsolated": "Split this shape outside isolation: it comes from an earlier page"

@@ -1,6 +1,6 @@
 ---
 title: Change a placed shape
-description: Select a shape you've already placed and change it, split a line in two, take one marcher out of it, group marchers into a shape where they stand, or ungroup it.
+description: Select a shape you've already placed and change it, split a line or box in two, take one marcher out of it, group marchers into a shape where they stand, or ungroup it.
 type: how-to
 covers:
   - apps/desktop/src/shapes/placed
@@ -63,7 +63,7 @@ A placed line, curve or arc can be cut in two between any two of its marchers. E
 
 1. Click a marcher in the line to select it.
 
-2. Point at the line between the two marchers where it should split. Scissors appear beside the line, with a dashed mark where the cut falls.
+2. Rest the pointer on the line between the two marchers where it should split. After a moment, scissors appear beside the line, with a dashed mark where the cut falls.
 
 3. Click the scissors.
 
@@ -78,7 +78,32 @@ You can also right-click the line between the two marchers and choose <Ui k="act
 
 On a straight line, a line with corners or an arc, nobody moves. A curve's pieces can't always follow it exactly, so on a tight curve its marchers can move a little to stand on the pieces. A piece with only one marcher isn't a line: that marcher leaves the shape.
 
-Closed lines, lines with rows, boxes and circles can't be split yet; <Ui k="actions.shape.splitHere" /> is greyed and says why.
+Closed lines, lines with rows and circles can't be split yet; <Ui k="actions.shape.splitHere" /> is greyed and says why.
+
+## Split a box in two
+
+A box filled as a <Ui k="shapes.edit.mode.files" plain /> can be split between any two of its files or ranks. Each piece is a box with the same fill and spacing, nobody moves, and the split is one step you can undo.
+
+<Steps>
+
+1. Click a marcher in the box to select it.
+
+2. Rest the pointer between two marchers standing side by side. After a moment, scissors appear past the edge of the box, with a dashed mark across the whole box where the cut falls: between two files when the marchers are in the same rank, between two ranks when they're in the same file.
+
+3. Click the scissors.
+
+</Steps>
+
+<Media
+  id="shapes-split-box"
+  alt="A placed box of four files and three ranks, selected. The pointer moves between the first two marchers of the middle rank; scissors appear above the box with a dashed mark down between the first and second files. It clicks them and the box becomes two boxes, one file and three files, nobody moving. Clicking empty field, then a marcher of the first file, selects that box alone."
+/>
+
+You can also right-click between two marchers and choose <Ui k="actions.shape.splitHere" />: it cuts along the gap nearest where you clicked. On a tablet, tap between two marchers to show the scissors, then tap them, or long press there for the same menu.
+
+A box is only split where each piece is a tidy box with its marchers standing where they are. A cut down through a short back rank would leave a piece whose back marchers stand off its middle, so there the scissors don't show and <Ui k="actions.shape.splitHere" /> is greyed and says why. A piece with only one marcher isn't a box: that marcher leaves the shape.
+
+Boxes in <Ui k="shapes.edit.mode.outline" plain /> or <Ui k="shapes.edit.mode.spread" plain /> can't be split yet.
 
 ## Ungroup a shape
 

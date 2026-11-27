@@ -757,6 +757,13 @@
         "height": 800,
         "seconds": 5.8
     },
+    "shapes-split-box": {
+        "chapter": "shapes",
+        "kind": "clip",
+        "width": 1280,
+        "height": 800,
+        "seconds": 8.4
+    },
     "shapes-split-line": {
         "chapter": "shapes",
         "kind": "clip",

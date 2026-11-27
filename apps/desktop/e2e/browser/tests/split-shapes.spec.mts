@@ -11,11 +11,12 @@ import {
 import { fieldGrid, savedPositions, type Position } from "../positions.mjs";
 import { seedShowSql, type SeedPosition } from "../seed.mjs";
 
-// Split here (#1336): a placed Line split in two between two marchers, nobody
-// moving, as one undo step. With a mouse, hovering a gap of the selected line
-// shows scissors just off it, and a click on them splits there. A finger has no
-// hover: a tap on the gap shows them, and a tap on them splits. A long press on
-// the gap opens the field menu with Shape: Split here, as a right-click does.
+// Split here (#1336, #1337): a placed Line split in two between two marchers,
+// or a Box between two files or ranks, nobody moving, as one undo step. With a
+// mouse, hovering a gap of the selected shape shows scissors just off it, and a
+// click on them splits there. A finger has no hover: a tap on the gap shows
+// them, and a tap on them splits. A long press on the gap opens the field menu
+// with Shape: Split here, as a right-click does.
 
 // Twelve trumpets scattered on the field
 const HOME: SeedPosition[] = Array.from({ length: 12 }, (_, i) => [
@@ -96,6 +97,45 @@ async function placeLine(
     return { ...gap, away };
 }
 
+/**
+ * Everyone in a Box, drawn with the mouse and placed, left selected: about 18
+ * steps a side. Returns the middle of a gap between two marchers side by side
+ * in a middle rank, clear of the box's handles on its edges, on screen.
+ */
+async function placeBox(show: Show): Promise<Point> {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await page.keyboard.press("ControlOrMeta+a");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    await page.keyboard.press("b");
+    const a = await toScreen(page, { x: cf.x - 9 * S, y: cf.y - 36 * S });
+    const b = await toScreen(page, { x: cf.x + 9 * S, y: cf.y - 18 * S });
+    await page.mouse.move(a.x, a.y);
+    await page.mouse.down();
+    await page.mouse.move(b.x, b.y, { steps: 12 });
+    await page.mouse.up();
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    await page.keyboard.press("Enter");
+    await expect
+        .poll(async () => (await recipes(show)).map((r) => r.kind))
+        .toEqual(["block"]);
+    await waitForIdle(page);
+    // The ranks as drawn, front to back: a middle one, its first two marchers
+    const drawn = (await drawnMarchers(page)).map((m) => m.screen);
+    const ranks = [...new Set(drawn.map((p) => Math.round(p.y)))].sort(
+        (p, q) => p - q,
+    );
+    const y = ranks[Math.floor(ranks.length / 2)]!;
+    const [left, right] = drawn
+        .filter((p) => Math.abs(p.y - y) <= 1)
+        .sort((p, q) => p.x - q.x);
+    return { x: (left!.x + right!.x) / 2, y: (left!.y + right!.y) / 2 };
+}
+
 /** The middle of the scissors drawn, on screen */
 async function scissorsAt(page: Page): Promise<Point> {
     const scissors = page.getByTestId("fieldSplitScissors");
@@ -104,11 +144,15 @@ async function scissorsAt(page: Page): Promise<Point> {
     return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
-/** Two lines where there was one, everyone where they stood */
-async function expectSplit(show: Show, before: readonly Position[]) {
+/** Two shapes of `kind` where there was one, everyone where they stood */
+async function expectSplit(
+    show: Show,
+    before: readonly Position[],
+    kind = "line",
+) {
     await expect
         .poll(async () => (await recipes(show)).map((r) => r.kind))
-        .toEqual(["line", "line"]);
+        .toEqual([kind, kind]);
     const after = byId(await savedPositions(show, 0));
     expect(after).toHaveLength(before.length);
     after.forEach((p, i) => {
@@ -172,6 +216,23 @@ test.describe("with a mouse", () => {
         await page.mouse.move(again.x, again.y, { steps: 6 });
         await page.mouse.click(again.x, again.y);
         await expectSplit(show, before);
+    });
+
+    test("change: hovering between two marchers of the selected box shows scissors; a click on them splits it into two boxes, nobody moving", async ({
+        show,
+    }) => {
+        const { page } = show;
+        const gap = await placeBox(show);
+        const before = byId(await savedPositions(show, 0));
+        await page.mouse.move(gap.x, gap.y, { steps: 4 });
+        const at = await scissorsAt(page);
+        await expect(page.getByTestId("fieldSplitMark")).toBeVisible();
+        await page.mouse.move(at.x, at.y, { steps: 6 });
+        await page.mouse.click(at.x, at.y);
+        await expectSplit(show, before, "block");
+
+        await page.keyboard.press("ControlOrMeta+z");
+        await expect.poll(async () => (await recipes(show)).length).toBe(1);
     });
 });
 
@@ -269,6 +330,18 @@ test.describe("with a finger", () => {
         await expect(page.getByTestId("fieldSplitScissors")).toBeVisible();
         await waitForIdle(page);
         expect(await view()).toEqual(before);
+    });
+
+    test("change: a tap between two marchers of the selected box shows the scissors, and a tap on them splits it", async ({
+        show,
+    }) => {
+        const { page } = show;
+        const gap = await placeBox(show);
+        await page.mouse.move(5, 5);
+        const before = byId(await savedPositions(show, 0));
+        await tap(page, gap);
+        await tap(page, await scissorsAt(page));
+        await expectSplit(show, before, "block");
     });
 
     test("change: a long press on a gap of the selected line offers Shape: Split here in the field menu", async ({

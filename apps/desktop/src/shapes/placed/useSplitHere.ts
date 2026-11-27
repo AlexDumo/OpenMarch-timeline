@@ -11,6 +11,7 @@ import type { XY } from "../types";
 import { toolEnvFor } from "../tool/toolEnv";
 import { useBoxSelectionStore } from "./boxSelectionStore";
 import {
+    isBoxKind,
     isLineKind,
     notALineReason,
     splitCheck,
@@ -43,7 +44,12 @@ export function splitCheckAt(
     const field = currentShapeField();
     if (!field) return null;
     const env = toolEnvFor(field, undefined, { kind });
-    // A box or circle is offered it greyed, with why, so it's found and understood (sims, #1336)
+    // A box splits between two files or ranks where the menu was opened on it (#1337)
+    if (isBoxKind(box))
+        return onShape(box, at, env.stepPx)
+            ? splitCheck(box, at, env.hitRadius)
+            : null;
+    // A circle is offered it greyed, with why, so it's found and understood (sims, #1336)
     if (!isLineKind(box))
         return onShape(box, at, env.stepPx)
             ? { ok: false, reason: notALineReason() }
@@ -55,8 +61,9 @@ export function splitCheckAt(
 
 /**
  * The field menu's **Split here** (`shapeSplitHere`, #1336): offered when the menu is opened on
- * the placed Line, Curve or Arc selected whole, on its line; it splits it there (`splitShape`), or
- * is greyed with why it can't (a closed line, rows, past its last marcher, a box or circle).
+ * the placed Line, Curve or Arc selected whole, on its line, or on the Box (#1337); it splits it
+ * there (`splitShape`), or is greyed with why it can't (a closed line, rows, past its last
+ * marcher, a box in Outline or Spread, a circle).
  * Pointed at, it marks where it would cut. Not offered off the shape, nor from the keyboard, which
  * opens the menu at no place.
  */
@@ -87,16 +94,19 @@ export function useSplitHere(): void {
         "shapeSplitHere",
         () => {
             const asked = scissorsSplit();
-            if (asked) void splitShape(asked.box, asked.k, queryClient);
+            if (asked) void splitShape(asked.box, asked.cut, queryClient);
             else if (check?.ok)
-                void splitShape(check.box, check.k, queryClient);
+                void splitShape(check.box, check.cut, queryClient);
         },
         {
             enabled: isEnabled,
             ignoreRepeat: true,
             disabledReason: check && !check.ok ? check.reason : undefined,
             // Pointed at in the menu, the cut is marked where it falls
-            preview: (on) => showSplit(on && check?.ok ? check.gap : null),
+            preview: (on) =>
+                on && check?.ok
+                    ? showSplit(check.gap, null, check.mark ?? null)
+                    : showSplit(null),
         },
     );
 }
