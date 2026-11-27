@@ -552,6 +552,10 @@ export function attachTimelineGestures(
     const onPointer = (event: PointerEvent) => {
         if (cancelling) return;
         if (event.type === "pointerdown" && !redirected.has(event)) {
+            // A mouse's or pen's press on a line, right on the selected clip's edge under it,
+            // resizes the clip (#593)
+            if (!timelineGesturesOwn(event) && redirectToEdgeUnderLine(event))
+                return;
             // A finger's first press near a small target (tablet plan 3.3) is that target's
             if (
                 timelineGesturesOwn(event) &&
@@ -572,6 +576,38 @@ export function attachTimelineGestures(
                 };
         }
         handlePointer(event);
+    };
+    /**
+     * Sends a mouse's or pen's press on the start flag's or the playhead's line (`data-timeline-line`)
+     * on to the selected clip's edge handle under it (`data-over-lines`): selecting a clip puts
+     * the lines on its ends, and a drag there should resize it (#593). Elsewhere the line keeps
+     * the press (UI-21). A finger's press gets the same through its hit areas (`findTouchHit`).
+     * Returns whether it did; the press as it landed then goes no further.
+     */
+    const redirectToEdgeUnderLine = (event: PointerEvent): boolean => {
+        const line =
+            event.target instanceof Element
+                ? event.target.closest("[data-timeline-line]")
+                : null;
+        if (!line || !viewport.contains(line)) return false;
+        const edge = (
+            viewport.ownerDocument.elementsFromPoint?.(
+                event.clientX,
+                event.clientY,
+            ) ?? []
+        ).find(
+            (element) =>
+                element.hasAttribute("data-over-lines") &&
+                viewport.contains(element),
+        );
+        if (!edge) return false;
+        event.stopPropagation();
+        // As a press on the line does: no focus moves to it, and no text selection starts
+        event.preventDefault();
+        const press = clonePointerEvent(event);
+        redirected.add(press);
+        edge.dispatchEvent(press);
+        return true;
     };
     /**
      * Sends a finger's press on to the hit area it belongs to (`findTouchHit`) when it landed
@@ -811,6 +847,7 @@ export function findTouchHit(
             drawn: drawnOf(element).getBoundingClientRect(),
             selected: element.hasAttribute("data-touch-selected"),
             group: element.dataset.touchGroup,
+            overLines: element.hasAttribute("data-touch-over-lines"),
             // Right on it: in its own button, where a mouse would take it. Not when a control
             // that keeps its presses is painted over it there (the add-page pill over the last
             // page's flag grip, #920): a mouse would take that control

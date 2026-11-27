@@ -87,6 +87,36 @@ describe("pickTouchTarget", () => {
         expect(pickTouchTarget(109, 50, targets)).toBe("selected grip");
     });
 
+    it("gives a press right on the selected clip's end handle to it over a line at the same x (#593)", () => {
+        const end = {
+            ...target("selected clip's end", 100, {
+                width: 6,
+                selected: true,
+                group: "clip:1",
+            }),
+            overLines: true,
+        };
+        const playhead = target("playhead", 100);
+        // The playhead is painted later, on top; right on both, the edge still wins
+        expect(pickTouchTarget(100, 50, [end, playhead])).toBe(
+            "selected clip's end",
+        );
+        expect(pickTouchTarget(100, 50, [end, playhead], "clip:1")).toBe(
+            "selected clip's end",
+        );
+        // Right on the line, off the handle: the line
+        expect(
+            pickTouchTarget(105, 50, [
+                end,
+                { ...target("playhead", 105), on: true },
+            ]),
+        ).toBe("playhead");
+        // Another clip's end, or a page flag's grip, under the line: the line (UI-21)
+        expect(pickTouchTarget(100, 50, [target("grip", 100), playhead])).toBe(
+            "playhead",
+        );
+    });
+
     it("still gives a press off every target to the selected one", () => {
         const targets = [
             target("grip", 100),
