@@ -10,6 +10,7 @@ import { useTimingObjects } from "@/hooks/useTimingObjects";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { setLaneShown, type TimelineLaneId } from "@/timeline/timelineLanes";
+import { requestLaneReveal } from "@/timeline/laneReveal";
 import { activeFieldEditor } from "@/field/editor/activeFieldEditor";
 import { useShowCues, type EditorCues } from "./useShowCues";
 import { pickedCueIn, useCueSelectionStore } from "./cueSelectionStore";
@@ -23,6 +24,7 @@ import {
     equipmentCuesOn,
     equipmentValueOfChoice,
     heldValueAt,
+    planAddToCue,
     planCueChange,
     planEquipmentSet,
     equipmentSetIsEmpty,
@@ -38,6 +40,7 @@ import {
     facingValueOf,
     type FacingChoice,
 } from "./facing";
+import { partOf, planFacingEdit, useFacingSplitStore } from "./facingSplit";
 
 /**
  * The beat a cue made at the paused playhead sits on: the beat whose click is the playhead. Spec
@@ -91,12 +94,16 @@ export interface CueCommands {
     readonly edited: (edit: "add" | "remove") => number[] | null;
     /**
      * Adds or removes the selection, as one undo step, and names the cue for its new performers;
-     * removing everyone deletes the cue.
+     * removing everyone deletes the cue. Those added leave the cue of theirs it replaces
+     * (`planAddToCue`).
      */
     readonly editPerformers: (edit: "add" | "remove") => void;
     /** Makes the cue lasting (null) or momentary for `length` counts. */
     readonly setLength: (length: number | null) => void;
-    /** Moves the cue to the playhead's count, as one undo step. */
+    /**
+     * Moves the cue to the playhead's count, as one undo step. A Facing cue only some of whose
+     * performers are selected moves only them (`planFacingEdit`).
+     */
     readonly moveToPlayhead: () => void;
     /**
      * What ending the cue at the playhead's count would do, by the end edge's rule
@@ -117,7 +124,8 @@ export interface CueCommands {
     readonly setFacing: (choice: FacingChoice) => void;
     /**
      * Changes the picked Facing cue's turn, as one undo step: where it turns to (`choice`) and how
-     * many counts it takes (`transition`, null for instant). Fields left out are kept.
+     * many counts it takes (`transition`, null for instant). Fields left out are kept. With only
+     * some of its performers selected, only they change (`planFacingEdit`).
      */
     readonly editTurn: (edit: {
         readonly choice?: FacingChoice;
@@ -247,6 +255,42 @@ export function useCueCommands(): CueCommands {
                     : held === equipmentValueOfChoice(choice);
             });
 
+        /**
+         * Writes an edit to Facing cue `target` (`planFacingEdit`): only the selected performers
+         * change when they're some of its performers. The lane then picks the cue they land in
+         * (from the turn popover, `popover`, reopening it there) and keeps a split's rest drawn.
+         */
+        const facingEdit = (
+            target: DatabaseCue,
+            change: CueChange,
+            set:
+                | { value: string; settings: Record<string, unknown> }
+                | undefined,
+            popover: boolean,
+        ) => {
+            if (!show) return;
+            const part = partOf(target, selectedIds);
+            const plan = planFacingEdit({
+                cues: show.cues,
+                cueId: target.id,
+                part,
+                change,
+                set,
+                relabelFor: relabelIn(show, words),
+            });
+            if (!plan) return;
+            useFacingSplitStore.getState().edited({
+                part: part ?? target.marcherIds,
+                beatId: change.beatId ?? target.beatId,
+                rest: part
+                    ? target.marcherIds.filter((id) => !part.includes(id))
+                    : null,
+                selectedIds,
+                popover,
+            });
+            edit(plan);
+        };
+
         return {
             show,
             selectedIds,
@@ -278,7 +322,10 @@ export function useCueCommands(): CueCommands {
                 // A first Equipment cue makes its lane appear, even one hidden before (#992)
                 if (!show.cues.some((c) => c.type === "equipment"))
                     revealLane("equipment");
-                edit(plan);
+                // Its lane shows itself once the cue is drawn, below the fold or not (#1315)
+                edit(plan, {
+                    onSuccess: () => requestLaneReveal("equipment"),
+                });
             },
             holders,
             selectHolding: (values, add) => {
@@ -294,6 +341,17 @@ export function useCueCommands(): CueCommands {
             editPerformers: (change) => {
                 const next = edited(change);
                 if (!cue || !next) return;
+                if (change === "add" && show) {
+                    const plan = planAddToCue({
+                        cues: show.cues,
+                        cueId: cue.id,
+                        marcherIds: selectedIds,
+                        countOf: (beatId) => show.countOfBeat.get(beatId),
+                        relabelFor: relabelIn(show, words),
+                    });
+                    if (!equipmentSetIsEmpty(plan)) edit(plan);
+                    return;
+                }
                 edit(
                     next.length === 0
                         ? {
@@ -324,6 +382,10 @@ export function useCueCommands(): CueCommands {
             },
             moveToPlayhead: () => {
                 if (!cue || !beat || !show) return;
+                if (cue.type === "facing" && partOf(cue, selectedIds)) {
+                    facingEdit(cue, { beatId: beat.id }, undefined, false);
+                    return;
+                }
                 const plan = cueChangeEdit(
                     show,
                     cue.id,
@@ -372,29 +434,16 @@ export function useCueCommands(): CueCommands {
                 // A first Facing cue makes its lane appear, even one hidden before
                 if (!show.cues.some((c) => c.type === "facing"))
                     revealLane("facing");
-                edit(plan);
+                edit(plan, { onSuccess: () => requestLaneReveal("facing") });
             },
             editTurn: ({ choice, transition }) => {
                 if (!cue || !show || cue.type !== "facing") return;
-                const set = choice ? facingValueOf(choice) : null;
-                const changed =
-                    (set !== null &&
-                        (set.value !== cue.value ||
-                            JSON.stringify(set.settings) !==
-                                JSON.stringify(cue.settings))) ||
-                    (transition !== undefined && transition !== cue.transition);
-                if (!changed) return;
-                edit({
-                    deletedCueIds: [],
-                    newCues: [],
-                    modifiedCues: [
-                        {
-                            id: cue.id,
-                            ...(set ?? {}),
-                            ...(transition !== undefined && { transition }),
-                        },
-                    ],
-                });
+                facingEdit(
+                    cue,
+                    transition !== undefined ? { transition } : {},
+                    choice ? facingValueOf(choice) : undefined,
+                    true,
+                );
             },
             deleteCue: () => {
                 if (!cue) return;

@@ -164,14 +164,23 @@ export interface FacingRow {
     readonly pieces: readonly FacingPiece[];
 }
 
+/**
+ * One keyframe on the lane's top row (fork #1315): a count where anyone's facing changes. Every
+ * Facing cue on that count shares it, whatever its performers and its turn.
+ */
+export interface FacingKey {
+    readonly count: number;
+    /** The cues on this count, in the order they were made */
+    readonly cueIds: readonly number[];
+    /** Who changes facing here (the cues' performers on the lane), in id order */
+    readonly marcherIds: readonly number[];
+}
+
 export interface FacingLaneData {
     readonly rows: readonly FacingRow[];
     readonly marcherIds: readonly number[];
-    /** Each cue's mark on the folded lane: where its turn starts */
-    readonly marks: readonly {
-        readonly cueId: number;
-        readonly count: number;
-    }[];
+    /** The keyframes, one per count where a Facing cue lands, in count order */
+    readonly keys: readonly FacingKey[];
 }
 
 /** A performer's Facing as lane pieces; an instant turn draws nothing of its own */
@@ -249,18 +258,67 @@ export function facingLane({
                 pieces,
             };
         });
-    const marks = new Map<number, { cueId: number; count: number }>();
+    // A cue is its result on its count: where its hold starts, or where its turn ends (a hold
+    // the next turn starts on at once draws nothing)
+    const countOf = new Map<number, number>();
     for (const row of rows)
         for (const p of row.pieces)
-            if (p.cueId !== null && !marks.has(p.cueId))
-                marks.set(p.cueId, { cueId: p.cueId, count: p.from });
+            if (p.cueId !== null && !countOf.has(p.cueId))
+                countOf.set(p.cueId, p.kind === "turn" ? p.to : p.from);
+    const keys = new Map<number, { cueIds: number[]; ids: Set<number> }>();
+    for (const c of facing) {
+        const count = countOf.get(c.id);
+        if (count === undefined) continue;
+        const key = keys.get(count) ?? { cueIds: [], ids: new Set() };
+        key.cueIds.push(c.id);
+        for (const id of c.marcherIds) if (known.has(id)) key.ids.add(id);
+        keys.set(count, key);
+    }
     return {
         rows,
         marcherIds: rows.flatMap((r) => r.marcherIds).sort((a, b) => a - b),
-        marks: facing.flatMap((c) =>
-            marks.has(c.id) ? [marks.get(c.id)!] : [],
-        ),
+        keys: [...keys]
+            .sort(([a], [b]) => a - b)
+            .map(([count, { cueIds, ids }]) => ({
+                count,
+                cueIds,
+                marcherIds: [...ids].sort((a, b) => a - b),
+            })),
     };
+}
+
+/**
+ * The rows the lane draws for a selection (fork #1315): each group with a selected performer in
+ * it, so a selection that spans groups with different histories shows each of them. Nothing
+ * selected, no rows: the lane is its keyframes alone.
+ */
+export function facingRowsFor(
+    rows: readonly FacingRow[],
+    selectedIds: readonly number[],
+): readonly FacingRow[] {
+    if (selectedIds.length === 0) return [];
+    const selected = new Set(selectedIds);
+    return rows.filter((r) => r.marcherIds.some((id) => selected.has(id)));
+}
+
+/**
+ * The selection a click on a keyframe leaves (fork #1315), as a click on a marcher does
+ * (`selectionAfterClick`): its performers alone; with `add` (Shift, or the touch pill's Add)
+ * they join the selection, or leave it when every one of them is in it already.
+ */
+export function selectionAfterKeyClick(
+    current: readonly number[],
+    key: Pick<FacingKey, "marcherIds">,
+    add: boolean,
+): readonly number[] {
+    if (!add) return key.marcherIds;
+    const theirs = new Set(key.marcherIds);
+    if (key.marcherIds.every((id) => current.includes(id)))
+        return current.filter((id) => !theirs.has(id));
+    return [
+        ...current,
+        ...key.marcherIds.filter((id) => !current.includes(id)),
+    ];
 }
 
 /** An angle as the lane and the popover write it: "90°", "−270°" */

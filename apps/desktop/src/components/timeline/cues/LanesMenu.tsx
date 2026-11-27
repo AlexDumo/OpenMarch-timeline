@@ -269,7 +269,8 @@ function LaneNameMenu({
     const lane = TIMELINE_LANES.find((l) => l.id === id)!;
     const folded = useLaneFolded(id);
     // Lanes with a stacked summary (the cue lanes) can collapse their rows
-    const folds = lane.cueType !== undefined;
+    // The Facing lane has no rows to fold: it shows the selection's (#1315)
+    const folds = lane.cueType !== undefined && id !== "facing";
     const name = t(lane.labelKey);
     return createPortal(
         <DropdownMenu.Root

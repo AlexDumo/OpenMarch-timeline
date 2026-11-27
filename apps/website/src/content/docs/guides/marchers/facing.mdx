@@ -4,8 +4,10 @@ description: Turn marchers to the front, the back, a side or any angle from a co
 type: how-to
 covers:
   - apps/desktop/src/cues/facing.ts
+  - apps/desktop/src/cues/facingSplit.ts
   - apps/desktop/src/components/timeline/cues/FacingLane.tsx
   - apps/desktop/src/components/timeline/cues/TurnPopover.tsx
+  - apps/desktop/src/timeline/laneReveal.ts
   - packages/core/src/cues/facing.ts
   - apps/desktop/src/view3d/core/marchers/cueInputs.ts
   - apps/desktop/src/cues/fieldFacing.ts
@@ -20,6 +22,8 @@ covers:
   - action:facingTurnRight
   - action:facingAngle
   - action:cueEditTurn
+  - action:cueAddSelected
+  - action:cueMoveToPlayhead
   - action:toggleFacingLane
   - action:toggleFacingArrows
   - i18n:cues.facing
@@ -36,7 +40,7 @@ import Term from "@/components/docs/Term.astro";
 import InShort from "@/components/docs/InShort.astro";
 import { Steps } from "@astrojs/starlight/components";
 
-<InShort>Select the marchers, right-click one and choose <Ui k="field.menu.facing" /> › a direction, or press <Kbd action="facingSide2" /> for side 2. To turn over the counts before, pull the tab on the left of its diamond in the Facing lane to the left.</InShort>
+<InShort>Select the marchers, right-click one and choose <Ui k="field.menu.facing" /> › a direction, or press <Kbd action="facingSide2" /> for side 2. To turn over the counts before, pull the tab on the left of its diamond in the Facing lane to the left. Click a diamond in the lane's top row to select who turns there.</InShort>
 
 Every marcher faces the front until you turn them, except bass drums and flub drums, which start on side 2 with their right side toward the front. A facing change says where the selected marchers face by a count: they face that way on it, and until their next facing change. They can turn into it instantly or over the counts before it. The field can draw a small caret in front of each marcher's dot, its point aimed the way they face ([See facing on the field](#see-facing-on-the-field)), and the 3D View turns them.
 
@@ -80,21 +84,29 @@ Angles don't wrap around, so they say how a marcher gets there:
 
 ## Turn over the counts before
 
-The <Ui k="cues.lane.facing" plain /> lane on the timeline appears with the show's first facing change; to show or hide it, use the <Ui k="cues.lane.lanes" /> row ([Lanes](/guides/timeline/how-the-timeline-works/#lanes)). It has a row for each group of marchers who turn alike.
+The <Ui k="cues.lane.facing" plain /> lane on the timeline appears with the show's first facing change; to show or hide it, use the <Ui k="cues.lane.lanes" /> row ([Lanes](/guides/timeline/how-the-timeline-works/#lanes)). When you set a facing and the lane is below the bottom of the timeline, the timeline opens, or scrolls, far enough to show it.
 
-- A diamond marks each facing change on its count. The solid bar after it is the angle they hold from there, up to their next facing change.
+The lane's top row has a diamond on each count where anyone's facing changes. When several groups change on the same count, even with turns of different lengths, they share one diamond, with a small number beside it saying how many; point at it to see who. With marchers selected, the lane adds a row for each group of them who turn alike, showing their turns; with nobody selected, it's only the row of diamonds.
+
+- Click a diamond in the top row to select the marchers who change facing there. <Kbd keys="Shift" gesture="click" /> adds them to the selection, or takes them out if they're all selected already. On a tablet, turn on <Ui k="touch.modifiers.add" plain /> on the touch pill first to add.
+- In a group's row, a diamond marks each of their facing changes on its count. The solid bar after it is the angle they hold from there, up to their next facing change.
 - A pale bar with a dashed edge in front of the diamond is the turn into it. Its label says which way they turn, how far and over how many counts, such as ↺ 180° · 2 counts. ↺ is a turn to the marchers' left, as the turn panel's dial draws it, and ↻ with a negative angle a turn to their right. On a narrow bar the counts, then the angle, are left out; point at the bar to read it all.
 
 <Media
+  id="marchers-facing-keys"
+  alt="Three groups face new ways: G6 to G10 turn to side 2 over two counts and G14, G19 and G22 face the back at once, both at the end of Page 1, then G1 to G3 face side 1 four counts later. With nobody selected the Facing lane is one row of two diamonds, the first marked 2. Clicking it selects G6 to G10, G14, G19 and G22, and their two rows appear with their turns; Shift-clicking the second diamond adds G1 to G3 and their row."
+/>
+
+<Media
   id="marchers-facing-lane"
-  alt="The timeline's Facing lane with one row, G6–G10: a pale turn bar with a dashed edge, labelled with the turn, over the four counts before the end of Page 1, then a diamond on the end of Page 1 and a solid bar reading Side 2 · 90° from there to the end of the show."
+  alt="The timeline's Facing lane with G6 to G10 selected: its top row of diamonds, then their row, G6–G10: a pale turn bar with a dashed edge, labelled with the turn, over the four counts before the end of Page 1, then a diamond on the end of Page 1 and a solid bar reading Side 2 · 90° from there to the end of the show."
 />
 
 To face back on count 3, turning over the 2 counts before it:
 
 <Steps>
 
-1. Turn the marchers to the back on count 3, as above. Its diamond has a small tab with an arrow on its left.
+1. Turn the marchers to the back on count 3, as above. They stay selected, so their row shows; its diamond has a small tab with an arrow on its left.
 2. Drag the tab two counts to the left. A turn grows in front of the diamond, from count 1 to count 3, and the diamond stays on count 3. The turn goes at an even speed per count.
 
 </Steps>
@@ -110,7 +122,7 @@ To face back on count 3, turning over the 2 counts before it:
 
 ## Edit a turn
 
-Double-click a turn's bar in the <Ui k="cues.lane.facing" plain /> lane, or right-click it and choose <Ui k="actions.cues.editTurn" />.
+Select the marchers so their row shows, then double-click their turn's bar in the <Ui k="cues.lane.facing" plain /> lane, or right-click it and choose <Ui k="actions.cues.editTurn" />. A diamond in the top row with one facing change opens the same panel when you double-click it.
 
 <Media
   id="marchers-facing-popover"
@@ -125,10 +137,25 @@ Double-click a turn's bar in the <Ui k="cues.lane.facing" plain /> lane, or righ
 
 ## Move, change or delete a facing change
 
-- Drag the diamond, or the solid bar after it, sideways to move the facing change to another count. Its turn moves with it, taking the same number of counts. To move it without dragging, put the playhead on the new count, right-click the bar and choose <Ui k="actions.cues.moveToPlayhead" />.
+- Drag a diamond in the top row sideways to move every facing change on that count; each keeps its own turn. To move one group's alone, select them and drag the diamond in their row, or the solid bar after it.
+- Drag a group's diamond, or the solid bar after it, sideways to move that facing change to another count. Its turn moves with it, taking the same number of counts. To move it without dragging, put the playhead on the new count, right-click the bar and choose <Ui k="actions.cues.moveToPlayhead" />.
 - Click a bar to pick its facing change. As when you click a move's bar, that also selects its counts: the start flag goes to where the turn starts and the playhead to those marchers' next facing change.
-- Right-click a bar, or press and hold it on a tablet, for its menu: <Ui k="actions.cues.editTurn" plain />, <Ui k="actions.cues.addSelected" plain />, <Ui k="actions.cues.removeSelected" plain />, <Ui k="cues.lane.selectPerformers" plain />, <Ui k="actions.cues.moveToPlayhead" plain /> and <Ui k="actions.cues.delete" plain />.
-- Click a row's name to select its marchers.
+- Right-click a bar or a diamond, or press and hold it on a tablet, for its menu: <Ui k="actions.cues.editTurn" plain />, <Ui k="actions.cues.addSelected" plain />, <Ui k="actions.cues.removeSelected" plain />, <Ui k="cues.lane.selectPerformers" plain />, <Ui k="actions.cues.moveToPlayhead" plain /> and <Ui k="actions.cues.delete" plain />.
+- A diamond in the top row that several groups share has a shorter menu instead: <Ui k="cues.lane.keySelectAll" plain />, then one entry per group to select only that group.
+- Click a row's name to select its marchers, and only their row stays.
+
+## Edit some of a group
+
+Edits follow the selection. When you select only some of the marchers who share a facing change, their row's name says how many, such as "Trumpets 3 of 12", and editing it changes only the selected ones:
+
+- Dragging the row's diamond or solid bar, or its turn, and <Ui k="actions.cues.moveToPlayhead" plain />, move or stretch only their facing change.
+- The turn panel edits only theirs; its title says so, such as "T1–T3 (3 of 12)".
+
+The selected marchers split off into a facing change of their own, and the others keep theirs, as one step of undo. So you can see the split, the others' row stays under yours, dimmed, until you change the selection: click its name to select them. A drag on a diamond in the top row still moves every facing change on that count.
+
+To edit the whole group again, click the row's name ("Select all 12") first. With everyone in it selected, or nobody, an edit changes the whole facing change.
+
+To join them back, make their facing change match the others' again on the same count, by dragging it back or setting the same turn: the two become one. Or select them, right-click the others' dimmed row (its bars don't drag, but have the menu) and choose <Ui k="actions.cues.addSelected" plain />: the marchers you add leave their own facing change that it replaces, on the same count or a few counts off (between the group's facing changes before and after), and one left with nobody is deleted.
 
 ## See facing on the field
 
