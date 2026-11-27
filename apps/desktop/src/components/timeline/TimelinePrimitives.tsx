@@ -2796,6 +2796,8 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                     })}
                     title={flagTitle(kind, beatIndex)}
                     {...flagHandlers(kind, beatIndex)}
+                    // A line: the selected clip's edge under it takes a press there (#593)
+                    data-timeline-line=""
                     className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-40 w-12 -translate-x-1/2 touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2 enabled:cursor-ew-resize! disabled:cursor-default!"
                     style={{
                         left: x,
@@ -2811,7 +2813,7 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                         )}
                         style={{ height }}
                     />
-                    {(onCommit || live(kind)) && <TouchHitArea />}
+                    {(onCommit || live(kind)) && <TouchHitArea line />}
                 </button>
                 {/* The pennant is its own handle in the headroom strip (UI-20), above the
                     playhead's (z-50) and the loop's ends (z-58): after Stop the flag is drawn on
@@ -3221,6 +3223,8 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
                 type="button"
                 data-testid="timeline-playhead"
                 data-timeline-scrub="true"
+                // A line: the selected clip's edge under it takes a press there (#593)
+                data-timeline-line=""
                 // A finger's long press opens its menu (tablet 3.4), not the button's hint
                 data-own-long-press={onAddPage || basicPoint ? "" : undefined}
                 aria-label={t("timeline.playhead.label", {
@@ -3276,7 +3280,7 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
                 >
                     <path d="M0 0 H12 V6 L6 11 L0 6 Z" fill="currentColor" />
                 </svg>
-                {onSeek && <TouchHitArea />}
+                {onSeek && <TouchHitArea line />}
             </button>
         </AddPageFlagMenu>
     );

@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+    attachSelectedClipEdgePress,
     attachTimelineGestures,
     fingerDragSlop,
     findTouchHit,
     isTouchContextMenu,
+    selectedClipEdgeUnderLine,
     TimelineGestures,
     timelineNavigation,
     timelineTouchRegion,
@@ -736,6 +738,187 @@ describe("touch hit areas (tablet 3.3)", () => {
         viewport.insertBefore(pill, grip.button);
         expect(findTouchHit(viewport, 110, 50)?.target).toBe(grip.hit);
     });
+
+    /**
+     * Where a line sits on each of a clip's edges once the clip is selected: the start flag on its
+     * start, the playhead on its end. `on` is a point on the edge's handle under the line, `past`
+     * one on the line just outside the clip, and `chip` a control drawn over the handle there
+     */
+    const EDGES = {
+        start: {
+            handle: [40, 46],
+            line: [34, 46],
+            on: 43,
+            past: 37,
+            chip: [40, 50],
+        },
+        end: {
+            handle: [94, 100],
+            line: [94, 106],
+            on: 97,
+            past: 103,
+            chip: [90, 100],
+        },
+    } as const;
+
+    /**
+     * A clip with one edge's handle (selected or not), and that edge's line on it, painted over it
+     * as the pinned layer is
+     */
+    function lineOnClipEdge({
+        selected,
+        edge,
+    }: {
+        selected: boolean;
+        edge: keyof typeof EDGES;
+    }) {
+        const at = EDGES[edge];
+        const { viewport } = mount();
+        const clip = document.createElement("button");
+        clip.setAttribute("data-timeline-interactive", "true");
+        clip.getBoundingClientRect = () => rectOf(40, 100, 40, 60);
+        const handle = document.createElement("span");
+        if (selected) handle.setAttribute("data-selected-clip-edge", "");
+        handle.getBoundingClientRect = () => rectOf(...at.handle, 40, 60);
+        clip.append(handle);
+        viewport.append(clip);
+        const line = document.createElement("button");
+        if (edge === "end") line.setAttribute("data-timeline-scrub", "true");
+        else line.setAttribute("data-timeline-interactive", "true");
+        line.setAttribute("data-timeline-line", "");
+        line.getBoundingClientRect = () => rectOf(...at.line);
+        viewport.append(line);
+        return { viewport, clip, handle, line, at };
+    }
+
+    describe.each([
+        ["end", "the playhead"],
+        ["start", "the start flag"],
+    ] as const)(
+        "a mouse's press where a line crosses the selected clip's %s (#593)",
+        (edge, lineName) => {
+            const mountEdge = (selected: boolean) =>
+                lineOnClipEdge({ selected, edge });
+
+            it(`goes to the selected clip's ${edge} handle, under ${lineName}`, () => {
+                const { handle, line, at } = mountEdge(true);
+                const stack = document.elementsFromPoint(at.on, 50);
+                expect(stack[0]).toBe(line);
+                expect(selectedClipEdgeUnderLine(line, stack)).toBe(handle);
+            });
+
+            it("stays the line's on an unselected clip's edge, and off the handle", () => {
+                const unselected = mountEdge(false);
+                expect(
+                    selectedClipEdgeUnderLine(
+                        unselected.line,
+                        document.elementsFromPoint(unselected.at.on, 50),
+                    ),
+                ).toBeNull();
+                document.body.replaceChildren();
+                const { line, at } = mountEdge(true);
+                // On the line past the clip's edge, and on it above the clip row
+                for (const [x, y] of [
+                    [at.past, 50],
+                    [at.on, 20],
+                ] as const)
+                    expect(
+                        selectedClipEdgeUnderLine(
+                            line,
+                            document.elementsFromPoint(x, y),
+                        ),
+                    ).toBeNull();
+            });
+
+            it("stays where it landed when no line is on top, or another control is between", () => {
+                const { viewport, handle, line, at } = mountEdge(true);
+                expect(
+                    selectedClipEdgeUnderLine(
+                        handle,
+                        document.elementsFromPoint(at.on, 50).slice(1),
+                    ),
+                ).toBeNull();
+                const chip = document.createElement("button");
+                chip.getBoundingClientRect = () => rectOf(...at.chip, 40, 60);
+                viewport.insertBefore(chip, line);
+                expect(
+                    selectedClipEdgeUnderLine(
+                        line,
+                        document.elementsFromPoint(at.on, 50),
+                    ),
+                ).toBeNull();
+            });
+
+            it("is sent on to the handle, and the line never hears it; a finger's is left to the adapter", () => {
+                const { viewport, handle, line, at } = mountEdge(true);
+                const downs: string[] = [];
+                handle.addEventListener("pointerdown", (event) =>
+                    downs.push(`handle ${(event as PointerEvent).pointerType}`),
+                );
+                line.addEventListener("pointerdown", (event) =>
+                    downs.push(`line ${(event as PointerEvent).pointerType}`),
+                );
+                const detach = attachSelectedClipEdgePress(viewport);
+                line.dispatchEvent(
+                    fingerEvent("pointerdown", 1, at.on, 50, "mouse"),
+                );
+                expect(downs).toEqual(["handle mouse"]);
+                downs.length = 0;
+                line.dispatchEvent(
+                    fingerEvent("pointerdown", 2, at.on, 50, "touch"),
+                );
+                expect(downs).toEqual(["line touch"]);
+                downs.length = 0;
+                // Elsewhere on the line, the line takes it
+                line.dispatchEvent(
+                    fingerEvent("pointerdown", 3, at.past, 50, "mouse"),
+                );
+                expect(downs).toEqual(["line mouse"]);
+                detach();
+            });
+
+            it("leaves a Ctrl or Cmd press with the line, which the handle turns down", () => {
+                const { viewport, handle, line, at } = mountEdge(true);
+                const downs: string[] = [];
+                handle.addEventListener("pointerdown", () =>
+                    downs.push("handle"),
+                );
+                line.addEventListener("pointerdown", () => downs.push("line"));
+                const detach = attachSelectedClipEdgePress(viewport);
+                for (const key of ["ctrlKey", "metaKey"] as const) {
+                    const press = fingerEvent(
+                        "pointerdown",
+                        1,
+                        at.on,
+                        50,
+                        "mouse",
+                    );
+                    Object.defineProperty(press, key, { value: true });
+                    line.dispatchEvent(press);
+                }
+                expect(downs).toEqual(["line", "line"]);
+                detach();
+            });
+
+            it("focuses the clip, not the line, on the press's mouse down", () => {
+                const { viewport, clip, line, at } = mountEdge(true);
+                const detach = attachSelectedClipEdgePress(viewport);
+                line.dispatchEvent(
+                    fingerEvent("pointerdown", 1, at.on, 50, "mouse"),
+                );
+                const down = new MouseEvent("mousedown", {
+                    bubbles: true,
+                    cancelable: true,
+                    clientX: at.on,
+                    clientY: 50,
+                });
+                line.dispatchEvent(down);
+                expect(down.defaultPrevented).toBe(true);
+                expect(document.activeElement).toBe(clip);
+                detach();
+            });
+        },
+    );
 
     it("sends a finger's press near a target on to it, with its click; a mouse's stays where it landed", () => {
         const { viewport, bare } = mount();
