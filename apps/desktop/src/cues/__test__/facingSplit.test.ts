@@ -360,6 +360,19 @@ describe("Add selected to this cue, for Facing (#1318)", () => {
         expect(facing(after, 1, 41)).toBe(180);
     });
 
+    it("keeps a turn of theirs far from the cue, even when the slot is the whole show", () => {
+        // The trumpets' only Facing cue is far off: it's not the same turn, so it stays
+        const rest = cue(40, "side2", TRUMPETS.slice(3));
+        const theirs = cue(2, "side1", [1, 2, 3]);
+        const cues = [theirs, rest];
+        const plan = add(cues, rest, [1, 2, 3]);
+        expect(plan.deletedCueIds).toEqual([]);
+        expect(plan.modifiedCues).toEqual([
+            { id: rest.id, marcherIds: TRUMPETS, label: "x12" },
+        ]);
+        expect(facing(written(cues, plan), 1, 20)).toBe(facing(cues, 1, 20));
+    });
+
     it("leaves Equipment's other counts alone, taking them out of its own count's other cue", () => {
         const eq = (count: number, value: string, ids: number[]) =>
             cue(count, value, ids, {

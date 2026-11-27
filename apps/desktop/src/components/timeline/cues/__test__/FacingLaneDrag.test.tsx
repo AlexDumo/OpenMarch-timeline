@@ -540,6 +540,36 @@ describe("edits follow the selection (#1318)", () => {
         expect(useFacingSplitStore.getState().rest).toBeNull();
     });
 
+    it("picks the split-off cue once its write lands, when the split stays on the cue's count", async () => {
+        const turnStart = (container: HTMLElement) =>
+            container.querySelector(
+                '[data-cue-id="1"] [data-testid="facing-lane-turn-start"]',
+            )!;
+        const view = renderLane([cue(1, 13, "side2", { transition: 3 })], {
+            selectedIds: [1],
+        });
+        await dragBy(turnStart(view.container), -16);
+        expect(written.at(-1)!.newCues).toEqual([
+            expect.objectContaining({ beatId: 100 + 13, marcherIds: [1] }),
+        ]);
+        // The old cue still holds them all on that count: wait for the write
+        expect(useFacingSplitStore.getState().follow).toEqual(
+            expect.objectContaining({ ids: [1], rest: [2] }),
+        );
+        cleanup();
+        // The cues as written: the old cue keeps the rest, the new one has the selection
+        renderLane(
+            [
+                cue(1, 13, "side2", { transition: 3, marcherIds: [2] }),
+                cue(3, 13, "side2", { transition: 4, marcherIds: [1] }),
+            ],
+            { selectedIds: [1] },
+        );
+        await act(async () => {});
+        expect(useCueSelectionStore.getState().cueId).toBe(3);
+        expect(useFacingSplitStore.getState().follow).toBeNull();
+    });
+
     it("draws a split's rest dimmed and read-only under the selection's row; its name selects them", async () => {
         const split = [
             cue(1, 12, "side2", { marcherIds: [2] }),

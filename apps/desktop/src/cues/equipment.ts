@@ -436,8 +436,9 @@ export function withEquipmentSet(
  *   count, as setting that equipment there would.
  * - **Facing:** each added performer's one Facing cue nearest it in its slot: after the cue's
  *   performers' previous Facing cue and before their next (the start and end of the show when
- *   there's none), its own count included. A cue of theirs a couple of counts off is the same
- *   turn, written apart; only the nearest goes, so their cues elsewhere in a wide slot stay.
+ *   there's none), its own count included, and no more than a couple of counts from it beyond
+ *   the two turns. That's the same turn, written apart; only the nearest goes, so their cues
+ *   elsewhere in the show stay.
  *
  * Nothing when they're all in it already or the cue isn't there.
  */
@@ -484,6 +485,9 @@ export function planAddToCue({
     return plan;
 }
 
+/** How many counts apart two Facing cues can be, beyond their turns, and still be one turn */
+const SAME_TURN_COUNTS = 2;
+
 /**
  * For `planAddToCue`: which of `added` leave which other cue, by cue id. Equipment: all of them,
  * from each cue of the same kind on the count; Facing: each one, from their nearest cue in the
@@ -520,7 +524,17 @@ function whoLeaves(
             return other.beatId === cue.beatId && other.length === cue.length;
         if (cue.type !== "facing") return false;
         const there = countOf(other.beatId);
-        return there !== undefined && there > previous && there < next;
+        return (
+            there !== undefined &&
+            there > previous &&
+            there < next &&
+            // The same turn written apart: within a couple of counts of it, turns included, so a
+            // wide slot never takes a turn of theirs from elsewhere in the show
+            Math.abs(there - (at ?? there)) <=
+                SAME_TURN_COUNTS +
+                    (cue.transition ?? 0) +
+                    (other.transition ?? 0)
+        );
     };
     const leaving = new Map<number, number[]>();
     for (const id of added) {

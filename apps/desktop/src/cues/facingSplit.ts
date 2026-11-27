@@ -219,6 +219,8 @@ export const useFacingSplitStore = create<{
         readonly ids: readonly number[];
         readonly beatId: number;
         readonly popover: boolean;
+        /** Who stayed in the old cue on a split: the cue they land in holds none of them */
+        readonly rest: readonly number[];
     } | null;
     readonly rest: {
         readonly ids: readonly number[];
@@ -242,7 +244,12 @@ export const useFacingSplitStore = create<{
     rest: null,
     edited: ({ part, beatId, rest, selectedIds, popover }) =>
         setState((s) => ({
-            follow: { ids: [...part], beatId, popover },
+            follow: {
+                ids: [...part],
+                beatId,
+                popover,
+                rest: [...(rest ?? [])],
+            },
             rest:
                 rest && rest.length > 0
                     ? { ids: [...rest], selection: selectionKey(selectedIds) }
@@ -263,18 +270,23 @@ export function useSplitRest(
 }
 const EMPTY_IDS: readonly number[] = [];
 
-/** The Facing cue on `beatId` that turns every one of `ids` (the newest, when there are two) */
+/**
+ * The Facing cue on `beatId` that turns every one of `ids` and none of `rest` (the newest, when
+ * there are two). Until a split's write lands, the old cue still holds both, so it's not this.
+ */
 export function cueLandedFor(
     cues: readonly DatabaseCue[],
     ids: readonly number[],
     beatId: number,
+    rest: readonly number[] = [],
 ): DatabaseCue | null {
     return cues
         .filter(
             (c) =>
                 c.type === "facing" &&
                 c.beatId === beatId &&
-                ids.every((id) => c.marcherIds.includes(id)),
+                ids.every((id) => c.marcherIds.includes(id)) &&
+                !rest.some((id) => c.marcherIds.includes(id)),
         )
         .reduce<DatabaseCue | null>(
             (newest, c) => (newest === null || c.id > newest.id ? c : newest),

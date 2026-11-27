@@ -40,6 +40,7 @@ import { useTranslate } from "@tolgee/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import type { TimelineBandGeometry } from "@/components/timeline/TimelineBand";
+import { formatList } from "@/utilities/formatList";
 import {
     KEEP_MENU_EVENTS,
     MenuItemWithReason,
@@ -284,7 +285,12 @@ export function FacingLaneView({
     const landing = useFacingSplitStore((s) => s.follow);
     useEffect(() => {
         if (!landing || !show) return;
-        const landed = cueLandedFor(show.cues, landing.ids, landing.beatId);
+        const landed = cueLandedFor(
+            show.cues,
+            landing.ids,
+            landing.beatId,
+            landing.rest,
+        );
         if (!landed) return;
         useFacingSplitStore.getState().followed();
         pickCue(landed);
@@ -373,12 +379,12 @@ export function FacingLaneView({
             ? cueHeading(key.cueIds[0]!)
             : t("cues.lane.keyShared", {
                   count: key.cueIds.length,
-                  names: key.cueIds
-                      .map((id) => {
+                  names: formatList(
+                      key.cueIds.map((id) => {
                           const cue = show?.cues.find((c) => c.id === id);
                           return cue ? rowName(cue.marcherIds, cue.label) : "";
-                      })
-                      .join(", "),
+                      }),
+                  ),
               });
 
     const openMenu = (cueId: number, clientX: number, clientY: number) => {
