@@ -8,9 +8,10 @@
  *   orbit moves with them, so the viewer's orbit and zoom carry on around
  *   them. With `turnWithPerformer`, the orbit also swings round as they turn
  *   (eased), keeping the angle the viewer orbited to, like a game's camera.
- * - Point of view: the camera flies into their eyes, then looks where they
- *   face, turning with them, offset by where the viewer has looked (drag) and
- *   zoomed (field of view). With `showOwnBody` the eye sits inside their head
+ * - Point of view: the camera flies into their eyes, then looks where their
+ *   head faces (a bass drum's head turned to the front, too), turning with
+ *   them, offset by where the viewer has looked (drag) and zoomed (field of
+ *   view). With `showOwnBody` the eye sits inside their head
  *   and their arms and instrument show in front, their head, hat and plume
  *   left out while the camera is near their eyes; without, their whole body
  *   is left out of the picture.
@@ -28,6 +29,7 @@ import {
     POV_FOV_DEG,
     POV_FOV_MAX,
     POV_FOV_MIN,
+    lookHeading,
     povFraming,
     povLookOf,
     povPose,
@@ -79,6 +81,7 @@ export class FollowController {
     private inEyes = false;
     private look: PovLook = { yaw: 0, pitch: POV_DEFAULT_PITCH };
     private fovDeg = POV_FOV_DEG;
+    /** Where the point of view looks (radians), eased toward `lookHeading` of the performer. */
     private heading = Number.NaN;
     /** The heading the third-person orbit is turned to, eased toward the performer's. */
     private chase = Number.NaN;
@@ -133,7 +136,8 @@ export class FollowController {
         if (following.mode === "pov")
             return (
                 this.inEyes &&
-                Math.abs(angleDelta(this.heading, facing)) > TURN_DONE
+                Math.abs(angleDelta(this.heading, lookHeading(this.pose))) >
+                    TURN_DONE
             );
         return (
             this.hooks.turnWithPerformer() &&
@@ -210,7 +214,7 @@ export class FollowController {
         if (next.mode === "pov") {
             this.look = povLookOf(next.framing);
             this.fovDeg = povFovOf(next);
-            this.heading = pose.heading;
+            this.heading = lookHeading(pose);
             this.hideForEyes(next.marcherId);
             const view = povPose(pose, this.look, this.hooks.showOwnBody());
             this.rig.flyTo(view.position, view.target, {
@@ -321,7 +325,7 @@ export class FollowController {
         if (this.inEyes) {
             this.heading = easeAngle(
                 this.heading,
-                pose.heading,
+                lookHeading(pose),
                 dt,
                 POV_TURN_HALF_LIFE_MS,
             );
@@ -395,7 +399,7 @@ export class FollowController {
     /** Puts the camera in the performer's eyes, from the last pose read. */
     private place() {
         const view = povPose(
-            { ...this.pose, heading: this.heading },
+            { ...this.pose, heading: this.heading, headYaw: 0 },
             this.look,
             this.hooks.showOwnBody(),
         );

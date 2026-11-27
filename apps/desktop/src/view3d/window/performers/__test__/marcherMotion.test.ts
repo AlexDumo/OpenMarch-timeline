@@ -958,3 +958,51 @@ describe("standing on a podium", () => {
         expect(writes.map((w) => w.clip.row)).toEqual([rows[loop.clip]]);
     });
 });
+
+describe("eyes front", () => {
+    function motion(eyesFront: boolean[]) {
+        const yaws: [number, number][] = [];
+        const bodies = {
+            bake: { rows: {} },
+            setHeadYaw(slot: number, yaw: number) {
+                yaws.push([slot, yaw]);
+            },
+        } as unknown as MarcherBodies;
+        const plans = eyesFront.map(() => null);
+        const m = new MarcherMotion(
+            plans,
+            manifest,
+            bodies,
+            [],
+            [],
+            [],
+            [],
+            eyesFront,
+        );
+        return { m, yaws };
+    }
+
+    it("turns only eyes-front heads, from where each finally faces", () => {
+        const { m, yaws } = motion([true, false, true]);
+        m.writeHeads(
+            Float32Array.from([Math.PI / 2, Math.PI / 2, -Math.PI / 2]),
+        );
+        expect(yaws.map(([slot]) => slot)).toEqual([0, 2]);
+        expect(yaws[0][1]).toBeCloseTo((-70 * Math.PI) / 180, 6);
+        expect(yaws[1][1]).toBeCloseTo((70 * Math.PI) / 180, 6);
+        // facing the back: head on the chest
+        yaws.length = 0;
+        m.writeHeads(Float32Array.from([Math.PI, 0, Math.PI]));
+        expect(yaws[0][1]).toBeCloseTo(0, 6);
+    });
+
+    it("leaves a pit player looking at their instrument", () => {
+        const { m, yaws } = motion([true, true]);
+        m.writeHeads(
+            Float32Array.from([Math.PI / 2, Math.PI / 2]),
+            Int32Array.from([3, -1]),
+        );
+        expect(yaws[0]).toEqual([0, 0]);
+        expect(yaws[1][1]).toBeCloseTo((-70 * Math.PI) / 180, 6);
+    });
+});

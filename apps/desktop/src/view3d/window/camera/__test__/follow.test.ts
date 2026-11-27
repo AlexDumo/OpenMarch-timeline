@@ -314,6 +314,28 @@ describe("FollowController", () => {
         expect(dir.x).toBeGreaterThan(0.95);
     });
 
+    it("looks where the head faces when it's turned from the chest", () => {
+        // a bass drum on side 2 (+x), head turned back toward the front (+z)
+        const turned = pose({ heading: Math.PI / 2, headYaw: -Math.PI / 2 });
+        const view = povPose(turned, { yaw: 0, pitch: 0 });
+        expect(view.target[0] - view.position[0]).toBeCloseTo(0, 6);
+        expect(view.target[2] - view.position[2]).toBeGreaterThan(0);
+
+        const { camera, follow, state, run } = setup();
+        follow.change({ marcherId: 4, mode: "pov" }, 0);
+        run(0, FLY_MS + 32);
+        // they face side 2 with their head 70° back toward the front
+        state.performer = pose({
+            heading: Math.PI / 2,
+            headYaw: (-70 * Math.PI) / 180,
+        });
+        run(FLY_MS + 48, FLY_MS + 48 + 2000);
+        const dir = camera.getWorldDirection(new Vector3());
+        const yaw = Math.atan2(dir.x, dir.z);
+        expect((yaw * 180) / Math.PI).toBeCloseTo(20, 0);
+        expect(follow.easing).toBe(false);
+    });
+
     it("drags to look around and zooms in the point of view", () => {
         const { camera, follow, run } = setup();
         expect(follow.lookDrag(10, 0)).toBe(false);

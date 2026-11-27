@@ -1,3 +1,8 @@
+import type { FacingDirection } from "@/cues/facing";
+
+/** A section's default facing: the Facing cue value of one of the four directions. */
+export type DefaultFacing = `builtin:facing.${FacingDirection}`;
+
 class Section {
     private static currentScoreOrder = 0;
     /** The name of the section. E.g. "Baritone" */
@@ -15,7 +20,12 @@ class Section {
      * (`builtin:facing.front`, `.back`, `.side1` or `.side2`). A turn or an angle can't be a
      * default: there is nothing to turn from, and a default has no settings. Omitted, front.
      */
-    readonly defaultFacing?: string;
+    readonly defaultFacing?: DefaultFacing;
+    /**
+     * In the 3D View, the section's heads turn toward the front (the audience) whichever way
+     * their bodies face, as far as a neck turns: bass drums, played turned to a side.
+     */
+    readonly eyesFront: boolean;
 
     constructor({
         name,
@@ -23,12 +33,14 @@ class Section {
         prefix,
         tName,
         defaultFacing,
+        eyesFront = false,
     }: {
         name: string;
         family: SectionFamily;
         prefix: string;
         tName: string;
-        defaultFacing?: string;
+        defaultFacing?: DefaultFacing;
+        eyesFront?: boolean;
     }) {
         this.name = name;
         this.family = family;
@@ -36,6 +48,7 @@ class Section {
         this.prefix = prefix;
         this.tName = tName;
         this.defaultFacing = defaultFacing;
+        this.eyesFront = eyesFront;
     }
 
     /**
@@ -226,8 +239,9 @@ export const SECTIONS: { [key: string]: Section } = {
         name: "Bass Drum",
         tName: "section.instrument.bassDrum",
         prefix: "D",
-        // Right side to the front: bass drums are played turned to side 2
+        // Right side to the front: bass drums are played turned to side 2, looking at the front
         defaultFacing: "builtin:facing.side2",
+        eyesFront: true,
     }),
     Cymbals: new Section({
         family: FAMILIES.Battery,
@@ -241,6 +255,7 @@ export const SECTIONS: { [key: string]: Section } = {
         tName: "section.instrument.flubDrum",
         prefix: "L",
         defaultFacing: "builtin:facing.side2",
+        eyesFront: true,
     }),
     ColorGuard: new Section({
         family: FAMILIES.Guard,

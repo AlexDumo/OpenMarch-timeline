@@ -50,7 +50,8 @@ export const MAX_FOLLOW_DISTANCE_M = 100;
  * - `third`: `angleDeg` round them from behind (0), toward their right
  *   (90) to in front (180); `tiltDeg` how high the camera looks down from;
  *   `distanceM` from their chest.
- * - `pov`: `angleDeg` turns the look to their right (negative: left) and
+ * - `pov`: `angleDeg` turns the look to their right (negative: left) from
+ *   where their head faces (a bass drum's head turns to the front), and
  *   `tiltDeg` up (negative: down, at an instrument).
  */
 export const cameraFollowSchema = z.object({

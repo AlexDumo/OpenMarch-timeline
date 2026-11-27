@@ -81,7 +81,8 @@ import {
  * Contact shadow under each marcher: a soft dark disc on the turf, in place
  * of real shadows (the instanced skinning has no depth pass yet).
  */
-/** The head bone, as the bake names it (`HEAD_BONES` in `composeMath.ts`). */
+/** The neck and head bones, as the bake names them (`HEAD_BONES` in `composeMath.ts`). */
+const NECK_BONE = "DEF-spine004";
 const HEAD_BONE = "DEF-spine006";
 /**
  * Between the eyes, just inside the face, on the om-pose bodies at rest
@@ -99,8 +100,16 @@ export const EYE_AT_REST: readonly [number, number, number] = [0, 1.678, 0.06];
 export function headBase(
     skeleton: THREE.Skeleton,
 ): [number, number, number] | null {
+    return boneBase(skeleton, HEAD_BONE);
+}
+
+/** Bone `name`'s origin at bind in `skeleton` (dots dropped from names), metres, or null. */
+function boneBase(
+    skeleton: THREE.Skeleton,
+    name: string,
+): [number, number, number] | null {
     const i = skeleton.bones.findIndex(
-        (b) => b.name.replace(/\./g, "") === HEAD_BONE,
+        (b) => b.name.replace(/\./g, "") === name,
     );
     if (i < 0) return null;
     const at = new THREE.Vector3().setFromMatrixPosition(
@@ -392,6 +401,8 @@ export class MarcherBodies {
     private readonly meshOf: Int32Array;
     private readonly instanceOf: Int32Array;
     private readonly scaleOf: Float32Array;
+    /** Each slot's head turn from its chest, as last set (`setHeadYaw`). */
+    private readonly headYawOf: Float32Array;
     /** The hold id each slot plays (`slotHoldId`). */
     private readonly holdIds: string[];
     /** Per slot: which of its held looks draws (`heldLooks`). */
@@ -418,7 +429,11 @@ export class MarcherBodies {
         this.bake = bake;
         const anyBody = bodies.values().next().value!;
         this.headAt = headBase(anyBody.mesh.skeleton);
-        this.composer = new Composer(bake, looks.length);
+        this.composer = new Composer(
+            bake,
+            looks.length,
+            boneBase(anyBody.mesh.skeleton, NECK_BONE),
+        );
         const firstRow = this.firstRow();
         for (let i = 0; i < looks.length; i++)
             this.composer.writeFeet(i, { row: firstRow });
@@ -426,6 +441,7 @@ export class MarcherBodies {
         this.meshOf = new Int32Array(looks.length).fill(-1);
         this.instanceOf = new Int32Array(looks.length);
         this.scaleOf = new Float32Array(looks.length);
+        this.headYawOf = new Float32Array(looks.length);
         this.holdIds = looks.map((l) => slotHoldId(l.uniform));
         this.heldOf = new Uint8Array(looks.length);
 
@@ -627,6 +643,19 @@ export class MarcherBodies {
     /** Sets what slot `slot`'s Horn/Equipment channel plays; null follows the Feet. */
     setHorn(slot: number, play: ChannelPlay | null): void {
         this.composer.writeChannel(slot, "horn", play);
+    }
+
+    /** Turns slot `slot`'s head from its chest by `yaw` radians (`eyesFrontYaw`); 0 for none. */
+    setHeadYaw(slot: number, yaw: number): void {
+        // a body whose head can't turn looks where its chest does, camera too
+        if (!this.composer.turnsHeads) return;
+        this.headYawOf[slot] = yaw;
+        this.composer.writeHeadYaw(slot, yaw);
+    }
+
+    /** How far slot `slot`'s head is turned from its chest (radians, `setHeadYaw`). */
+    headYaw(slot: number): number {
+        return this.headYawOf[slot] ?? 0;
     }
 
     /**

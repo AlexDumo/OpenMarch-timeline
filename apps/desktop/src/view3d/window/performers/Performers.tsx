@@ -79,7 +79,10 @@ import { workspaceSettingsQueryOptions } from "@/hooks/queries/useWorkspaceSetti
 import { performerDefaults } from "@/view3d/core/performerDefaults";
 import { useHoldStyles } from "./useHoldStyles";
 import { isPercussionSection } from "@/view3d/core/marchers/crab";
-import { FRONT_HEADING } from "@/view3d/core/marchers/facing";
+import {
+    FRONT_HEADING,
+    isEyesFrontSection,
+} from "@/view3d/core/marchers/facing";
 import {
     buildCountClock,
     countAt,
@@ -316,6 +319,16 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                   )
                 : null,
         [looksKey, percussionTravel],
+    );
+    // Bass drums look at the front whichever way they face
+    const eyesFront = useMemo(
+        () =>
+            looksKey
+                ? (JSON.parse(looksKey) as [number, string, unknown][]).map(
+                      ([, section]) => isEyesFrontSection(section),
+                  )
+                : [],
+        [looksKey],
     );
     const marcherAssets = useMarcherAssets(
         heightClasses,
@@ -608,9 +621,17 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                       marcherLooks.map((l) =>
                           clipName(PODIUM_CLIP, l.body.heightClass),
                       ),
+                      eyesFront,
                   )
                 : null,
-        [marcherBodies, showPlans, marcherAssets, hornSlots, marcherLooks],
+        [
+            marcherBodies,
+            showPlans,
+            marcherAssets,
+            hornSlots,
+            marcherLooks,
+            eyesFront,
+        ],
     );
     const silkMotion = useMemo(
         () =>
@@ -776,6 +797,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 out.y = meshes.lift[i];
                 out.heading = headings[i];
                 out.height = heightsRef.current?.[i] ?? PERFORMER_HEIGHT;
+                out.headYaw = bodiesRef.current?.headYaw(i) ?? 0;
                 out.hasEye =
                     bodiesRef.current?.eyeInto(
                         i,
@@ -998,6 +1020,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                     lift,
                     headings,
                 );
+                // bass drums look to the front from where they finally face
+                motion?.writeHeads(headings, players);
                 const silks = silkMotion?.update(c, closed) ?? null;
                 withoutHidden(() =>
                     marcherBodies.writeFrame(

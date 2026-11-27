@@ -16,8 +16,11 @@
  *   The prop bone is a Horn bone; in body space (a toss) it skips the
  *   re-anchoring and plays its row's own matrix.
  *
- * Then the leg turn, per bone by its turn class, as om-pose's shader sums
- * it per class (LEG TURN in `instanced-marchers.js`). Pure: no three.js.
+ * Then the head turn (eyes front): the neck and head yawed from the chest
+ * about a vertical line through the neck's base, the neck by
+ * {@link NECK_SHARE} of it so the turn spreads up the neck. Then the leg
+ * turn, per bone by its turn class, as om-pose's shader sums it per class
+ * (LEG TURN in `instanced-marchers.js`). Pure: no three.js.
  */
 import { STATE_TEXELS } from "./channelState";
 
@@ -38,6 +41,16 @@ export const CHANNEL_HORN = 2;
  */
 export const HEAD_BONES: readonly string[] = ["DEF-spine004", "DEF-spine006"];
 
+/** How much of the head turn the neck takes; the head takes all of it. */
+export const NECK_SHARE = 0.5;
+
+/** The neck and head bones the head turn yaws, and the neck's base at bind (metres). */
+export interface HeadTurnSetup {
+    neck: number;
+    head: number;
+    at: readonly [number, number, number];
+}
+
 export interface ComposeSetup {
     /** Bones per row and per composed performer, the prop bone included. */
     bones: number;
@@ -52,6 +65,8 @@ export interface ComposeSetup {
     propBone: number;
     /** The leg turn's data bone and hip/shoulder width ratio; null off a v4 skeleton. */
     turn: { root: number; waist: number } | null;
+    /** The head turn's bones; absent or null, heads never turn from the chest. */
+    headTurn?: HeadTurnSetup | null;
 }
 
 /** GLSL's mod: never negative for a positive divisor. */
@@ -263,6 +278,9 @@ const S = {
     m: scratch(),
     yaw: scratch(),
     tw: scratch(),
+    neck: scratch(),
+    hy: scratch(),
+    head: scratch(),
 };
 
 /**
@@ -354,6 +372,27 @@ export function composeSlot(
         invert4(sample(setup.anchorHorn, horn, S.t), S.t2);
         mul4(S.chest, S.t2, S.spHorn);
     }
+    /** A bone by its channel, before any turn. */
+    const channelBone = (bone: number, into: Float32Array) => {
+        const ch = setup.channel[bone];
+        if (ch === CHANNEL_FEET) return feet(bone, into);
+        if (ch === CHANNEL_BODY || !horn) return bodyBone(bone, into);
+        if (bone === setup.propBone && propInBody)
+            return sample(bone, horn, into);
+        return mul4(S.spHorn, sample(bone, horn, S.t), into);
+    };
+
+    // the head turn: about the neck's base where the neck is now
+    const head = setup.headTurn;
+    const headYaw = head ? st[o + 7 * 4] : 0;
+    let px = 0,
+        pz = 0;
+    if (head && headYaw !== 0) {
+        const n = channelBone(head.neck, S.neck);
+        const [ax, ay, az] = head.at;
+        px = n[0] * ax + n[4] * ay + n[8] * az + n[12];
+        pz = n[2] * ax + n[6] * ay + n[10] * az + n[14];
+    }
 
     // the leg turn
     const turn = setup.turn;
@@ -402,13 +441,21 @@ export function composeSlot(
     }
 
     for (let bone = 0; bone < nb; bone++) {
-        const ch = setup.channel[bone];
-        let res: Float32Array = S.m;
-        if (ch === CHANNEL_FEET) feet(bone, res);
-        else if (ch === CHANNEL_BODY) bodyBone(bone, res);
-        else if (!horn) bodyBone(bone, res);
-        else if (bone === setup.propBone && propInBody) sample(bone, horn, res);
-        else mul4(S.spHorn, sample(bone, horn, S.t), res);
+        let res: Float32Array = channelBone(bone, S.m);
+        if (
+            head &&
+            headYaw !== 0 &&
+            (bone === head.neck || bone === head.head)
+        ) {
+            const t = bone === head.neck ? headYaw * NECK_SHARE : headYaw;
+            setYaw(S.hy, t);
+            mul4(S.hy, res, S.head);
+            const c = Math.cos(t),
+                sn = Math.sin(t);
+            S.head[12] += px - (c * px + sn * pz);
+            S.head[14] += pz - (-sn * px + c * pz);
+            res = S.head;
+        }
         if (turned) {
             const cls = setup.turnClass[bone];
             if (cls === 1) res = mul4(S.yaw, res, S.t2);
@@ -432,11 +479,13 @@ export function composeSlot(
  * The compose setup of a v4 skeleton from its bone names (dots dropped,
  * the prop bone last): Body owns DEF-spine.003 and up, Horn/Equipment the
  * shoulders, arms, hands and the prop bone, Feet the rest. The prop bone
- * turns as the right hand does.
+ * turns as the right hand does. `neckAt`, the neck's base at bind, lets heads
+ * turn from the chest (eyes front); without it they never do.
  */
 export function composeSetupOf(
     boneNames: readonly string[],
     turn: { classes: readonly number[]; root: number; waist: number } | null,
+    neckAt: readonly [number, number, number] | null = null,
 ): ComposeSetup {
     const find = (n: string) => {
         const i = boneNames.indexOf(n);
@@ -469,5 +518,12 @@ export function composeSetupOf(
         anchorHorn: find("DEF-spine003"),
         propBone,
         turn: turn ? { root: turn.root, waist: turn.waist } : null,
+        headTurn: neckAt
+            ? {
+                  neck: find(HEAD_BONES[0]),
+                  head: find(HEAD_BONES[1]),
+                  at: neckAt,
+              }
+            : null,
     };
 }

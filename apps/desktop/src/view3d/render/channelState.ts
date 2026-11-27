@@ -15,12 +15,16 @@
  * | 4     | Body rate    | once          |                 |          |
  * | 5     | Horn row     | samples       | counts          | phase    |
  * | 6     | Horn rate    | once          | prop in body    |          |
- * | 7     |              |               |                 |          |
+ * | 7     | head yaw     |               |                 |          |
  *
  * A Body or Horn row of -1 means the channel has nothing of its own: its
  * bones follow the channel under it (Horn follows Body, Body follows Feet).
  * A row plays clip time `count × rate + phase`, looping, or clamped to its
  * end when `once` (a transition).
+ *
+ * The head yaw (radians, the heading's sense) turns the neck and head from the
+ * chest: eyes front (`eyesFrontYaw`). It follows the performer's heading, so it
+ * is written whenever that changes, which is every frame of a Facing turn.
  */
 
 export const STATE_TEXELS = 8;
@@ -112,6 +116,24 @@ export function writeChannelState(
         [play.rate, play.once ? 1 : 0, play.propInBody ? 1 : 0, 0],
         o + 4,
     );
+}
+
+/** The head yaw's float in a slot's state. */
+const HEAD_YAW = 7 * 4;
+
+/**
+ * Sets slot `slot`'s head yaw (radians); false when it already had that one, so
+ * the caller needn't upload the state again.
+ */
+export function writeHeadYaw(
+    state: Float32Array,
+    slot: number,
+    yaw: number,
+): boolean {
+    const o = stateOffset(slot) + HEAD_YAW;
+    if (Math.abs(state[o] - yaw) < 1e-5) return false;
+    state[o] = yaw;
+    return true;
 }
 
 /** A fresh state array for `n` slots: every Body and Horn channel off. */

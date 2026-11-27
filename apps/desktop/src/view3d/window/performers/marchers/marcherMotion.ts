@@ -33,6 +33,7 @@ import type { MarcherPlan } from "@/view3d/core/marchers/planner";
 import { bodyAt, eventIndexAt } from "@/view3d/core/marchers/planner";
 import type { HeightClass } from "@/view3d/core/marchers/looks";
 import { marcherCueInputs } from "@/view3d/core/marchers/cueInputs";
+import { eyesFrontYaw } from "@/view3d/core/marchers/facing";
 import type {
     DirectionChange,
     DotMode,
@@ -367,6 +368,12 @@ export class MarcherMotion {
          * height class). None given leaves it at attention there.
          */
         private readonly podium: readonly string[] = [],
+        /**
+         * Per slot: looks at the front whichever way it faces (`isEyesFrontSection`), its
+         * head turned from its chest by `eyesFrontYaw` of its heading (`writeHeads`). None
+         * given, none do.
+         */
+        private readonly eyesFront: readonly boolean[] = [],
     ) {
         this.cursor = new Int32Array(plans.length).fill(-1);
         this.hornCursor = new Int32Array(plans.length).fill(-1);
@@ -510,6 +517,20 @@ export class MarcherMotion {
                 });
             // `update` finds the event again and writes its clip
             this.cursor[i] = CLOSED;
+        }
+    }
+
+    /**
+     * Turns each eyes-front slot's head from its chest toward the front (`eyesFrontYaw`) for
+     * where it finally faces, `headings`: call it after everything that writes them (`update`
+     * or `updateClosed`, pit players and podium stands). A slot playing a pit instrument
+     * (`players`) looks at the instrument it faces, its head on its chest.
+     */
+    writeHeads(headings: Float32Array, players?: Int32Array): void {
+        for (let i = 0; i < this.plans.length; i++) {
+            if (!this.eyesFront[i]) continue;
+            const playing = players !== undefined && players[i] >= 0;
+            this.bodies.setHeadYaw(i, playing ? 0 : eyesFrontYaw(headings[i]));
         }
     }
 
