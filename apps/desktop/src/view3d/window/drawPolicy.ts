@@ -1,7 +1,10 @@
 /**
  * When the 3D View draws (docs/3d/fidelity.md, P7.2): only while something
- * moves, and at a capped frame rate on battery. A paused show with a still
- * camera draws nothing, which is most of the battery the window can save.
+ * moves, and at a capped frame rate on battery, except while the show plays.
+ * A paused show with a still camera draws nothing, which is most of the
+ * battery the window can save. Playback isn't capped: beside the 2D field,
+ * which draws at the display's rate, a capped 3D View looks out of step
+ * (fork #1377).
  *
  * Pure: the scene's `DrawWhenNeeded` feeds it the time and what is moving,
  * and turns its answer into `invalidate()` calls.
@@ -38,15 +41,20 @@ export function noteFrame(state: DrawState, now: number): void {
     state.lastFrameMs = now;
 }
 
-/** True while the battery frame cap holds the frame rate down: always on battery. */
-export function frameCapped(onBattery: boolean): boolean {
-    return onBattery;
+/**
+ * True while the battery frame cap holds the frame rate down: on battery,
+ * unless the show is playing.
+ */
+export function frameCapped(onBattery: boolean, playing: boolean): boolean {
+    return onBattery && !playing;
 }
 
 export interface DrawInputs {
     /** Something animates continuously: playback, a camera move. */
     moving: boolean;
     onBattery: boolean;
+    /** The show is playing: draws at the display's rate even on battery. */
+    playing: boolean;
 }
 
 /**
@@ -60,7 +68,11 @@ export function nextFrameDelay(
 ): number | null {
     const active = inputs.moving || now < state.awakeUntil;
     if (!active) return null;
-    if (!frameCapped(inputs.onBattery) || state.lastFrameMs === null) return 0;
+    if (
+        !frameCapped(inputs.onBattery, inputs.playing) ||
+        state.lastFrameMs === null
+    )
+        return 0;
     const wait =
         1000 / BATTERY_FPS - (now - state.lastFrameMs) - FRAME_SLACK_MS;
     return wait > 0 ? wait : 0;

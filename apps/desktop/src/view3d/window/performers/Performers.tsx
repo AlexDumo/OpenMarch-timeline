@@ -160,6 +160,11 @@ import { useShowFlags } from "@/hooks/queries/useShowFlags";
 import { flagCueValues } from "@/showAssets/flags";
 import { useFlagArtworkAtlas } from "./marchers/flagArtworkAtlas";
 import { SilkMotion } from "./marchers/silkMotion";
+import {
+    installPlaybackProbe,
+    probeFrame,
+    probeRecording,
+} from "./playbackProbe";
 
 const CYLINDER_SEGMENTS = 20;
 const RING_SEGMENTS = 32;
@@ -604,6 +609,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     );
     // Meshes, bakes and plans land outside React's props: draw them.
     useEffect(() => requestDraw(1000));
+    useEffect(() => installPlaybackProbe(), []);
     const motion = useMemo(
         () =>
             marcherBodies && showPlans && marcherAssets && marcherLooks
@@ -879,6 +885,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     const cameraRef = useRef<[number, number, number]>([0, 0, 0]);
     const lodCameraRef = useRef<[number, number, number]>([NaN, NaN, NaN]);
     useFrame((state) => {
+        const frameStart = performance.now();
         if (!meshes) return;
         const p = state.camera.position;
         const cam = cameraRef.current;
@@ -953,6 +960,27 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         }
 
         const { bodies, rings, visible, xz, placed, lift } = meshes;
+        const recordProbe = (c: number) => {
+            const dot = new Float32Array(xz.length);
+            const dotPlaced = new Uint8Array(placed.length);
+            writePerformerPositions(
+                slots,
+                ms,
+                fieldProperties,
+                visible,
+                dot,
+                dotPlaced,
+            );
+            probeFrame(
+                slots.ids,
+                ms,
+                c,
+                !!sync.clock?.playing,
+                xz,
+                dot,
+                performance.now() - frameStart,
+            );
+        };
         if (moved) {
             // the marchers run a count ahead of the clock (`STEP_AHEAD`), so
             // they're placed from the drill a count later; closed, they stand
@@ -1035,6 +1063,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                     ),
                 );
                 marcherBodies.compose(state.gl);
+                if (probeRecording()) recordProbe(c);
                 lod[0] = cam[0];
                 lod[1] = cam[1];
                 lod[2] = cam[2];

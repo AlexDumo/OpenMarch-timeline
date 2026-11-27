@@ -67,6 +67,7 @@ import { useView3dWindowStore } from "@/stores/View3dWindowStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { isWebBuild } from "@/utilities/webBuild";
 import { view3dAutoOpenOnShow } from "./view3dAutoOpen";
+import { installEditorPlaybackProbe } from "./editorPlaybackProbe";
 import {
     VIEW3D_AUTO_OPEN_SETTING,
     VIEW3D_CLOCK_CHANNEL,
@@ -188,6 +189,7 @@ export function useView3dPublisher() {
     const setWindowOpen = useView3dWindowStore((s) => s.setOpen);
     // The window goes with the show
     useEffect(() => () => setWindowOpen(false), [setWindowOpen]);
+    useEffect(() => installEditorPlaybackProbe(), []);
 
     // Starts above any earlier editor session's numbers, so a reloaded
     // editor's clocks aren't ignored by a window that stayed open.

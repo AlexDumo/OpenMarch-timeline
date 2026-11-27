@@ -596,6 +596,30 @@ a flat silk needs few cells, and `guard.test.ts` pins their own budgets.
   measured at the old 1.5 × 0.7 m size, before C4.11's 44 × 66 in cut; the
   grid's cell count, and so its triangles, doesn't depend on the size.
 
+### 2026-11-27 · fix/3d-playback-sync-1377 · playback sync with the 2D field (fork #1377)
+
+- Report: on a MacBook Air (M5) the 3D View "doesn't match" the 2D field
+  during playback and performers don't move smoothly.
+- Measured with `window.view3dPlaybackTest` (3D View) and
+  `window.view3dEditorPlaybackTest` (editor), lined up by wall time, on the
+  reporter's 171-performer field show, 12 s of Preview playback, built
+  Electron app in Docker + Xvfb on an RTX 3060 Ti (ANGLE/Vulkan).
+  - Clock: the 3D View's show time is 4 ms ahead of the editor's live audio
+    time (median; -4 to +10 ms). The clock sync is fine.
+  - Bodies: every frame, each body's root moves at its dot's speed (1.14 m/s
+    at 8 to 5, 120 bpm), half a step ahead of the dot (0.29 m at 8 to 5,
+    0.57 m at 16 to 5), as `STEP_AHEAD` intends. Roots don't move once per
+    step; at a turn the body cuts the corner on the transition clip's root.
+  - Frame rate: the performers take 0.8 ms CPU a frame (p90 1.1). This box
+    drew both windows at about 16 fps (the editor alone at 24 fps), so it
+    can't stand in for the Mac's frame rate.
+- The reporter's own recordings, by frame differencing: a small indoor show
+  drew the 3D View at 28 fps beside a 49 fps 2D field (the 30 fps battery
+  cap); the 171-performer show drew both at about 20 fps.
+- Change: the battery frame cap no longer applies while the show plays
+  (`frameCapped(onBattery, playing)`); the quality fallback can then measure
+  playback on battery too.
+
 ## Packaging
 
 ### 2026-10-11 · 3d-worker (3d/c1-sharp) · C1.5 sharp, macOS arm64
