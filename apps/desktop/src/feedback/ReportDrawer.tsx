@@ -246,7 +246,10 @@ function RecordingBar({ recording }: { recording: RecordingInProgress }) {
             role="status"
             className="bg-bg-1 text-text border-red fixed bottom-16 left-1/2 z-50 flex -translate-x-1/2 items-center gap-12 rounded-full border py-6 pr-6 pl-16 font-sans shadow-xl"
         >
-            <span className="bg-red size-8 animate-pulse rounded-full" />
+            {/* Still, not pulsing: an endless animation keeps the editor
+                drawing every frame and halved the 3D View's frame rate while
+                it was recorded (fork #1378) */}
+            <span className="bg-red size-8 rounded-full" />
             <span className="text-body tabular-nums">
                 <T
                     keyName="feedback.record.recording"

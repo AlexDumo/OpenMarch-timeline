@@ -593,7 +593,8 @@ function RecordingControls({
         const seconds = Math.max(0, Math.round((now - state.startedAt) / 1000));
         return (
             <div className="rounded-6 border-red flex items-center gap-12 border p-12">
-                <span className="bg-red size-8 animate-pulse rounded-full" />
+                {/* Still, like the recording bar's (no endless animation while recording) */}
+                <span className="bg-red size-8 rounded-full" />
                 <span className="text-body flex-1">
                     <T
                         keyName="feedback.record.recording"

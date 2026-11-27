@@ -1,13 +1,21 @@
 /**
- * Records the editor for a bug report (fork #801). In the desktop app the
- * main process answers the screen request with the editor window itself
- * (`electron/main/reports.ts`), so nothing else on screen is captured and there is
- * no picker. In the web editor the browser's picker offers this tab first.
+ * Records OpenMarch for a bug report (fork #801). In the desktop app every
+ * OpenMarch window is captured and the video follows the one in front
+ * (`windowsRecorder.ts`, fork #1378); main answers each screen request with
+ * one of its own windows (`electron/main/reportRecording.ts`), so nothing else
+ * on screen is captured and there is no picker. In the web editor the
+ * browser's picker offers this tab first.
  * The microphone is optional and mixed in as the audio track.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isWebBuild } from "@/utilities/webBuild";
+import { useTranslate } from "@tolgee/react";
 import { MAX_RECORDING_SECONDS } from "./reportDraft";
+import {
+    canRecordAllWindows,
+    recordAllWindows,
+    type WindowsRecording,
+} from "./windowsRecorder";
 
 /**
  * In a browser the person picks what to share. Offer this tab first and
@@ -21,7 +29,10 @@ const WEB_PICKER_HINTS = {
 };
 
 const DISPLAY_OPTIONS = {
-    video: { frameRate: 30 },
+    // The video is at most 1920 × 1080, so larger captures would only cost time
+    video: isWebBuild
+        ? { frameRate: 30 }
+        : { frameRate: 30, width: { max: 1920 }, height: { max: 1080 } },
     audio: false,
     ...(isWebBuild ? WEB_PICKER_HINTS : {}),
 } as DisplayMediaStreamOptions;
@@ -65,6 +76,8 @@ export function useReportRecording() {
     const [state, setState] = useState<RecordingState>({ status: "idle" });
     const recorder = useRef<MediaRecorder | null>(null);
     const streams = useRef<MediaStream[]>([]);
+    const windows = useRef<WindowsRecording | null>(null);
+    const { t } = useTranslate();
     const limit = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const release = useCallback(() => {
@@ -72,6 +85,8 @@ export function useReportRecording() {
         limit.current = null;
         streams.current.forEach((s) => s.getTracks().forEach((t) => t.stop()));
         streams.current = [];
+        windows.current?.stop();
+        windows.current = null;
     }, []);
 
     const stop = useCallback(() => {
@@ -86,12 +101,29 @@ export function useReportRecording() {
                 return;
             }
             try {
-                const screen =
-                    await navigator.mediaDevices.getDisplayMedia(
+                const tracks: MediaStreamTrack[] = [];
+                // Ending the share from outside (window closed) ends the recording
+                let onScreenEnded = (_stop: () => void) => {};
+                if (!isWebBuild && canRecordAllWindows()) {
+                    // Follows the window in front; a closed window hands over to another
+                    const all = await recordAllWindows(
                         DISPLAY_OPTIONS,
+                        t("feedback.record.minimized"),
                     );
-                streams.current.push(screen);
-                const tracks: MediaStreamTrack[] = [...screen.getVideoTracks()];
+                    windows.current = all;
+                    tracks.push(all.track);
+                } else {
+                    const screen =
+                        await navigator.mediaDevices.getDisplayMedia(
+                            DISPLAY_OPTIONS,
+                        );
+                    streams.current.push(screen);
+                    tracks.push(...screen.getVideoTracks());
+                    onScreenEnded = (stop) =>
+                        screen
+                            .getVideoTracks()[0]
+                            ?.addEventListener("ended", stop);
+                }
                 if (microphone) {
                     const mic = await microphoneStream();
                     // The screen was allowed but not the microphone: say which
@@ -129,8 +161,7 @@ export function useReportRecording() {
                         ),
                     });
                 };
-                // Ending the share from outside (window closed) ends the recording
-                screen.getVideoTracks()[0]?.addEventListener("ended", stop);
+                onScreenEnded(stop);
                 recorder.current = rec;
                 rec.start(1000);
                 limit.current = setTimeout(stop, MAX_RECORDING_SECONDS * 1000);
@@ -140,7 +171,7 @@ export function useReportRecording() {
                 setState({ status: "failed", reason: "denied" });
             }
         },
-        [release, stop],
+        [release, stop, t],
     );
 
     const discard = useCallback(() => {

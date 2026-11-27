@@ -1,9 +1,11 @@
 /**
  * Bug and feedback reports from the editor's report drawer (fork #801): the
  * main process makes a scrubbed copy of the open show, uploads it with the
- * recording and the diagnostics, and lets the editor record its own window.
+ * recording and the diagnostics, and lets the editor record OpenMarch's
+ * windows (`reportRecording.ts`).
  */
-import { app, ipcMain, session, type BrowserWindow } from "electron";
+import { app, ipcMain, type BrowserWindow } from "electron";
+import { registerReportRecording } from "./reportRecording";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -245,21 +247,5 @@ export function registerReports(options: ReportOptions) {
         },
     );
 
-    // Recording: the editor asks for the screen and gets its own window's
-    // picture: no system picker, nothing else on screen. Every other request
-    // is refused, as before this handler existed.
-    void app.whenReady().then(() =>
-        session.defaultSession.setDisplayMediaRequestHandler(
-            (request, callback) => {
-                const main = options.getMainWindow();
-                if (
-                    main &&
-                    !main.isDestroyed() &&
-                    request.frame?.top === main.webContents.mainFrame
-                )
-                    callback({ video: main.webContents.mainFrame });
-                else callback({});
-            },
-        ),
-    );
+    registerReportRecording(options);
 }
