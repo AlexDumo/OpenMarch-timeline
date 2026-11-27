@@ -8,8 +8,9 @@ import {
 } from "../orderAnimations";
 
 /**
- * Who goes where's walking pictures in each option's tip (09-who-goes-where.md, change log row
- * 12): seven marchers walk to a new line, who goes where worked out by the real assignment
+ * Who goes where's walking pictures in each option's tip (09-who-goes-where.md, change log rows
+ * 12 and 16): seven marchers walk to a new form in a scene that shows why you'd pick the option,
+ * who goes where worked out by the real assignment
  */
 
 const sequence = (choice: (typeof ORDER_CHOICES)[number]) =>
@@ -17,6 +18,7 @@ const sequence = (choice: (typeof ORDER_CHOICES)[number]) =>
 
 describe("who goes where's walking pictures", () => {
     it("shows each option's rule on the new line, read left to right", () => {
+        // A ring opened in order around it; a line turned around
         expect(sequence("keep")).toBe("1 2 3 4 5 6 7");
         expect(sequence("reverse")).toBe("7 6 5 4 3 2 1");
         // Each half flipped: the middle of the line at the ends, its ends meeting in the middle
@@ -26,6 +28,8 @@ describe("who goes where's walking pictures", () => {
     });
 
     it("keeps each section on one run of spots, where Least travel mixes them", () => {
+        // One section in front, one behind: side by side on the arc
+        expect(sequence("sections")).toBe("1 2 3 4 5b 6b 7b");
         const sections = orderAnimation("sections");
         const groups = [...sections.marchers]
             .sort((a, b) => a.to.x - b.to.x)
@@ -47,6 +51,22 @@ describe("who goes where's walking pictures", () => {
         // Reverse order's walks all cross; Keep order's none
         expect(animationCrossings(orderAnimation("keep"))).toBe(0);
         expect(animationCrossings(orderAnimation("reverse"))).toBe(21);
+    });
+
+    it("rings the leader where order matters, and Inside out's two ends", () => {
+        const leads = (choice: (typeof ORDER_CHOICES)[number]) => {
+            const picture = orderAnimation(choice);
+            return picture.marchers
+                .filter((m) => m.lead)
+                .map((m) => picture.spots.indexOf(m.to));
+        };
+        // The leader opens the ring at the arc's first spot, and turns around to its last
+        expect(leads("keep")).toEqual([0]);
+        expect(leads("reverse")).toEqual([6]);
+        // The ends meet either side of the middle
+        expect(leads("inside")).toEqual([2, 4]);
+        for (const choice of ["nearest", "zipper", "sections"] as const)
+            expect(leads(choice)).toEqual([]);
     });
 
     it("gives every marcher their own spot, all inside the picture", () => {

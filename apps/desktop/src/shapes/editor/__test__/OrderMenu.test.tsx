@@ -108,6 +108,10 @@ describe("who goes where's menu", () => {
                 '[data-testid="shape-order-inside-animation-marcher"]',
             ).length,
         ).toBe(7);
+        // No drill numbers on the dots, so they can't pass for the show's own marchers; Inside
+        // out's two ends are ringed instead
+        expect(picture.querySelectorAll("text")).toHaveLength(0);
+        expect(picture.querySelectorAll("[data-lead]")).toHaveLength(2);
         // Screen readers still hear just the words
         expect(
             screen.getByTestId("shape-order-inside"),

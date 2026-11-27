@@ -20,18 +20,13 @@ import "./OrderAnimation.css";
 const R = 3.5;
 /** A spot on the new line, drawn as the open shape draws its spots */
 const SPOT_R = 2.6;
-/** A drill number above its dot, as the field draws it */
-const LABEL_SIZE = 8;
-const LABEL_LIFT = R * 2.2;
-/** The field's label face (`LABEL_FONT` in fieldFonts.ts, bold) */
-const LABEL_FAMILY = '"Courier New", monospace';
+/** The ring around a leader: no drill numbers, so the eye follows this one */
+const LEAD_R = R + 2;
 /** A start ghost's and a walk's strength, as on the field (FieldOverlay) */
 const GHOST_OPACITY = 0.35;
 const WALK_ALPHA = 0.4;
 /** The second group's dots (Zipper's second line, Within sections' second section) */
 const SECOND_FILL = "rgb(37, 99, 235)";
-/** The drill prefix of each group */
-const PREFIX = ["T", "M"] as const;
 
 /**
  * The show's field theme, so the picture matches the field, or the default one with no show
@@ -47,9 +42,10 @@ function useFieldTheme(): FieldTheme {
 
 /**
  * Who goes where's walking picture in an option's tip (09-who-goes-where.md): a piece of field,
- * drawn the way the field draws an open shape. Seven marchers with drill numbers walk from where
- * they stand to the spots the option gives them on a new line, worked out by the real assignment
- * (`orderAnimations.ts`). Faint ghosts mark where they started and faint lines their walks, so the
+ * drawn the way the field draws an open shape. Seven marchers walk from where they stand to the
+ * spots the option gives them on a new form, worked out by the real assignment
+ * (`orderAnimations.ts`). They carry no drill numbers, so they can't pass for the show's own
+ * marchers; a ringed leader shows the order. Faint ghosts mark where they started and faint lines their walks, so the
  * picture also reads as a still, which is what people asking for reduced motion get. It's
  * decoration: the tip's words say what the option does.
  */
@@ -68,9 +64,10 @@ export function OrderAnimation({
     const walk = rgbaToString({ ...theme.shape, a: WALK_ALPHA });
     const fill = (group: 0 | 1) =>
         group ? SECOND_FILL : rgbaToString(theme.defaultMarcher.fill);
-    // Grid lines through the new line's spots: every step faint, every fourth darker
-    const x0 = picture.line.a.x % step;
-    const y0 = picture.line.a.y % step;
+    // Grid lines through the first spot: every step faint, every fourth darker
+    const origin = picture.spots[0]!;
+    const x0 = origin.x % step;
+    const y0 = origin.y % step;
     const grid = (count: number, offset: number) =>
         Array.from({ length: count }, (_, i) => offset + i * step);
     const xs = grid(Math.ceil(width / step), x0);
@@ -101,7 +98,7 @@ export function OrderAnimation({
                     x2={x}
                     y2={height}
                     stroke={rgbaToString(
-                        strong(x, picture.line.a.x)
+                        strong(x, origin.x)
                             ? theme.secondaryStroke
                             : theme.tertiaryStroke,
                     )}
@@ -116,7 +113,7 @@ export function OrderAnimation({
                     x2={width}
                     y2={y}
                     stroke={rgbaToString(
-                        strong(y, picture.line.a.y)
+                        strong(y, origin.y)
                             ? theme.secondaryStroke
                             : theme.tertiaryStroke,
                     )}
@@ -144,14 +141,15 @@ export function OrderAnimation({
                     strokeWidth={1}
                 />
             ))}
-            <line
-                x1={picture.line.a.x}
-                y1={picture.line.a.y}
-                x2={picture.line.b.x}
-                y2={picture.line.b.y}
-                stroke={shape}
-                strokeWidth={1}
-            />
+            {picture.outline.map((points, i) => (
+                <polyline
+                    key={`outline-${i}`}
+                    points={points.map((p) => `${p.x},${p.y}`).join(" ")}
+                    fill="none"
+                    stroke={shape}
+                    strokeWidth={1}
+                />
+            ))}
             {picture.spots.map((p, i) => (
                 <circle
                     key={`spot-${i}`}
@@ -163,11 +161,12 @@ export function OrderAnimation({
                     strokeWidth={1}
                 />
             ))}
-            {picture.marchers.map(({ from, to, n, group }, i) => (
+            {picture.marchers.map(({ from, to, group, lead }, i) => (
                 <g
                     key={`walker-${i}`}
                     className="order-walk"
                     data-testid={testId ? `${testId}-marcher` : undefined}
+                    data-lead={lead || undefined}
                     style={
                         {
                             "--dx": `${to.x - from.x}px`,
@@ -183,17 +182,16 @@ export function OrderAnimation({
                         stroke={rgbaToString(theme.defaultMarcher.outline)}
                         strokeWidth={0.5}
                     />
-                    <text
-                        x={from.x}
-                        y={from.y - LABEL_LIFT}
-                        fontSize={LABEL_SIZE}
-                        fontWeight="bold"
-                        fontFamily={LABEL_FAMILY}
-                        textAnchor="middle"
-                        fill={rgbaToString(theme.defaultMarcher.label)}
-                    >
-                        {`${PREFIX[group]}${n}`}
-                    </text>
+                    {lead && (
+                        <circle
+                            cx={from.x}
+                            cy={from.y}
+                            r={LEAD_R}
+                            fill="none"
+                            stroke={rgbaToString(theme.defaultMarcher.label)}
+                            strokeWidth={1}
+                        />
+                    )}
                 </g>
             ))}
         </svg>
