@@ -349,6 +349,51 @@ export function planCueChange({
 }
 
 /**
+ * Moves every cue in `cueIds` to `beatId` as one write (the Facing lane's shared keyframe, fork
+ * #1315): each moves as `planCueChange` moves it alone, keeping its turn, one after another, and
+ * the plan is what changed in the end. Nothing when nothing changes.
+ */
+export function planCuesMove({
+    cues,
+    cueIds,
+    beatId,
+    relabelFor,
+}: {
+    cues: readonly DatabaseCue[];
+    cueIds: readonly number[];
+    beatId: number;
+    relabelFor: (marcherIds: readonly number[]) => string | null;
+}): EquipmentSet {
+    let now: DatabaseCue[] = [...cues];
+    for (const cueId of cueIds) {
+        // A cue an earlier one merged into is gone
+        if (!now.some((c) => c.id === cueId)) continue;
+        now = withEquipmentSet(
+            now,
+            planCueChange({ cues: now, cueId, change: { beatId }, relabelFor }),
+        );
+    }
+    const plan = emptyPlan();
+    const after = new Map(now.map((c) => [c.id, c]));
+    for (const cue of cues) {
+        const next = after.get(cue.id);
+        if (!next) {
+            plan.deletedCueIds.push(cue.id);
+            continue;
+        }
+        const ids = next.marcherIds.join() !== cue.marcherIds.join();
+        const fields: ModifiedCueArgs = {
+            id: cue.id,
+            ...(next.beatId !== cue.beatId && { beatId: next.beatId }),
+            ...(ids && { marcherIds: next.marcherIds }),
+            ...(next.label !== cue.label && { label: next.label }),
+        };
+        if (Object.keys(fields).length > 1) plan.modifiedCues.push(fields);
+    }
+    return plan;
+}
+
+/**
  * `cues` as they would be after `plan` is written, for drawing a drag's preview from the very edit
  * its drop writes: deleted cues gone, modified ones changed. A plan that makes new cues (setting
  * equipment) isn't previewed; a cue change makes none.
@@ -380,4 +425,137 @@ export function withEquipmentSet(
                 ...(change.label !== undefined && { label: change.label }),
             };
         });
+}
+
+/**
+ * "Add selected to this cue" (fork #992, #1318): `marcherIds` join cue `cueId` and leave the cue
+ * of theirs it replaces, so they do what it does there rather than keep a cue of their own beside
+ * it. A cue left with nobody is deleted; one write, so one undo step.
+ *
+ * - **Equipment:** their other cue of the same kind (lasting, or momentary of one length) on its
+ *   count, as setting that equipment there would.
+ * - **Facing:** each added performer's one Facing cue nearest it in its slot: after the cue's
+ *   performers' previous Facing cue and before their next (the start and end of the show when
+ *   there's none), its own count included, and no more than a couple of counts from it beyond
+ *   the two turns. That's the same turn, written apart; only the nearest goes, so their cues
+ *   elsewhere in the show stay.
+ *
+ * Nothing when they're all in it already or the cue isn't there.
+ */
+export function planAddToCue({
+    cues,
+    cueId,
+    marcherIds,
+    countOf,
+    relabelFor,
+}: {
+    cues: readonly DatabaseCue[];
+    cueId: number;
+    marcherIds: readonly number[];
+    /** A beat's count, for the Facing cue's slot */
+    countOf: (beatId: number) => number | undefined;
+    /** The label for a cue now holding these performers */
+    relabelFor: (marcherIds: readonly number[]) => string | null;
+}): EquipmentSet {
+    const plan = emptyPlan();
+    const cue = cues.find((c) => c.id === cueId);
+    if (!cue) return plan;
+    const joined = editedPerformers(cue, marcherIds, "add");
+    if (!joined) return plan;
+    const added = marcherIds.filter((id) => !cue.marcherIds.includes(id));
+    const leaving = whoLeaves(cue, added, cues, countOf);
+    for (const other of cues) {
+        const ids = leaving.get(other.id);
+        if (!ids) continue;
+        const rest = editedPerformers(other, ids, "remove");
+        if (rest === null) continue;
+        if (rest.length === 0) plan.deletedCueIds.push(other.id);
+        else
+            plan.modifiedCues.push({
+                id: other.id,
+                marcherIds: rest,
+                label: relabelFor(rest),
+            });
+    }
+    plan.modifiedCues.push({
+        id: cue.id,
+        marcherIds: joined,
+        label: relabelFor(joined),
+    });
+    return plan;
+}
+
+/** How many counts apart two Facing cues can be, beyond their turns, and still be one turn */
+const SAME_TURN_COUNTS = 2;
+
+/**
+ * For `planAddToCue`: which of `added` leave which other cue, by cue id. Equipment: all of them,
+ * from each cue of the same kind on the count; Facing: each one, from their nearest cue in the
+ * slot.
+ */
+function whoLeaves(
+    cue: DatabaseCue,
+    added: readonly number[],
+    cues: readonly DatabaseCue[],
+    countOf: (beatId: number) => number | undefined,
+): Map<number, number[]> {
+    // A Facing cue's slot: between its performers' Facing cues before and after it
+    const at = countOf(cue.beatId);
+    const theirs = cues.flatMap((c) => {
+        const count = countOf(c.beatId);
+        return c.type === "facing" &&
+            c.id !== cue.id &&
+            count !== undefined &&
+            c.marcherIds.some((id) => cue.marcherIds.includes(id))
+            ? [count]
+            : [];
+    });
+    const previous =
+        at === undefined
+            ? Infinity
+            : Math.max(-Infinity, ...theirs.filter((count) => count < at));
+    const next =
+        at === undefined
+            ? -Infinity
+            : Math.min(Infinity, ...theirs.filter((count) => count > at));
+    const inSlot = (other: DatabaseCue): boolean => {
+        if (other.id === cue.id || other.type !== cue.type) return false;
+        if (cue.type === "equipment")
+            return other.beatId === cue.beatId && other.length === cue.length;
+        if (cue.type !== "facing") return false;
+        const there = countOf(other.beatId);
+        return (
+            there !== undefined &&
+            there > previous &&
+            there < next &&
+            // The same turn written apart: within a couple of counts of it, turns included, so a
+            // wide slot never takes a turn of theirs from elsewhere in the show
+            Math.abs(there - (at ?? there)) <=
+                SAME_TURN_COUNTS +
+                    (cue.transition ?? 0) +
+                    (other.transition ?? 0)
+        );
+    };
+    const leaving = new Map<number, number[]>();
+    for (const id of added) {
+        const candidates = cues.filter(
+            (other) => inSlot(other) && other.marcherIds.includes(id),
+        );
+        const chosen =
+            cue.type === "facing" && at !== undefined
+                ? candidates
+                      .map((other) => ({
+                          other,
+                          away: Math.abs((countOf(other.beatId) ?? at) - at),
+                      }))
+                      .sort(
+                          (a, b) => a.away - b.away || a.other.id - b.other.id,
+                      )
+                      .slice(0, 1)
+                      .map(({ other }) => other)
+                : candidates;
+        for (const other of chosen)
+            leaving.set(other.id, [...(leaving.get(other.id) ?? []), id]);
+    }
+    return leaving;
 }

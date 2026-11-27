@@ -4732,7 +4732,16 @@
             "turnLabel": "{icon} {amount} · {count, plural, one {# count} other {# counts}}",
             "turnLabelShort": "{icon} {amount}",
             "dragCue": "Drag to move this facing change",
-            "dragToTurn": "Drag to turn over counts"
+            "dragToTurn": "Drag to turn over counts",
+            "keyShared": "{count, plural, one {# group changes facing here} other {# groups change facing here}}: {names}",
+            "keyHint": "Click to select who changes here, Shift-click to add them. Drag to move.",
+            "keyHintPlaying": "Click to select who changes here. Pause to move it.",
+            "keySelectAll": "Select everyone who changes here",
+            "keySelectGroup": "Select {name}",
+            "partOf": "{part} of {count}",
+            "selectAllOf": "Select all {count}",
+            "restHint": "The rest of the cue the selection was split from. Click to select them.",
+            "popoverPart": "{name} ({part} of {count})"
         },
         "item": {
             "flag": "Flag",
