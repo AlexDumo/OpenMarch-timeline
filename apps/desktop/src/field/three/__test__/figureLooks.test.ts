@@ -4,6 +4,8 @@ import {
     showFigureLooks,
     type FigurePerformer,
 } from "../figures/figureLooks";
+import { sectionUniform } from "@/view3d/core/marchers/looks";
+import { UNIFORM_PRESET_IDS } from "@/view3d/core/marchers/uniformPresets";
 
 const band = (...sections: string[]): FigurePerformer[] =>
     sections.map((section, i) => ({ id: i + 1, section }));
@@ -68,6 +70,35 @@ describe("showFigureLooks", () => {
         );
         expect(b.byPerformer.get(7)).toBe(a[0]);
         expect(b.byPerformer.get(40)).toBe(a[1]);
+    });
+
+    it("wears the show's uniform, as the 3D View dresses it", () => {
+        const look = (uniforms?: string) =>
+            [
+                ...showFigureLooks(band("Trumpet"), {
+                    uniforms,
+                }).looks.values(),
+            ][0]!;
+        expect(look().colors).toEqual(sectionUniform("Trumpet").colors);
+        expect(
+            fingerprints(band("Trumpet"), {
+                uniforms: UNIFORM_PRESET_IDS[1],
+            })[0],
+        ).not.toBe(fingerprints(band("Trumpet"))[0]);
+    });
+
+    it("colors drum shells with the section's fill, as the 3D View does", () => {
+        const plain = fingerprints(band("Snare"));
+        const red = fingerprints([{ id: 1, section: "Snare", fill: 0xff0000 }]);
+        expect(red[0]).not.toBe(plain[0]);
+        expect(
+            [
+                ...showFigureLooks(
+                    [{ id: 1, section: "Snare", fill: 0xff0000 }],
+                    null,
+                ).looks.values(),
+            ][0]!.options.carryColor,
+        ).toBe(0xff0000);
     });
 
     it("gives a performer with no section the plain figure", () => {

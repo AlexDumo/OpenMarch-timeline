@@ -16,12 +16,14 @@ the app (`apps/desktop/src/field/three/figures/figures.webp`). That set can't fo
 - Nothing remade the shipped pictures when a model changed.
 
 The owner (2026-11-25) chose: the app makes the pictures itself, in the background, and the show
-file keeps them, in 0.2.0. One body and one uniform color (slate) for every performer stays: the
-figures show shape and size, not the uniform's colors.
+file keeps them, in 0.2.0. One body for every performer stays. At first every figure wore one
+slate uniform too; on 2026-11-27 the owner asked for the uniform on the field to match the 3D
+View, so each figure now wears the show's uniform preset, with its section's color on drum shells
+and flag silks, and those colors are part of its key.
 
 ## Decision
 
-1. **A look is a key.** Everything that changes a figure's shape (the carried model and its
+1. **A look is a key.** Everything that draws a figure, its uniform's colors included, and everything that changes its shape (the carried model and its
    options, the brass finish, the hold state, the bake's body and uniform, and the app's model
    version) hashes to a fingerprint. Two performers with the same fingerprint share a picture.
 2. **The app bakes missing looks in the background.** When a show opens, or a setting changes

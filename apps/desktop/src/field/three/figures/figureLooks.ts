@@ -1,10 +1,11 @@
 /**
  * The looks a show's performer figures need (ADR 0019): each performer's uniform as the 3D View
- * dresses them, in the figures' one body and slate uniform (`figureDress.ts`), and each look's
- * fingerprint. Everything that changes a figure's shape goes into the fingerprint: what the
+ * dresses them (the show's uniform preset, their section's color on drum shells and flag silks,
+ * what they carry), on the figures' one body (`figureDress.ts`), and each look's fingerprint.
+ * Everything that draws a figure goes into the fingerprint: the uniform's colors, what the
  * performer carries and its options (a bass drum's size, the tuba or sousaphone), the brass
- * finish, the hold, the bake's body and uniform, the picture's scale and the figures' version.
- * Nothing else does: colors, names and drill leave it alone.
+ * finish, the hold, the bake's body, the picture's scale and the figures' version. Nothing else
+ * does: names and drill leave it alone.
  *
  * Pure: no three.js, React or database.
  */
@@ -15,11 +16,7 @@ import {
     sectionUniform,
     type UniformLook,
 } from "@/view3d/core/marchers/looks";
-import {
-    FIGURE_BODY,
-    FIGURE_LOOK,
-    bakeDressed,
-} from "@/view3d/core/marchers/figureDress";
+import { FIGURE_BODY } from "@/view3d/core/marchers/figureDress";
 import {
     guardUniformPresetOf,
     uniformPresetOf,
@@ -31,7 +28,7 @@ import { DEFAULT_HOLD } from "@/view3d/window/performers/windowHorn";
  * Raise when the models, the bake's light or how a figure is cut out change what a figure looks
  * like: every show bakes its figures again on open.
  */
-export const FIGURE_VERSION = 1;
+export const FIGURE_VERSION = 2;
 
 /** A figure's scale: pixels per meter on the ground. */
 export const FIGURE_PX_PER_METER = 250;
@@ -50,6 +47,8 @@ export interface FigureSettings {
 export interface FigurePerformer {
     id: number;
     section: string | null | undefined;
+    /** sRGB: the section's 2D fill, which colors its drum shells and flag silks as in the 3D View */
+    fill?: number | null;
 }
 
 export interface ShowFigureLooks {
@@ -106,18 +105,15 @@ export function showFigureLooks(
     const looks = new Map<string, UniformLook>();
     const fingerprintOf = new Map<string, string>();
     performers.forEach((p, i) => {
-        const look = bakeDressed(
-            sectionUniform(
-                sections[i],
-                DEFAULT_HOLD,
-                options[i],
-                undefined,
-                undefined,
-                preset,
-                guardPreset,
-                winds,
-            ),
-            FIGURE_LOOK,
+        const look = sectionUniform(
+            sections[i],
+            DEFAULT_HOLD,
+            options[i],
+            p.fill ?? undefined,
+            undefined,
+            preset,
+            guardPreset,
+            winds,
         );
         const text = canonicalJson(look);
         let fingerprint = fingerprintOf.get(text);

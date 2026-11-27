@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LinearFilter, LinearMipmapLinearFilter, Texture } from "three";
 import { useVenueSettings } from "@/hooks/queries/useVenueSettings";
+import { allSectionAppearancesQueryOptions } from "@/hooks/queries/useSectionAppearances";
 import type { PerformerFigureRow } from "@om-electron/database/performerFigures";
 import { UNITS_PER_METER, type Figure, type FigureAtlas } from "./figureAtlas";
 import {
@@ -19,7 +20,7 @@ import {
 import type { BakedFigure, FigureLayout } from "./bakeFigures";
 import type { FigureBakeReply } from "./figureBakeProtocol";
 import FigureBakeWorker from "./figureBake.worker.ts?worker";
-import type { UniformLook } from "@/view3d/core/marchers/looks";
+import { fillToNumber, type UniformLook } from "@/view3d/core/marchers/looks";
 
 /** A figure as the show file keeps it. */
 interface StoredFigure {
@@ -268,24 +269,42 @@ export function useShowFigures(
     const { data: venue } = useVenueSettings();
     const { uniforms, guardUniforms, brassFinish, tuba } = venue ?? {};
     const hasVenue = !!venue;
-    const performersKey = useMemo(
-        () =>
-            JSON.stringify(
-                (performers ?? []).map((p) => [p.id, p.section ?? ""]),
-            ),
-        [performers],
+    // a section's fill colors its drum shells and flag silks, as in the 3D View
+    const { data: sectionAppearances } = useQuery(
+        allSectionAppearancesQueryOptions(),
     );
+    const performersKey = useMemo(() => {
+        const fillOf = new Map(
+            (sectionAppearances ?? []).flatMap((a) =>
+                a.fill_color
+                    ? [[a.section, fillToNumber(a.fill_color)] as const]
+                    : [],
+            ),
+        );
+        return JSON.stringify(
+            (performers ?? []).map((p) => [
+                p.id,
+                p.section ?? "",
+                fillOf.get(p.section ?? "") ?? null,
+            ]),
+        );
+    }, [performers, sectionAppearances]);
+    const ready = hasVenue && !!sectionAppearances;
     const figures = useMemo(
         () =>
-            hasVenue
+            ready
                 ? showFigureLooks(
-                      (JSON.parse(performersKey) as [number, string][]).map(
-                          ([id, section]) => ({ id, section }),
-                      ),
+                      (
+                          JSON.parse(performersKey) as [
+                              number,
+                              string,
+                              number | null,
+                          ][]
+                      ).map(([id, section, fill]) => ({ id, section, fill })),
                       { uniforms, guardUniforms, brassFinish, tuba },
                   )
                 : null,
-        [performersKey, hasVenue, uniforms, guardUniforms, brassFinish, tuba],
+        [performersKey, ready, uniforms, guardUniforms, brassFinish, tuba],
     );
     const { data: stored } = useQuery({
         queryKey: FIGURES_KEY,

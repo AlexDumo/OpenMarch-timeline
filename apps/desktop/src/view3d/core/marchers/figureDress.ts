@@ -1,7 +1,7 @@
 /**
- * How the 2D field's performer figures (fork #1319, ADR 0019) dress every performer: one body
- * and one slate uniform for everyone, so the field needs one picture per thing carried, not one
- * per performer. The figures show shape and size, not the show's colors.
+ * The 2D field's performer figures' one body (fork #1319, ADR 0019), and the slate uniform the
+ * shipped set (`figures.webp`, baked from the 3D View's window) wears. A show's own figures wear
+ * its uniform (`field/three/figures/figureLooks.ts`).
  *
  * Pure: no three.js, React or database.
  */
