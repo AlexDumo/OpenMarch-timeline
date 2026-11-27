@@ -45,8 +45,19 @@ export type ShapeTarget =
     /** The shape's body */
     | { readonly type: "move" };
 
+/**
+ * How far what a pen or finger pressed stands from the press, kept through the drag so it moves
+ * with the pointer instead of jumping onto it (#873); none for a mouse, which drags it to the
+ * pointer
+ */
+type GrabOffset = { readonly offset?: XY };
+
 export type ShapeGesture =
-    | { readonly type: "handle"; readonly key: string; readonly base: unknown }
+    | ({
+          readonly type: "handle";
+          readonly key: string;
+          readonly base: unknown;
+      } & GrabOffset)
     | {
           readonly type: "rotate";
           readonly from: "knob" | "corner";
@@ -56,8 +67,8 @@ export type ShapeGesture =
           /** The pointer's angle from the pivot at the press */
           readonly startAngle: number;
       }
-    | { readonly type: "center"; readonly base: unknown }
-    | { readonly type: "pivot"; readonly base: unknown }
+    | ({ readonly type: "center"; readonly base: unknown } & GrabOffset)
+    | ({ readonly type: "pivot"; readonly base: unknown } & GrabOffset)
     | { readonly type: "move"; readonly base: unknown; readonly grab: XY };
 
 /** How far the knob stands above the shape's back edge, in a mouse's handle reaches (`stemUnit`) */
@@ -193,13 +204,42 @@ export function startShapeGesture(
         pivotMoved,
     );
     if (!target) return null;
+    // What a pen or finger grabs keeps its offset from the press (#873)
+    const grabbed = (point: XY | undefined): GrabOffset =>
+        env.keepGrab && point
+            ? { offset: { x: point.x - at.x, y: point.y - at.y } }
+            : {};
     switch (target.type) {
         case "handle":
-            return { type: "handle", key: target.key, base: params };
+            return {
+                type: "handle",
+                key: target.key,
+                base: params,
+                ...grabbed(
+                    kind
+                        .handles(params, n, selected)
+                        .find((h) => h.key === target.key)?.at,
+                ),
+            };
         case "center":
-            return { type: "center", base: params };
-        case "pivot":
-            return { type: "pivot", base: params };
+            return {
+                type: "center",
+                base: params,
+                ...grabbed(kind.frameOf(params, n).center),
+            };
+        case "pivot": {
+            const frame = kind.frameOf(params, n);
+            // A pivot pulled out of the center dot starts at the center
+            return {
+                type: "pivot",
+                base: params,
+                ...grabbed(
+                    target.pulled
+                        ? frame.center
+                        : pivotPoint(frame, pivotOf(params)),
+                ),
+            };
+        }
         case "move":
             return { type: "move", base: params, grab: at };
         case "rotate": {
@@ -274,15 +314,23 @@ export function selectionIn(
         : null;
 }
 
-/** The shape as `gesture` has it with the pointer at `at`, its pivot kept */
+/**
+ * The shape as `gesture` has it with the pointer at `pointer`, its pivot kept. A handle, center dot or
+ * pivot a pen or finger grabbed goes where the pointer puts it with the press's offset, and snaps
+ * there (#873).
+ */
 export function dragShape(
     kind: AnyToolKind,
     n: number,
     gesture: ShapeGesture,
-    at: XY,
+    pointer: XY,
     env: ToolEnv,
 ): unknown {
     const base = gesture.base;
+    const offset = "offset" in gesture ? gesture.offset : undefined;
+    const at = offset
+        ? { x: pointer.x + offset.x, y: pointer.y + offset.y }
+        : pointer;
     if (gesture.type === "pivot")
         return withPivot(base, snapPivot(kind.frameOf(base, n), at, env));
     return carryPivot(base, dragged(kind, n, gesture, at, env));

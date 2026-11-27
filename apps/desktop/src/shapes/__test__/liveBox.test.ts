@@ -93,6 +93,40 @@ describe("a selected placed box", () => {
         expect(out.live.params.center.x).toBe(20);
     });
 
+    it("a pen or finger drags a handle or the center dot keeping its offset from the press (#873)", () => {
+        // A finger's reach, and a mouse's as long to compare
+        const mouse: ToolEnv = { ...env, hitRadius: 8 };
+        const finger: ToolEnv = { ...mouse, keepGrab: true };
+        const membersAfter = (
+            e: ToolEnv,
+            from: { x: number; y: number },
+            to: { x: number; y: number },
+        ) => {
+            let live = pressLive(openLive(placed()), from, e)!;
+            live = moveLive(live, to, e);
+            return liveTargets(placed(), releaseLive(live).live.params, ctx)
+                .members;
+        };
+        // The se handle at (20,20), pressed 5 off and dragged by (20,10): as if pressed on it
+        const onHandle = membersAfter(
+            mouse,
+            { x: 20, y: 20 },
+            { x: 40, y: 30 },
+        );
+        expect(
+            membersAfter(finger, { x: 25, y: 25 }, { x: 45, y: 35 }),
+        ).toEqual(onHandle);
+        // A mouse goes on taking the handle to the pointer
+        expect(
+            membersAfter(mouse, { x: 25, y: 25 }, { x: 45, y: 35 }),
+        ).not.toEqual(onHandle);
+        // The center dot at (10,10), pressed 1 off
+        const onDot = membersAfter(mouse, { x: 10, y: 10 }, { x: 21.6, y: 10 });
+        expect(
+            membersAfter(finger, { x: 11, y: 11 }, { x: 22.6, y: 11 }),
+        ).toEqual(onDot);
+    });
+
     it("a press without a drag changes nothing", () => {
         const live = pressLive(openLive(placed()), { x: 10, y: 10 }, env)!;
         expect(releaseLive(live).changed).toBe(false);

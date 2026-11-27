@@ -220,6 +220,43 @@ describe.each(KINDS)("the pivot on the field, with %s", (_, kind, a, b) => {
         );
     });
 
+    it("a pen or finger drags the pivot keeping its offset from the press; a mouse takes it to the pointer (#873)", () => {
+        const t = open();
+        const { center } = kind.frameOf(t.params, N);
+        const off = { x: 3, y: 3 };
+        const finger = { hitRadius: 5, keepGrab: true };
+        const mouse = { hitRadius: 5 };
+        const plus = (a: XY, b: XY) => ({ x: a.x + b.x, y: a.y + b.y });
+        // Pulled out of the center dot: it starts at the center, not at the finger
+        const by = { x: 30, y: -20 };
+        const pulled = (over: Partial<ToolEnv>) =>
+            pivotField(
+                kind,
+                dragged(t, plus(center, off), plus(plus(center, off), by), {
+                    reachInside: true,
+                    ...over,
+                }),
+            );
+        expect(near(pulled(finger), plus(center, by))).toBe(true);
+        expect(near(pulled(mouse), plus(center, by))).toBe(false);
+        // Once out, dragged from its crosshair
+        const out = plus(center, by);
+        const moved = dragged(t, center, out, { reachInside: true });
+        const again = { x: 10, y: 5 };
+        const fromCross = (over: Partial<ToolEnv>) =>
+            pivotField(
+                kind,
+                dragged(
+                    moved,
+                    plus(out, off),
+                    plus(plus(out, off), again),
+                    over,
+                ),
+            );
+        expect(near(fromCross(finger), plus(out, again))).toBe(true);
+        expect(near(fromCross(mouse), plus(out, again))).toBe(false);
+    });
+
     it("a centered pivot draws no crosshair of its own", () => {
         const t = open();
         expect(
