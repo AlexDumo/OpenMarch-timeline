@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import clsx from "clsx";
 import { useOpenShowEntry, useWebLibraryStore } from "@/stores/WebLibraryStore";
 import { backupReminderDue, formatAgo } from "@/utilities/webLibrary";
-import { backUp, onIpad } from "./webLibraryActions";
+import { appleDevice, backUp } from "./webLibraryActions";
 
 const REMINDER_KEY = "openmarch-web:lastBackupReminder";
 
@@ -90,7 +90,13 @@ export default function WebSaveStatus() {
           ? t("web.notSaved")
           : saving
             ? t("web.saving")
-            : t(onIpad ? "web.savedOnIpad" : "web.savedInBrowser");
+            : t(
+                  appleDevice === "ipad"
+                      ? "web.savedOnIpad"
+                      : appleDevice === "iphone"
+                        ? "web.savedOnIphone"
+                        : "web.savedInBrowser",
+              );
     const detail = memoryOnly
         ? t("web.memoryNote")
         : saveStatus?.state === "error"

@@ -43,7 +43,7 @@ import {
     backUp,
     deleteStoredShow,
     duplicateStoredShow,
-    onIpad,
+    appleDevice,
     openStoredShow,
     renameStoredShow,
     reportFailure,
@@ -95,9 +95,11 @@ export default function WebShowLibrary() {
             <header className="flex flex-col gap-4">
                 <h2 className="text-h5">
                     {t(
-                        onIpad
+                        appleDevice === "ipad"
                             ? "web.library.titleIpad"
-                            : "web.library.titleBrowser",
+                            : appleDevice === "iphone"
+                              ? "web.library.titleIphone"
+                              : "web.library.titleBrowser",
                     )}
                 </h2>
                 <p className="text-sub text-text-subtitle">
