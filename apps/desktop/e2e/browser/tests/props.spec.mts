@@ -30,10 +30,6 @@ const RISER = [
 ];
 
 test.use({
-    // The time-stretch worklet (#216) can't load here: Playwright's route,
-    // which serves the renderer from disk, doesn't see AudioWorklet module
-    // requests. Every browser scenario on main logs this; nothing here plays.
-    allowedPageErrors: [/Audio worklet error/],
     seedSql: [
         ...seedShowSql({
             beats: 16,

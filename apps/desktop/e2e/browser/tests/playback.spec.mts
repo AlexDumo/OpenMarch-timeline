@@ -84,7 +84,8 @@ test("playback draws the marchers where the show puts them at each moment", asyn
                 requestAnimationFrame(read);
             }),
     );
-    await page.keyboard.press("Space");
+    // Shift+Space pauses where it is; Space would stop and go back to where Play was pressed (UI-24)
+    await page.keyboard.press("Shift+Space");
 
     // Mid-move: somewhere strictly between the two pages' positions
     const moving = samples.filter(({ t1 }) => t1.x > 400.5 && t1.x < 599.5);
@@ -106,7 +107,7 @@ test("playback draws the marchers where the show puts them at each moment", asyn
             samples[i - 1].t1.x - 0.01,
         );
 
-    // Paused, the field holds the moment it stopped at
+    // Paused, the field holds the moment it stopped at (the last whole beat played)
     await expect
         .poll(async () => {
             const drawn = await drawnMarchers(page);

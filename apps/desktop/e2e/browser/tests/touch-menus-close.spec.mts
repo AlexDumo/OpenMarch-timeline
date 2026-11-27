@@ -120,7 +120,6 @@ test.describe("touch layout", () => {
     test.use({
         showFile: SHOW,
         appSettings: { optOutAnalytics: true, editorMode: "expert" },
-        allowedPageErrors: [/Audio worklet error/],
         touchScreen: true,
         initScript: "localStorage.setItem('openmarch:inputMode', 'touch');",
     });

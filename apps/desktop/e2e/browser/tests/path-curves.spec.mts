@@ -40,8 +40,6 @@ test.use({
         })),
         positions: [HOME, HOME, PAGE2],
     }),
-    // The time-stretch worklet (#216) can't load in the harness (see props.spec.mts)
-    allowedPageErrors: [/Audio worklet error/],
 });
 
 type Point = { x: number; y: number };
@@ -55,6 +53,17 @@ async function toScreen(page: Page, p: Point): Promise<Point> {
         y: marcher.screen.y + (p.y - marcher.y) * zoom,
     };
 }
+
+/** Whether the field itself is under screen point `at`, not the path's bar or another control */
+const fieldAt = (page: Page, at: Point) =>
+    page.evaluate(
+        ({ x, y }) =>
+            document
+                .elementFromPoint(x, y)
+                ?.closest("[data-testid]")
+                ?.getAttribute("data-testid") === "fieldCanvas",
+        at,
+    );
 
 const pointsOf = async (show: Show): Promise<StoredPoint[]> => {
     const rows = await show.query<{ geometry: string }>(
@@ -110,10 +119,13 @@ test("change: the pen's press-and-drag places a smooth point; a double-click, th
     await page.mouse.down();
     await page.mouse.move(to.x, to.y, { steps: 10 });
     await page.mouse.up();
-    // A click places a corner (after the double-click time)
+    // A click places a corner (after the double-click time). While drawing, the pen's bar stays
+    // pinned just under the marchers, so the corner goes further down, on the field below it,
+    // where a person sees open field to click
     await page.waitForTimeout(600);
-    const c2 = onGrid({ x: 800, y: 300 + 6 * S });
+    const c2 = onGrid({ x: 800, y: 300 + 12 * S });
     const at2 = await toScreen(page, c2);
+    expect(await fieldAt(page, at2)).toBe(true);
     await page.mouse.move(at2.x, at2.y, { steps: 4 });
     await page.mouse.click(at2.x, at2.y);
     await page.keyboard.press("Enter");

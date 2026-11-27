@@ -47,8 +47,6 @@ test.use({
         })),
         positions: [HOME, HOME, HOME],
     }),
-    // The time-stretch worklet (#216) can't load in the harness (see props.spec.mts)
-    allowedPageErrors: [/Audio worklet error/],
 });
 
 test.beforeEach(async ({ show }) => {

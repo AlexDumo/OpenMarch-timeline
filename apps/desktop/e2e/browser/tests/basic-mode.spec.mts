@@ -90,10 +90,9 @@ test.use({
         ...T3_HOLDS,
         "DELETE FROM timeline_change_log",
     ],
-    // A refused edit (a locked marcher) is logged as well as shown; the box
-    // tool's time-stretch worklet can't load in the harness (see props.spec.mts)
+    // A refused edit (a locked marcher) is logged as well as shown
     // (one pattern: a two-item array would read as a fixture tuple)
-    allowedPageErrors: [/TimelineEditRefusedError|Audio worklet error/],
+    allowedPageErrors: [/TimelineEditRefusedError/],
 });
 
 /** Each marcher's saved spot on page `pageId`'s flag, as "x,y" by drill number. */

@@ -90,16 +90,22 @@ test.describe("page shortcuts", () => {
     });
 });
 
-test("the pages row's text keeps page names apart", async ({ show }) => {
+// The page ruler names each page on its own box (the page-era `#pages` row it replaced is gone since
+// #136): home's box shows a house, and every other box its own name, never its neighbor's run into it.
+// The Electron suite reads the names from the boxes' labels (`timelinePageNames`).
+test("the page ruler names each page on its own box", async ({ show }) => {
     const { page } = show;
     await addPageAt(page, 3);
     await expect(page.getByRole("heading", { name: "Page 1" })).toBeVisible();
     await addPageAt(page, 5);
     await expect(page.getByRole("heading", { name: "Page 2" })).toBeVisible();
-    // The Electron suite reads the last page's name from this text (e.g.
-    // "0 1 2", never "012"): the resize handles separate the names
-    const text = (await page.locator("#pages").textContent()) ?? "";
-    expect(text.match(/\d+[A-Z]?/g)?.at(-1)).toBe("2");
+    const ruler = page.getByTestId("timeline-page-ruler");
+    const box = (name: string) =>
+        ruler.getByRole("button", { name: `Page ${name}`, exact: true });
+    await expect(ruler.getByRole("button", { name: /^Page / })).toHaveCount(3);
+    await expect(box("0")).toHaveText("");
+    await expect(box("1")).toHaveText("1");
+    await expect(box("2")).toHaveText("2");
 });
 
 test("choosing where to place all marchers closes the menu", async ({
@@ -115,7 +121,7 @@ test("choosing where to place all marchers closes the menu", async ({
         .getByRole("button", { name: "All marchers", exact: true })
         .click();
     const choice = page.getByRole("button", {
-        name: "Clear this page",
+        name: "Clear Page 1",
     });
     await expect(choice).toBeEnabled();
     await choice.click();

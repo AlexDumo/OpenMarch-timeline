@@ -4,9 +4,10 @@ import { dragFrom, readField, selectPage, waitForIdle } from "../app.mjs";
 import { savedPosition } from "../positions.mjs";
 import { seedShowSql, type SeedPosition } from "../seed.mjs";
 import type { FieldTestItem } from "../../../src/field/fieldTestApi";
+import { PIT_AREA_MARGIN_FT } from "../../../src/field/pitStrip";
 
 // A drum major's podium behind the back sideline (instruments.md section 6):
-// the field draws a back strip there and fits it, and the podium, locked as
+// the field draws a back area there and fits it, and the podium, locked as
 // equipment starts, can be unlocked from its right-click and dragged further
 // back, past the field.
 
@@ -24,8 +25,6 @@ const PAGE_1: SeedPosition[] = [
 ];
 
 test.use({
-    // The time-stretch worklet (#216) can't load here; nothing here plays
-    allowedPageErrors: [/Audio worklet error/],
     seedSql: [
         ...seedShowSql({
             beats: 16,
@@ -57,11 +56,13 @@ test("opens fitted to the back strip, with the podium and its drum major in view
         .getByTestId("fieldCanvas")
         .first()
         .boundingBox())!;
-    // In view, with room above it: the strip reaches 30 ft (180 units) behind the field
+    // In view with the whole back area above it: since #926 the area reaches only 4 ft past the
+    // podium's footprint (pitAreasOf): the circle round its model's 1.2 x 1.5 m outline
     const { zoom } = (await readField(show.page)).viewport;
-    expect(podium.screen.y - (180 + PODIUM.y) * zoom).toBeGreaterThan(
-        canvas.y - 1,
-    );
+    const unitsPerFt = 12 * 0.5;
+    const radius = (Math.hypot(1.2, 1.5) / 2) * 3.28084 * unitsPerFt;
+    const reach = radius + PIT_AREA_MARGIN_FT * unitsPerFt;
+    expect(podium.screen.y - reach * zoom).toBeGreaterThan(canvas.y - 1);
 });
 
 test("a back podium unlocked from its right-click and dragged further back lands there", async ({

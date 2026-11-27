@@ -11,7 +11,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { waitForField, waitForSettledField } from "./app.mjs";
-import { workerPolicyFor } from "../../src/security/appCsp";
+import { serveRenderer } from "./serveRenderer.mjs";
 
 const desktopDir = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
@@ -23,15 +23,6 @@ const electronMain = path.join(desktopDir, "dist-electron/main/index.js");
 const migrationsFolder = path.join(desktopDir, "electron/database/migrations");
 const blankShow = path.join(migrationsFolder, "_blank.dots");
 
-/** The renderer is served from disk under this origin; nothing listens on it. */
-const APP_ORIGIN = "https://app.openmarch.test";
-
-/**
- * Errors the browser harness itself causes, allowed in every browser scenario: the time-stretch
- * worklet (#216) can't load, because the route that serves the renderer from disk doesn't see
- * AudioWorklet module requests.
- */
-const HARNESS_PAGE_ERRORS = [/Audio worklet error/];
 const VIEWPORT = { width: 1600, height: 1000 };
 
 const requireBuilt = (file: string, script: string) => {
@@ -88,6 +79,9 @@ async function openInBrowser(
     const { openShow } = (await import(pathToFileURL(hostBundle).href)) as {
         openShow: typeof import("./host/index").openShow;
     };
+    // Each show gets its own server on a port the system picks, so parallel
+    // workers never share one
+    const renderer = await serveRenderer(rendererDir);
     const host = await openShow({
         databasePath,
         migrationsFolder,
@@ -115,7 +109,7 @@ async function openInBrowser(
             // Electron
             if (channel === "settings:open") {
                 const settings = await context.newPage();
-                await settings.goto(`${APP_ORIGIN}/#settings`);
+                await settings.goto(`${renderer.origin}/#settings`);
                 return { ok: true, value: undefined };
             }
             try {
@@ -130,34 +124,19 @@ async function openInBrowser(
         (channel: string, args: unknown[]) => host.send(channel, args),
     );
 
-    // Serve the built renderer from disk and block everything else, so a
-    // test never depends on the network or on a free port.
+    // The renderer comes from its local server; everything else is blocked,
+    // so a test never depends on the network
     await context.route("**/*", async (route) => {
         const url = new URL(route.request().url());
-        if (url.protocol === "data:" || url.protocol === "blob:")
-            return route.fallback();
-        if (url.origin !== APP_ORIGIN) return route.abort();
-        const file = path.join(
-            rendererDir,
-            url.pathname === "/" ? "index.html" : url.pathname,
-        );
-        if (!file.startsWith(rendererDir) || !fs.existsSync(file))
-            return route.fulfill({ status: 404, body: "Not found" });
-        // A worker's own policy, as the web build's `_headers` sends it
-        const worker = workerPolicyFor(url.href);
-        if (worker)
-            return route.fulfill({
-                path: file,
-                headers: {
-                    "Content-Type": "text/javascript",
-                    "Content-Security-Policy": worker.csp,
-                },
-            });
-        return route.fulfill({ path: file });
+        const local =
+            url.protocol === "data:" ||
+            url.protocol === "blob:" ||
+            url.origin === renderer.origin;
+        return local ? route.fallback() : route.abort();
     });
 
     const page = await context.newPage();
-    await page.goto(APP_ORIGIN);
+    await page.goto(renderer.origin);
     const reader = new DatabaseSync(databasePath, { readOnly: true });
     return {
         page,
@@ -171,6 +150,7 @@ async function openInBrowser(
             reader.close();
             await context.close();
             host.close();
+            await renderer.close();
         },
     };
 }
@@ -539,12 +519,9 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
             await app.close();
         }
 
-        const allowed = [
-            ...allowedPageErrors,
-            ...(target === "browser" ? HARNESS_PAGE_ERRORS : []),
-        ];
         const unexpected = pageErrors.filter(
-            (message) => !allowed.some((pattern) => pattern.test(message)),
+            (message) =>
+                !allowedPageErrors.some((pattern) => pattern.test(message)),
         );
         expect(unexpected, "The page logged or threw errors").toEqual([]);
     },

@@ -18,8 +18,6 @@ const desktop = path.resolve(
 test.use({
     showFile: path.join(desktop, "view3d-web/public/demos/part1-demo.dots"),
     appSettings: { optOutAnalytics: true, editorMode: "expert" },
-    // The time-stretch worklet (#216) can't load in the harness (see props.spec.mts)
-    allowedPageErrors: [/Audio worklet error/],
     // A touch screen, in the touch layout
     touchScreen: true,
     initScript: "localStorage.setItem('openmarch:inputMode', 'touch');",

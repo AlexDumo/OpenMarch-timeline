@@ -32,8 +32,6 @@ const desktop = path.resolve(
 test.use({
     showFile: path.join(desktop, "view3d-web/public/demos/part1-demo.dots"),
     appSettings: { optOutAnalytics: true, editorMode: "expert" },
-    // The time-stretch worklet (#216) can't load in the harness (see props.spec.mts)
-    allowedPageErrors: [/Audio worklet error/],
     // A touch screen, in the touch layout
     touchScreen: true,
     initScript: "localStorage.setItem('openmarch:inputMode', 'touch');",
@@ -426,8 +424,7 @@ test("two fingers on the bare ruler over playback don't jump playback", async ({
     const view = (await viewport(page).boundingBox())!;
     const ruler = await bareRuler(page);
     // Near the end of the show: a jump there would put the clock well ahead of where it plays.
-    // (The harness can't load the demo's audio worklet, so the clock may not run at all; what
-    // matters is that it never jumps.)
+    // (What matters is that it never jumps, not how far it plays.)
     const at = { x: view.x + view.width - 120, y: ruler.y };
     // Space plays from the timeline (a focused page box would take it as a click)
     await viewport(page).focus();

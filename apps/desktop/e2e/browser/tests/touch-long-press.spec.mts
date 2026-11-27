@@ -50,7 +50,6 @@ test.use({
     // A touch screen, in the touch layout
     touchScreen: true,
     initScript: "localStorage.setItem('openmarch:inputMode', 'touch');",
-    allowedPageErrors: [/Audio worklet error/],
 });
 
 type Point = { x: number; y: number };
